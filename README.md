@@ -8,7 +8,7 @@ volume** through CoreAudio. Arduino firmware is unchanged.
 
 - Reads the deej serial protocol at 9600 baud, 5 sliders
 - One slider (default index 0) controls system output volume
-- Sets volume in-process via CoreAudio — no `osascript`, no subprocesses
+- Sets volume in-process via CoreAudio, with no `osascript` and no subprocesses
 - Follows whichever output device is current, so Bluetooth headphones just work
 - Auto-detects the serial port and reconnects when the board is unplugged
 - No Homebrew, no Go, no Background Music, no virtual audio device
@@ -31,7 +31,7 @@ It prints live slider values so you can see which physical slider is which index
 ```
 
 Installs a LaunchAgent that starts at login and restarts on crash. Logs to `/tmp/deej-mac.log`
-(quiet — the status line is only printed to a terminal).
+(quiet: the status line is only printed to a terminal).
 
 ```bash
 ./install.sh --uninstall
@@ -53,9 +53,9 @@ List available ports with `ls /dev/cu.*`.
 
 Two constants at the top of [Sources/deej-mac/main.swift](Sources/deej-mac/main.swift), then rebuild:
 
-- `invertSliders` — `true` for boards where sliding down raises the volume. Set to `false` if your
+- `invertSliders`: `true` for boards where sliding down raises the volume. Set to `false` if your
   pots are wired the other way.
-- `deadzone` — `0.01` (1%, about 10 ADC counts). Raise it if the volume drifts while you aren't
+- `deadzone`: `0.01` (1%, about 10 ADC counts). Raise it if the volume drifts while you aren't
   touching the slider, lower it if the steps feel coarse.
 
 ## Not included

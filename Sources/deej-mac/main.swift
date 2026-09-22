@@ -17,7 +17,7 @@ let args = Array(CommandLine.arguments.dropFirst())
 let portOverride = args.first { $0.hasPrefix("/dev/") }
 let sliderIndex = args.compactMap { Int($0) }.first ?? 0
 
-// 'vmvc' — kAudioHardwareServiceDeviceProperty_VirtualMainVolume. Spelled as a FourCC so we
+// 'vmvc' is kAudioHardwareServiceDeviceProperty_VirtualMainVolume. Spelled as a FourCC so we
 // don't drag in the deprecated AudioHardwareService* symbols. Unlike per-channel 'volm' it
 // works on devices that expose no main volume element (e.g. some Bluetooth headsets).
 let virtualMainVolume: AudioObjectPropertySelector = 0x766D7663
