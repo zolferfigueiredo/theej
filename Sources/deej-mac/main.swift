@@ -189,20 +189,43 @@ func makeIcon(slashed: Bool, alpha: CGFloat = 1.0) -> NSImage {
     return image
 }
 
-final class MenuBar: NSObject {
+final class MenuBar: NSObject, NSMenuDelegate {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let connectedIcon = makeIcon(slashed: false)
     private let disconnectedIcon = makeIcon(slashed: true)
     private let busyIcon = makeIcon(slashed: false, alpha: 0.38)
+    private let statusEntry = NSMenuItem(title: "", action: nil, keyEquivalent: "")
 
     override init() {
         super.init()
-        if let button = item.button {
-            button.target = self
-            button.action = #selector(clicked)
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        }
+        let menu = NSMenu()
+        menu.delegate = self
+        menu.autoenablesItems = false
+
+        statusEntry.isEnabled = false
+        menu.addItem(statusEntry)
+        menu.addItem(.separator())
+        menu.addItem(entry("Reconnect", #selector(reconnect), ""))
+        menu.addItem(.separator())
+        menu.addItem(entry("Quit deej", #selector(quit), "q"))
+
+        item.menu = menu  // assigned permanently, so left and right click both open it
         refresh()
+    }
+
+    private func entry(_ title: String, _ action: Selector, _ key: String) -> NSMenuItem {
+        let mi = NSMenuItem(title: title, action: action, keyEquivalent: key)
+        mi.target = self
+        mi.isEnabled = true
+        return mi
+    }
+
+    // Rebuilt as the menu opens, so the status line is never stale.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        let state = shared.snapshot()
+        statusEntry.title = state.connected
+            ? "Connected: \(state.port ?? "?")  \(state.volume)%"
+            : "Not connected"
     }
 
     func refresh() {
@@ -213,44 +236,23 @@ final class MenuBar: NSObject {
             : "deej: not connected"
     }
 
-    @objc private func clicked() {
-        if NSApp.currentEvent?.type == .rightMouseUp {
-            showMenu()
-        } else {
-            reconnect()
-        }
-    }
-
     @objc private func reconnect() {
-        item.button?.image = busyIcon  // brief, so a click never looks like it did nothing
+        item.button?.image = busyIcon  // brief, so the click never looks like it did nothing
         shared.requestReconnect()
     }
 
     @objc private func quit() {
         NSApp.terminate(nil)
     }
+}
 
-    // Assigning item.menu makes the button open it instead of firing the action, so it is
-    // attached only for this click and cleared straight afterwards.
-    private func showMenu() {
-        let state = shared.snapshot()
-        let menu = NSMenu()
-        let status = NSMenuItem(
-            title: state.connected
-                ? "Connected: \(state.port ?? "?")  \(state.volume)%"
-                : "Not connected",
-            action: nil, keyEquivalent: "")
-        status.isEnabled = false
-        menu.addItem(status)
-        menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Reconnect", action: #selector(reconnect), keyEquivalent: ""))
-        menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit deej", action: #selector(quit), keyEquivalent: "q"))
-        for entry in menu.items where entry.action != nil { entry.target = self }
-        item.menu = menu
-        item.button?.performClick(nil)
-        item.menu = nil
-    }
+// The previous version printed a retry line every 2 seconds while the device was missing, which
+// grew /tmp/deej-mac.log to 1.2MB over one night. Log transitions only, never on a timer.
+var lastLogged = ""
+func log(_ message: String) {
+    guard message != lastLogged else { return }
+    lastLogged = message
+    print(message)
 }
 
 var lastApplied: Float32 = -1
@@ -315,6 +317,7 @@ func readUntilDrop(_ fd: Int32) {
 func serialLoop() {
     while true {
         guard let path = findPort() else {
+            log("Waiting for a serial device")
             shared.setConnected(false, port: nil)
             Thread.sleep(forTimeInterval: 2)
             continue
@@ -323,13 +326,16 @@ func serialLoop() {
         let fd = open(path, O_RDWR | O_NOCTTY | O_NONBLOCK)
         guard fd >= 0, configureSerial(fd), fcntl(fd, F_SETFL, 0) == 0 else {
             if fd >= 0 { close(fd) }
+            log("Could not open \(path)")
             shared.setConnected(false, port: nil)
             Thread.sleep(forTimeInterval: 2)
             continue
         }
+        log("Connected: \(path)")
         shared.setConnected(true, port: path)
         readUntilDrop(fd)
         close(fd)
+        log("Disconnected")
         shared.setConnected(false, port: nil)
         lastApplied = -1
         Thread.sleep(forTimeInterval: 1)
