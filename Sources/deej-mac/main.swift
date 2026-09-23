@@ -1,6 +1,7 @@
 import Foundation
 import Darwin
 import CoreAudio
+import AppKit
 
 let baud = speed_t(B9600)
 let maxADC: Float32 = 1023.0
@@ -70,32 +71,6 @@ func parse(_ line: String) -> [Int]? {
     return values
 }
 
-var lastApplied: Float32 = -1
-var lastPrint = Date.distantPast
-let interactive = isatty(1) != 0
-// Under launchd stdout is a file, which Swift block-buffers; without this the connect
-// messages never reach /tmp/deej-mac.log. The status line is tty-only so this stays quiet.
-setvbuf(stdout, nil, _IOLBF, 0)
-
-func handle(_ values: [Int]) {
-    guard sliderIndex < values.count else { return }
-    let raw = Float32(values[sliderIndex]) / maxADC
-    let scalar = invertSliders ? 1 - raw : raw
-    let extreme = scalar <= 0 || scalar >= 1
-    if scalar != lastApplied && (extreme || abs(scalar - lastApplied) >= deadzone) {
-        lastApplied = scalar
-        setMasterVolume(scalar)
-    }
-    // Silent under launchd (no tty), so the log file doesn't grow forever.
-    guard interactive, Date().timeIntervalSince(lastPrint) >= 0.5 else { return }
-    lastPrint = Date()
-    let cols = values.enumerated()
-        .map { "\($0.offset == sliderIndex ? "*" : " ")\($0.offset):\(String(format: "%4d", $0.element))" }
-        .joined()
-    print("\r\(cols)   volume \(String(format: "%3d", Int(lastApplied * 100)))%  ", terminator: "")
-    fflush(stdout)
-}
-
 func findPort() -> String? {
     if let override = portOverride { return override }
     let entries = ((try? FileManager.default.contentsOfDirectory(atPath: "/dev")) ?? []).sorted()
@@ -117,29 +92,209 @@ func configureSerial(_ fd: Int32) -> Bool {
     return tcsetattr(fd, TCSANOW, &options) == 0
 }
 
-print("deej-mac: slider \(sliderIndex) controls macOS output volume")
+// Shared between the serial thread and the menu bar on the main thread.
+var menuBar: MenuBar?
 
-while true {
-    guard let path = findPort() else {
-        print("Waiting for Arduino serial device...")
-        sleep(2)
-        continue
+final class Shared {
+    private let lock = NSLock()
+    private var connected = false
+    private var port: String?
+    private var volumePercent = 0
+    private var reconnectFlag = false
+
+    func snapshot() -> (connected: Bool, port: String?, volume: Int) {
+        lock.lock(); defer { lock.unlock() }
+        return (connected, port, volumePercent)
     }
-    print("Connecting to \(path)...")
-    // O_NONBLOCK to skip the DTR carrier wait, then back to blocking for the read loop.
-    let fd = open(path, O_RDWR | O_NOCTTY | O_NONBLOCK)
-    guard fd >= 0 else { perror("open"); sleep(2); continue }
-    guard configureSerial(fd), fcntl(fd, F_SETFL, 0) == 0 else {
-        fputs("Could not configure \(path)\n", stderr)
-        close(fd)
-        sleep(2)
-        continue
+
+    func setConnected(_ value: Bool, port newPort: String?) {
+        lock.lock()
+        let changed = (value != connected) || (newPort != port)
+        connected = value
+        port = newPort
+        lock.unlock()
+        guard changed else { return }
+        DispatchQueue.main.async { menuBar?.refresh() }
     }
-    print("Connected.")
+
+    func setVolume(_ percent: Int) {
+        lock.lock(); volumePercent = percent; lock.unlock()
+    }
+
+    func requestReconnect() {
+        lock.lock(); reconnectFlag = true; lock.unlock()
+    }
+
+    func takeReconnect() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        let value = reconnectFlag
+        reconnectFlag = false
+        return value
+    }
+}
+
+let shared = Shared()
+
+// Drawn in code rather than shipped as an asset. isTemplate lets macOS handle light and dark
+// menu bars, which is also why the disconnected slash cannot use colour: a template image is
+// an alpha mask, so the gap around the slash has to be real transparency.
+func makeIcon(slashed: Bool, alpha: CGFloat = 1.0) -> NSImage {
+    let side: CGFloat = 18
+    let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { _ in
+        let s = side / 24.0
+        func pt(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
+            NSPoint(x: x * s, y: (24 - y) * s)  // design space is y down, AppKit is y up
+        }
+        let ink = NSColor.black.withAlphaComponent(alpha)
+        ink.setStroke()
+        ink.setFill()
+
+        let xs: [CGFloat] = [5, 12, 19]
+        let tracks = NSBezierPath()
+        tracks.lineWidth = 1.7 * s
+        tracks.lineCapStyle = .round
+        for x in xs {
+            tracks.move(to: pt(x, 3.5))
+            tracks.line(to: pt(x, 20.5))
+        }
+        tracks.stroke()
+
+        let knobY: [CGFloat] = [8.1, 14.6, 6.6]
+        let kw = 7.6 * s, kh = 3.4 * s
+        for (i, x) in xs.enumerated() {
+            let c = pt(x, knobY[i])
+            let r = NSRect(x: c.x - kw / 2, y: c.y - kh / 2, width: kw, height: kh)
+            NSBezierPath(roundedRect: r, xRadius: kh / 2, yRadius: kh / 2).fill()
+        }
+
+        if slashed {
+            let a = pt(1.6, 22.4), b = pt(22.4, 1.6)
+            let gap = NSBezierPath()
+            gap.move(to: a); gap.line(to: b)
+            gap.lineWidth = 5.4 * s
+            gap.lineCapStyle = .round
+            NSGraphicsContext.current?.compositingOperation = .clear
+            gap.stroke()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+
+            let slash = NSBezierPath()
+            slash.move(to: a); slash.line(to: b)
+            slash.lineWidth = 2.8 * s
+            slash.lineCapStyle = .round
+            slash.stroke()
+        }
+        return true
+    }
+    image.isTemplate = true
+    return image
+}
+
+final class MenuBar: NSObject, NSMenuDelegate {
+    private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    private let connectedIcon = makeIcon(slashed: false)
+    private let disconnectedIcon = makeIcon(slashed: true)
+    private let busyIcon = makeIcon(slashed: false, alpha: 0.38)
+    private let statusEntry = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+
+    override init() {
+        super.init()
+        let menu = NSMenu()
+        menu.delegate = self
+        menu.autoenablesItems = false
+
+        statusEntry.isEnabled = false
+        menu.addItem(statusEntry)
+        menu.addItem(.separator())
+        menu.addItem(entry("Reconnect", #selector(reconnect), ""))
+        menu.addItem(.separator())
+        menu.addItem(entry("Quit deej", #selector(quit), "q"))
+
+        item.menu = menu  // assigned permanently, so left and right click both open it
+        refresh()
+    }
+
+    private func entry(_ title: String, _ action: Selector, _ key: String) -> NSMenuItem {
+        let mi = NSMenuItem(title: title, action: action, keyEquivalent: key)
+        mi.target = self
+        mi.isEnabled = true
+        return mi
+    }
+
+    // Rebuilt as the menu opens, so the status line is never stale.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        let state = shared.snapshot()
+        statusEntry.title = state.connected
+            ? "Connected: \(state.port ?? "?")  \(state.volume)%"
+            : "Not connected"
+    }
+
+    func refresh() {
+        let state = shared.snapshot()
+        item.button?.image = state.connected ? connectedIcon : disconnectedIcon
+        item.button?.toolTip = state.connected
+            ? "deej: \(state.port ?? "connected"), \(state.volume)%"
+            : "deej: not connected"
+    }
+
+    @objc private func reconnect() {
+        item.button?.image = busyIcon  // brief, so the click never looks like it did nothing
+        shared.requestReconnect()
+    }
+
+    @objc private func quit() {
+        NSApp.terminate(nil)
+    }
+}
+
+// The previous version printed a retry line every 2 seconds while the device was missing, which
+// grew /tmp/deej-mac.log to 1.2MB over one night. Log transitions only, never on a timer.
+var lastLogged = ""
+func log(_ message: String) {
+    guard message != lastLogged else { return }
+    lastLogged = message
+    print(message)
+}
+
+var lastApplied: Float32 = -1
+var lastPrint = Date.distantPast
+let interactive = isatty(1) != 0
+
+func handle(_ values: [Int]) {
+    guard sliderIndex < values.count else { return }
+    let raw = Float32(values[sliderIndex]) / maxADC
+    let scalar = invertSliders ? 1 - raw : raw
+    let extreme = scalar <= 0 || scalar >= 1
+    if scalar != lastApplied && (extreme || abs(scalar - lastApplied) >= deadzone) {
+        lastApplied = scalar
+        setMasterVolume(scalar)
+        shared.setVolume(Int((scalar * 100).rounded()))
+    }
+    // Silent under launchd (no tty), so the log file doesn't grow forever.
+    guard interactive, Date().timeIntervalSince(lastPrint) >= 0.5 else { return }
+    lastPrint = Date()
+    let cols = values.enumerated()
+        .map { "\($0.offset == sliderIndex ? "*" : " ")\($0.offset):\(String(format: "%4d", $0.element))" }
+        .joined()
+    print("\r\(cols)   volume \(String(format: "%3d", Int(lastApplied * 100)))%  ", terminator: "")
+    fflush(stdout)
+}
+
+// poll() with a short timeout rather than a bare blocking read, so a reconnect click is noticed
+// within 250ms. Closing the fd from the main thread to break a blocking read would race on fd reuse.
+func readUntilDrop(_ fd: Int32) {
     var buffer = Data()
     var bytes = [UInt8](repeating: 0, count: 256)
-    var connected = true
-    while connected {
+    let problems = Int16(POLLHUP | POLLERR | POLLNVAL)
+    while true {
+        if shared.takeReconnect() { return }
+        var watch = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+        let ready = poll(&watch, 1, 250)
+        if ready < 0 {
+            if errno == EINTR { continue }
+            return
+        }
+        if ready == 0 { continue }
+        if watch.revents & problems != 0 { return }
         let count = read(fd, &bytes, bytes.count)
         if count > 0 {
             buffer.append(contentsOf: bytes[0..<count])
@@ -154,11 +309,44 @@ while true {
         } else if count < 0 && errno == EINTR {
             continue
         } else {
-            connected = false
+            return
         }
     }
-    close(fd)
-    print("\nDisconnected. Retrying...")
-    lastApplied = -1
-    sleep(1)
 }
+
+func serialLoop() {
+    while true {
+        guard let path = findPort() else {
+            log("Waiting for a serial device")
+            shared.setConnected(false, port: nil)
+            Thread.sleep(forTimeInterval: 2)
+            continue
+        }
+        // O_NONBLOCK to skip the DTR carrier wait, then back to blocking for the read loop.
+        let fd = open(path, O_RDWR | O_NOCTTY | O_NONBLOCK)
+        guard fd >= 0, configureSerial(fd), fcntl(fd, F_SETFL, 0) == 0 else {
+            if fd >= 0 { close(fd) }
+            log("Could not open \(path)")
+            shared.setConnected(false, port: nil)
+            Thread.sleep(forTimeInterval: 2)
+            continue
+        }
+        log("Connected: \(path)")
+        shared.setConnected(true, port: path)
+        readUntilDrop(fd)
+        close(fd)
+        log("Disconnected")
+        shared.setConnected(false, port: nil)
+        lastApplied = -1
+        Thread.sleep(forTimeInterval: 1)
+    }
+}
+
+setvbuf(stdout, nil, _IOLBF, 0)
+print("deej-mac: slider \(sliderIndex) controls macOS output volume")
+
+let app = NSApplication.shared
+app.setActivationPolicy(.accessory)  // menu bar only, no Dock icon
+menuBar = MenuBar()
+DispatchQueue.global(qos: .utility).async { serialLoop() }
+app.run()
