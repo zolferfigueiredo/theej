@@ -8,6 +8,7 @@ volume** through CoreAudio. Arduino firmware is unchanged.
 
 - Reads the deej serial protocol at 9600 baud, 5 sliders
 - One slider (default index 0) controls system output volume
+- Menu bar icon showing connected or disconnected at a glance
 - Sets volume in-process via CoreAudio, with no `osascript` and no subprocesses
 - Follows whichever output device is current, so Bluetooth headphones just work
 - Auto-detects the serial port and reconnects when the board is unplugged
@@ -24,6 +25,19 @@ Needs Xcode command line tools (`xcode-select --install`).
 
 It prints live slider values so you can see which physical slider is which index.
 
+## Menu bar
+
+A faders icon sits in the menu bar. When the Arduino is not connected it gains a heavy diagonal
+slash. The icon is a template image, so it follows light and dark menu bars automatically.
+
+| Action | Result |
+|---|---|
+| Left click | Reconnect to the device now |
+| Right click | Menu with the current port and volume, Reconnect, and Quit |
+
+There is no Dock icon and no window. When run from a terminal it also prints live slider values,
+so you can see which physical slider is which index.
+
 ## Run at login
 
 ```bash
@@ -32,6 +46,9 @@ It prints live slider values so you can see which physical slider is which index
 
 Installs a LaunchAgent that starts at login and restarts on crash. Logs to `/tmp/deej-mac.log`
 (quiet: the status line is only printed to a terminal).
+
+Quit from the menu really does quit. The agent uses `KeepAlive` with `SuccessfulExit` set to false,
+so a clean exit is left alone while a crash is still restarted.
 
 ```bash
 ./install.sh --uninstall

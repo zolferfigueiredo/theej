@@ -32,7 +32,11 @@ cat > "$PLIST" <<EOF
         <string>$1</string>}
     </array>
     <key>RunAtLoad</key><true/>
-    <key>KeepAlive</key><true/>
+    <key>KeepAlive</key>
+    <dict>
+        <!-- Restart on a crash, but let Quit in the menu actually quit. -->
+        <key>SuccessfulExit</key><false/>
+    </dict>
     <key>ThrottleInterval</key><integer>5</integer>
     <key>StandardOutPath</key><string>/tmp/deej-mac.log</string>
     <key>StandardErrorPath</key><string>/tmp/deej-mac.log</string>
