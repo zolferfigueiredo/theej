@@ -1,15 +1,16 @@
 # deej-mac
 
-macOS client for an existing [deej](https://github.com/omriharel/deej) Arduino: master volume
-plus external monitor brightness.
+macOS client for an existing [deej](https://github.com/omriharel/deej) Arduino: master volume,
+external monitor brightness, and built-in display brightness, with the native macOS HUD.
 
 Upstream deej is Windows-only for audio (it uses Windows Core Audio for per-app sessions). This is a
 small Swift daemon that speaks the same serial protocol and drives the macOS **master output
-volume** through CoreAudio, and **external monitor backlights** over DDC/CI. Arduino firmware is
-unchanged.
+volume** through CoreAudio, **external monitor backlights** over DDC/CI, and the **built-in Retina
+panel** through DisplayServices. Arduino firmware is unchanged.
 
 - Reads the deej serial protocol at 9600 baud, 5 sliders
-- Three knobs by default: volume, left monitor brightness, right monitor brightness
+- Four knobs by default: volume, built-in display, left monitor, right monitor
+- Shows the real macOS HUD on the display each knob controls
 - Menu bar icon showing connected or disconnected at a glance
 - Sets volume in-process via CoreAudio, with no `osascript`
 - Follows whichever output device is current, so Bluetooth headphones just work
@@ -21,8 +22,8 @@ unchanged.
 
 Needs Xcode command line tools (`xcode-select --install`).
 
-Brightness additionally needs [m1ddc](https://github.com/waydabber/m1ddc), a small standalone
-binary. Apple Silicon only; volume works without it.
+External monitor brightness additionally needs [m1ddc](https://github.com/waydabber/m1ddc), a small
+standalone binary. Apple Silicon only. Volume and built-in brightness work without it.
 
 ```bash
 brew install m1ddc
@@ -45,6 +46,16 @@ knob, plus Reconnect and Quit.
 
 There is no Dock icon and no window. When run from a terminal it also prints live slider values,
 so you can see which physical slider is which index.
+
+## On-screen feedback
+
+Turning a knob shows the same HUD macOS shows for its own brightness and volume keys, on the
+display that knob controls. macOS only raises that HUD from its media key handler, so the daemon
+asks for it directly over XPC to `com.apple.OSDUIHelper`.
+
+The HUD is not rate limited, so it tracks the knob smoothly even while an external panel is still
+stepping toward the value at its slower DDC pace. If the HUD ever stops working it is ignored: the
+volume or brightness change still happens.
 
 ## Run at login
 
@@ -77,17 +88,20 @@ List available ports with `ls /dev/cu.*`.
 Constants at the top of [Sources/deej-mac/main.swift](Sources/deej-mac/main.swift), then rebuild:
 
 - `mapping`: which knob drives what. Defaults to
-  `[0: .master, 3: .brightness(0), 2: .brightness(1)]`, meaning slider 0 is volume, slider 3 is the
-  leftmost external monitor and slider 2 is the one to its right. Brightness indices count external
-  displays left to right by their position in System Settings; the built-in display is never a
-  target. Swap the two indices if your monitors are the other way round.
+  `[0: .master, 1: .builtinBrightness, 3: .brightness(0), 2: .brightness(1)]`, meaning slider 0 is
+  volume, slider 1 is the built-in display, slider 3 is the leftmost external monitor and slider 2
+  is the one to its right. Brightness indices count external displays left to right by their
+  position in System Settings. Column 4 is unused. Swap the two monitor indices if yours are the
+  other way round.
 - `invertSliders`: `true` for boards where sliding down raises the value. Set to `false` if your
   pots are wired the other way.
 - `deadzone`: `0.01` (1%, about 10 ADC counts). Raise it if a value drifts while you aren't
   touching the slider, lower it if the steps feel coarse.
-- `brightnessInterval`: `0.25` seconds between DDC writes. One write takes about 77ms and DDC/CI is
-  slow, so a fast sweep drops intermediate positions and applies the final one. Lower it if
-  brightness feels laggy, raise it if the panel struggles.
+- `brightnessInterval`: `0.25` seconds between DDC writes to external monitors. One write takes
+  about 77ms and DDC/CI is slow, so a fast sweep drops intermediate positions and applies the final
+  one. The built-in display is not affected: it is an in-process call and applies immediately.
+- `osdChiclets`: `100`, the HUD bar resolution. Drop it to `16` for the classic segmented look.
+- `osdFadeMsec`: how long the HUD stays up.
 
 Turning a brightness knob fully down sets the backlight to 0 and the panel goes black. The knob is
 the way back.
@@ -96,5 +110,3 @@ the way back.
 
 Per-app volume. That needs a virtual audio device (BlackHole / Background Music) and process-tap
 plumbing; this deliberately only does master.
-
-Brightness of the built-in display. It is not a DDC device and needs a separate API.

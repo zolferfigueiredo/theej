@@ -18,21 +18,29 @@ let invertSliders = true
 
 enum Target {
     case master
+    case builtinBrightness
     // Index into the external displays sorted left to right, so 0 is the leftmost.
     case brightness(Int)
 }
 
-// Knob A -> master volume, knob B -> left monitor, knob C -> right monitor. The board is
-// wired, not configured, so this lives in source rather than a config file. Edit and rebuild
-// if you rewire. The built-in display is deliberately not a target.
-let mapping: [Int: Target] = [0: .master, 3: .brightness(0), 2: .brightness(1)]
+// Knob A -> master volume, knob E -> built-in display, knob B -> left monitor, knob C -> right
+// monitor. The board is wired, not configured, so this lives in source rather than a config file.
+// Edit and rebuild if you rewire. Column 4 is unused.
+let mapping: [Int: Target] = [
+    0: .master,
+    1: .builtinBrightness,
+    3: .brightness(0),
+    2: .brightness(1),
+]
 
-// The menu and the status line read as volume, then monitors left to right. That is not the
-// order of the serial columns driving them, so it needs its own ordering.
+// The menu and the status line read as volume, then the built-in, then externals left to right.
+// That is not the order of the serial columns driving them, so it needs its own ordering. The
+// bands are spaced so a new target kind cannot collide with a monitor ordinal.
 func rank(_ target: Target) -> Int {
     switch target {
-    case .master: return -1
-    case .brightness(let ordinal): return ordinal
+    case .master: return 0
+    case .builtinBrightness: return 1
+    case .brightness(let ordinal): return 2 + ordinal
     }
 }
 let orderedIndices = mapping.sorted { rank($0.value) < rank($1.value) }.map { $0.key }
@@ -102,26 +110,111 @@ func findM1ddc() -> String? {
 
 let m1ddcPath = findM1ddc()
 
-// Split out from displayUUIDs() so the ordering rule is testable without hardware. The
-// built-in is dropped rather than sorted: it sits at a negative x on this machine, so
-// leaving it in would silently make it "monitor 1".
-func orderExternals(_ displays: [(uuid: String, x: CGFloat, builtin: Bool)]) -> [String] {
-    displays.filter { !$0.builtin }.sorted { $0.x < $1.x }.map { $0.uuid }
+// The uuid is what m1ddc addresses a monitor by; the id is what the HUD needs to pick a screen.
+struct Display {
+    let id: CGDirectDisplayID
+    let uuid: String
+    let x: CGFloat
+    let builtin: Bool
 }
 
-// Re-read every write rather than cached with a reconfiguration callback: this is a handful
-// of microseconds at a 250ms cadence, and it means unplugging or rearranging monitors just
-// works with no callback machinery. m1ddc accepts these UUIDs directly.
-func displayUUIDs() -> [String] {
+// Split out from activeDisplays() so the ordering rule is testable without hardware. The
+// built-in is dropped rather than sorted: it sits at a negative x on this machine, so
+// leaving it in would silently make it "monitor 1".
+func orderExternals(_ displays: [Display]) -> [Display] {
+    displays.filter { !$0.builtin }.sorted { $0.x < $1.x }
+}
+
+// Re-read on every use rather than cached with a reconfiguration callback: this is a handful
+// of microseconds, and it means unplugging or rearranging monitors just works with no callback
+// machinery.
+func activeDisplays() -> [Display] {
     var ids = [CGDirectDisplayID](repeating: 0, count: 16)
     var count: UInt32 = 0
     guard CGGetActiveDisplayList(16, &ids, &count) == .success else { return [] }
-    let displays = ids[0..<Int(count)].compactMap { id -> (uuid: String, x: CGFloat, builtin: Bool)? in
+    return ids[0..<Int(count)].compactMap { id -> Display? in
         guard let cf = CGDisplayCreateUUIDFromDisplayID(id)?.takeRetainedValue(),
               let uuid = CFUUIDCreateString(nil, cf) as String? else { return nil }
-        return (uuid, CGDisplayBounds(id).origin.x, CGDisplayIsBuiltin(id) != 0)
+        return Display(id: id, uuid: uuid, x: CGDisplayBounds(id).origin.x,
+                       builtin: CGDisplayIsBuiltin(id) != 0)
     }
-    return orderExternals(displays)
+}
+
+func externalDisplays() -> [Display] { orderExternals(activeDisplays()) }
+
+func builtinDisplayID() -> CGDirectDisplayID? { activeDisplays().first { $0.builtin }?.id }
+
+// MARK: - Built-in display brightness
+
+// There is no public API for the built-in panel on Apple Silicon. This is the same private symbol
+// MonitorControl imports. Resolved once, and if it ever disappears the knob goes inert rather
+// than taking the daemon with it.
+typealias SetBrightnessFn = @convention(c) (CGDirectDisplayID, Float) -> Int32
+typealias BrightnessChangedFn = @convention(c) (CGDirectDisplayID, Double) -> Void
+
+let displayServices: (set: SetBrightnessFn, changed: BrightnessChangedFn?)? = {
+    let path = "/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices"
+    guard let handle = dlopen(path, RTLD_LAZY),
+          let setSym = dlsym(handle, "DisplayServicesSetBrightness") else { return nil }
+    let changedSym = dlsym(handle, "DisplayServicesBrightnessChanged")
+    return (unsafeBitCast(setSym, to: SetBrightnessFn.self),
+            changedSym.map { unsafeBitCast($0, to: BrightnessChangedFn.self) })
+}()
+
+// In-process and fast, unlike the DDC path, so this is called straight from handle() with no
+// worker and no rate limiting.
+func setBuiltinBrightness(_ id: CGDirectDisplayID, _ scalar: Float32) {
+    guard let services = displayServices, services.set(id, Float(scalar)) == 0 else { return }
+    // Without this, Control Center and the menu bar slider keep showing a stale value.
+    services.changed?(id, Double(scalar))
+}
+
+// MARK: - System HUD
+
+// The same XPC service and selector MonitorControl uses, taken from its binary. Private, so every
+// call here is best effort: losing the HUD must never cost a volume or brightness change.
+@objc protocol OSDUIHelperProtocol {
+    func showImage(_ image: Int64, onDisplayID: UInt32, priority: UInt32, msecUntilFade: UInt32,
+                   filledChiclets: UInt32, totalChiclets: UInt32, locked: Bool)
+}
+
+// ponytail: the three tunables. 1 and 3 are the long-standing BezelServices graphic ids, sun and
+// speaker. totalChiclets sets the bar resolution: 100 fills smoothly on the modern slider style,
+// 16 gives the classic segmented look.
+let osdBrightnessImage: Int64 = 1
+let osdVolumeImage: Int64 = 3
+let osdChiclets: UInt32 = 100
+let osdFadeMsec: UInt32 = 1000
+
+let osdLock = NSLock()
+var osdConnection: NSXPCConnection?
+
+func osdHelper() -> OSDUIHelperProtocol? {
+    osdLock.lock()
+    if osdConnection == nil {
+        // Not .privileged: that option is for root-owned services and the connection is
+        // invalidated on the spot for a normal user process, which silently kills the HUD.
+        let conn = NSXPCConnection(machServiceName: "com.apple.OSDUIHelper", options: [])
+        conn.remoteObjectInterface = NSXPCInterface(with: OSDUIHelperProtocol.self)
+        // OSDUIHelper is launched on demand and exits when idle, so a dropped connection is
+        // routine rather than an error. Clear it and let the next call build a fresh one.
+        let forget = { osdLock.lock(); osdConnection = nil; osdLock.unlock() }
+        conn.invalidationHandler = forget
+        conn.interruptionHandler = forget
+        conn.resume()
+        osdConnection = conn
+    }
+    let conn = osdConnection
+    osdLock.unlock()  // released before the proxy call, so an invalidation cannot block on us
+    return conn?.remoteObjectProxyWithErrorHandler { _ in } as? OSDUIHelperProtocol
+}
+
+func showOSD(_ image: Int64, on displayID: CGDirectDisplayID, _ scalar: Float32) {
+    let total = Float32(osdChiclets)
+    let filled = UInt32(max(0, min(total, (scalar * total).rounded())))
+    osdHelper()?.showImage(image, onDisplayID: UInt32(displayID), priority: 0x1f4,
+                           msecUntilFade: osdFadeMsec,
+                           filledChiclets: filled, totalChiclets: osdChiclets, locked: false)
 }
 
 func percent(_ scalar: Float32) -> Int {
@@ -173,10 +266,10 @@ func brightnessWorker() {
         let pending = desired.filter { applied[$0.key] != $0.value }.sorted { $0.key < $1.key }
         if pending.isEmpty { continue }
 
-        let uuids = displayUUIDs()
+        let externals = externalDisplays()
         for (ordinal, value) in pending {
-            guard ordinal < uuids.count else { continue }
-            if writeBrightness(uuids[ordinal], value) {
+            guard ordinal < externals.count else { continue }
+            if writeBrightness(externals[ordinal].uuid, value) {
                 applied[ordinal] = value
                 warned = false
             } else if !warned {
@@ -404,6 +497,7 @@ func describe(_ index: Int) -> String {
     let value = Int((lastApplied[index] ?? 0) * 100)
     switch mapping[index] {
     case .master: return "vol \(String(format: "%3d", value))%"
+    case .builtinBrightness: return "mac \(String(format: "%3d", value))%"
     case .brightness(let ordinal): return "mon\(ordinal + 1) \(String(format: "%3d", value))%"
     case nil: return ""
     }
@@ -421,9 +515,23 @@ func handle(_ values: [Int]) {
         lastApplied[index] = scalar
         changed = true
 
+        // The HUD is deliberately not rate limited. The DDC write is throttled to 250ms, so a
+        // HUD that tracks the knob at full speed is what makes the panel feel responsive.
         switch target {
-        case .master: setMasterVolume(scalar)
-        case .brightness(let ordinal): requestBrightness(ordinal, percent(scalar))
+        case .master:
+            setMasterVolume(scalar)
+            showOSD(osdVolumeImage, on: CGMainDisplayID(), scalar)
+        case .builtinBrightness:
+            if let id = builtinDisplayID() {
+                setBuiltinBrightness(id, scalar)
+                showOSD(osdBrightnessImage, on: id, scalar)
+            }
+        case .brightness(let ordinal):
+            requestBrightness(ordinal, percent(scalar))
+            let externals = externalDisplays()
+            if ordinal < externals.count {
+                showOSD(osdBrightnessImage, on: externals[ordinal].id, scalar)
+            }
         }
     }
 
@@ -514,11 +622,17 @@ if args.contains("--selftest") {
     precondition(percent(0.355) == 36)
     precondition(percent(0.004) == 0)
     // The built-in sits at a negative x. It must be dropped, not sorted to the front.
-    precondition(orderExternals([("R", 2560, false), ("BUILTIN", -1470, true), ("L", 0, false)])
-        == ["L", "R"])
-    precondition(orderExternals([("BUILTIN", 0, true)]).isEmpty)
-    // Menu order is volume then monitors left to right, not serial column order.
-    precondition(orderedIndices == [0, 3, 2])
+    let fake = { (uuid: String, x: CGFloat, builtin: Bool) in
+        Display(id: 0, uuid: uuid, x: x, builtin: builtin)
+    }
+    precondition(orderExternals([fake("R", 2560, false), fake("BUILTIN", -1470, true),
+                                 fake("L", 0, false)]).map(\.uuid) == ["L", "R"])
+    precondition(orderExternals([fake("BUILTIN", 0, true)]).isEmpty)
+    // Menu order is volume, then the built-in, then externals left to right, which is not the
+    // serial column order. The rank bands must stay distinct as target kinds are added.
+    precondition(orderedIndices == [0, 1, 3, 2])
+    precondition(Set([rank(.master), rank(.builtinBrightness),
+                      rank(.brightness(0)), rank(.brightness(1))]).count == 4)
     print("selftest ok")
     exit(0)
 }
@@ -527,12 +641,17 @@ setvbuf(stdout, nil, _IOLBF, 0)
 for index in orderedIndices {
     switch mapping[index]! {
     case .master: print("deej-mac: slider \(index) controls macOS output volume")
+    case .builtinBrightness:
+        print("deej-mac: slider \(index) controls built-in display brightness")
     case .brightness(let ordinal):
         print("deej-mac: slider \(index) controls external monitor \(ordinal + 1) brightness")
     }
 }
 if m1ddcPath == nil {
-    fputs("m1ddc not found, brightness control is disabled. brew install m1ddc\n", stderr)
+    fputs("m1ddc not found, external brightness is disabled. brew install m1ddc\n", stderr)
+}
+if displayServices == nil {
+    fputs("DisplayServices unavailable, built-in brightness is disabled.\n", stderr)
 }
 
 let app = NSApplication.shared
