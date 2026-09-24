@@ -10,12 +10,12 @@ unchanged.
 
 - Reads the deej serial protocol at 9600 baud, 5 sliders
 - Three knobs by default: volume, left monitor brightness, right monitor brightness
+- Menu bar icon showing connected or disconnected at a glance
 - Sets volume in-process via CoreAudio, with no `osascript`
 - Follows whichever output device is current, so Bluetooth headphones just work
 - Identifies monitors by their CoreGraphics UUID and orders them by on-screen position, so two
   identical panels stay left and right across sleep and replug
 - Auto-detects the serial port and reconnects when the board is unplugged
-- No menu bar app, nothing resident besides the daemon itself
 
 ## Build and run
 
@@ -35,6 +35,17 @@ monitor over I2C will fight over the value.
 
 It prints live slider values so you can see which physical slider is which index.
 
+## Menu bar
+
+A faders icon sits in the menu bar. When the Arduino is not connected it gains a heavy diagonal
+slash. The icon is a template image, so it follows light and dark menu bars automatically.
+
+Clicking it, with either button, opens a menu showing the current port and the live value of every
+knob, plus Reconnect and Quit.
+
+There is no Dock icon and no window. When run from a terminal it also prints live slider values,
+so you can see which physical slider is which index.
+
 ## Run at login
 
 ```bash
@@ -43,6 +54,9 @@ It prints live slider values so you can see which physical slider is which index
 
 Installs a LaunchAgent that starts at login and restarts on crash. Logs to `/tmp/deej-mac.log`
 (quiet: the status line is only printed to a terminal).
+
+Quit from the menu really does quit. The agent uses `KeepAlive` with `SuccessfulExit` set to false,
+so a clean exit is left alone while a crash is still restarted.
 
 ```bash
 ./install.sh --uninstall
