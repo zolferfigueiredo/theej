@@ -4,6 +4,7 @@ import CoreAudio
 import CoreGraphics
 import ColorSync
 import AppKit
+import IOKit.hid
 
 let appName = "DeJota"
 let appVersion = "1.0.1"
@@ -28,6 +29,7 @@ enum Target: Hashable, Codable {
     // Index into the external displays sorted left to right, so 0 is the leftmost.
     case brightness(Int)
     case contrast(Int)
+    case externalKeyboard
 }
 
 // The array index is the letter on the box (A = 0). column is the serial field the knob arrives
@@ -50,8 +52,9 @@ func targets(_ knobs: [Knob]) -> [Int: Target] {
     return result
 }
 
-// The menu and the status line read as the volumes, then the built-in, then externals left to right.
-// That is not the order of the serial columns driving them, so it needs its own ordering. Monitors
+// The menu and the status line read as the volumes, the built-in display and Night Shift, externals
+// left to right, then keyboards. That is not the order of the serial columns driving them, so it
+// needs its own ordering. Monitors
 // take two ranks each from 10, and activeDisplays() stops at 16, so a target kind below 10 or from
 // 42 up cannot collide with one.
 func rank(_ target: Target) -> Int {
@@ -63,6 +66,7 @@ func rank(_ target: Target) -> Int {
     case .nightShift: return 4
     case .brightness(let ordinal): return 10 + 2 * ordinal
     case .contrast(let ordinal): return 11 + 2 * ordinal
+    case .externalKeyboard: return 100
     }
 }
 
@@ -80,6 +84,7 @@ func title(_ target: Target?) -> String {
     case .nightShift?: return "Night Shift warmth"
     case .brightness(let ordinal)?: return "Monitor \(ordinal + 1) brightness"
     case .contrast(let ordinal)?: return "Monitor \(ordinal + 1) contrast"
+    case .externalKeyboard?: return "External keyboard backlight"
     }
 }
 
@@ -243,6 +248,43 @@ func setNightShift(_ scalar: Float32) {
     _ = blueLight?.setEnabled?(scalar > 0)
 }
 
+// MARK: - External keyboard backlight
+
+// A QMK keyboard with VIA, over its raw HID interface. A vendor usage page needs no Input Monitoring
+// permission, and the device is not seized, so VIA and Keychron Launcher still work alongside.
+// ponytail: the first VIA keyboard found. Main thread only, as debounce(on: .main) runs it.
+var viaKeyboard: IOHIDDevice?
+
+func openVIAKeyboard() -> IOHIDDevice? {
+    let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
+    IOHIDManagerSetDeviceMatching(manager, [kIOHIDPrimaryUsagePageKey: 0xFF60, kIOHIDPrimaryUsageKey: 0x61] as CFDictionary)
+    guard let device = (IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice>)?.first,
+          IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone)) == kIOReturnSuccess else { return nil }
+    return device
+}
+
+// Both VIA dialects, each ignored by a keyboard that speaks the other. Protocol 9 (older Keychron
+// firmware) is [set value, rgblight brightness, value]; protocol 12 is [set value, RGB matrix
+// channel, brightness, value]. Never the save command, so a replug brings back the keyboard's own
+// level and its flash is never written.
+func viaReports(_ scalar: Float32) -> [[UInt8]] {
+    let value = UInt8((max(0, min(1, scalar)) * 255).rounded())
+    return [[0x07, 0x80, value], [0x07, 0x03, 0x01, value]].map { $0 + [UInt8](repeating: 0, count: 32 - $0.count) }
+}
+
+func setExternalKeyboard(_ scalar: Float32) {
+    // A handle from before an unplug fails, and the second pass opens the keyboard again.
+    for _ in 0..<2 {
+        if viaKeyboard == nil { viaKeyboard = openVIAKeyboard() }
+        guard let device = viaKeyboard else { return }
+        // Report ID 0, with no ID byte in the buffer: QMK's raw HID descriptor has none.
+        if viaReports(scalar).allSatisfy({
+            IOHIDDeviceSetReport(device, kIOHIDReportTypeOutput, 0, $0, $0.count) == kIOReturnSuccess
+        }) { return }
+        viaKeyboard = nil
+    }
+}
+
 // MARK: - System HUD
 
 // The same XPC service and selector MonitorControl uses, taken from its binary. Private, so every
@@ -252,12 +294,13 @@ func setNightShift(_ scalar: Float32) {
                    filledChiclets: UInt32, totalChiclets: UInt32, locked: Bool)
 }
 
-// ponytail: the three tunables. 1 and 3 are the long-standing BezelServices graphic ids, sun and
-// speaker. 0 has no graphic, so the HUD shows the bar alone, for targets macOS has no icon for.
+// ponytail: the three tunables. 1, 3 and 11 are the long-standing BezelServices graphic ids: sun,
+// speaker and keyboard backlight. 0 has no graphic, so the HUD shows the bar alone, for targets macOS has no icon for.
 // totalChiclets sets the bar resolution: 100 fills smoothly on the modern slider style, 16 gives
 // the classic segmented look.
 let osdBrightnessImage: Int64 = 1
 let osdVolumeImage: Int64 = 3
+let osdKeyboardImage: Int64 = 11
 let osdBarImage: Int64 = 0
 let osdChiclets: UInt32 = 100
 let osdFadeMsec: UInt32 = 1000
@@ -836,7 +879,7 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
         let monitors: [Target?] = (0..<max(2, externalDisplays().count, assigned))
             .flatMap { [.brightness($0), .contrast($0)] }
         let choices: [Target?] = [nil, .master, .microphone, .builtinBrightness, .builtinContrast, .nightShift]
-            + monitors
+            + monitors + [.externalKeyboard]
 
         for view in knobRows.arrangedSubviews { view.removeFromSuperview() }
         for (index, knob) in draft.enumerated() {
@@ -1105,6 +1148,9 @@ func handle(_ values: [Int]) {
                 }
                 showOSD(brightness ? osdBrightnessImage : osdBarImage, on: display.id, scalar)
             }
+        case .externalKeyboard:
+            debounce(target, on: .main) { setExternalKeyboard(scalar) }
+            showOSD(osdKeyboardImage, on: CGMainDisplayID(), scalar)
         }
     }
 
@@ -1243,13 +1289,15 @@ if args.contains("--selftest") {
     // serial column order. The rank bands must stay distinct as target kinds are added.
     precondition(ordered(targets(sample)).map(\.key) == [0, 1, 3, 2])
     let every: [Target] = [.master, .microphone, .builtinBrightness, .builtinContrast, .nightShift]
-        + (0..<16).flatMap { [.brightness($0), .contrast($0)] }
+        + (0..<16).flatMap { [.brightness($0), .contrast($0)] } + [.externalKeyboard]
     precondition(Set(every.map(rank)).count == every.count)
     precondition(try! JSONDecoder().decode([Target].self, from: JSONEncoder().encode(every)) == every)
     // Knobs saved before the newer targets existed still load.
     let saved = #"[{"target":{"master":{}},"column":0},{"target":{"brightness":{"_0":0}},"column":3},"#
         + #"{"target":{"brightness":{"_0":1}},"column":2},{"column":4},{"target":{"builtinBrightness":{}},"column":1}]"#
     precondition(try! JSONDecoder().decode([Knob].self, from: Data(saved.utf8)) == sample)
+    precondition(viaReports(1).map { Array($0.prefix(4)) } == [[7, 0x80, 255, 0], [7, 3, 1, 255]])
+    precondition(viaReports(0.1).allSatisfy { $0.count == 32 })
     precondition(parse("7|1023|0\r") == [7, 1023, 0])
     precondition(parse("7||0") == nil && parse("1024") == nil)
     // Calibration finds the knob that swings, times only while it turns, then counts sweeps.

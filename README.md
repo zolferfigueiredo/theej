@@ -96,6 +96,10 @@ send is never found, so skip it.
   own Night Shift, so a schedule still switches it on and off at its set times.
 - **Monitor brightness** and **Monitor contrast**: each external monitor over DDC/CI, through
   m1ddc.
+- **External keyboard backlight**: a QMK keyboard with VIA, such as a Keychron K8 Pro, on its USB
+  cable (not Bluetooth). No permission is needed. Nothing is saved to the keyboard, so unplugging it
+  brings back its own level. The knob sets brightness only: a light switched off on the keyboard
+  has to be switched back on there.
 
 The volumes follow the knob as it turns. Everything else waits for the knob to settle, as described
 under On-screen feedback.
