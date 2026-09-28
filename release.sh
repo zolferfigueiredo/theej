@@ -1,5 +1,6 @@
 #!/bin/bash
-# One-time setup: xcrun notarytool store-credentials theej --key <AuthKey.p8> --key-id <id> --issuer <issuer-id>
+# One-time setup, shared with BiHan Brightness:
+# xcrun notarytool store-credentials bihan --key <AuthKey.p8> --key-id <id> --issuer <issuer-id>
 set -e
 cd "$(dirname "$0")"
 
@@ -63,7 +64,7 @@ hdiutil convert dist/rw.dmg -format UDZO -o "$DMG" >/dev/null
 rm -r dist/rw.dmg dist/dmg
 
 codesign --timestamp --sign "$ID" "$DMG"
-xcrun notarytool submit "$DMG" --keychain-profile theej --wait
+xcrun notarytool submit "$DMG" --keychain-profile bihan --wait
 xcrun stapler staple "$DMG"
 spctl --assess --type open --context context:primary-signature -vv "$DMG"
 echo "Release ready: $DMG"

@@ -145,8 +145,7 @@ knob settles, so a stray reading shorter than `brightnessSettle` never reaches a
 
 Installs a LaunchAgent that starts at login and restarts on crash. Logs to `/tmp/theej.log`
 (quiet: the status line is only printed to a terminal), and shows in Login Items as TheeJ. It also
-removes the agents from before the renames (`com.user.deej-mac`, `com.zolfer.dejota`), so they
-never run at once.
+removes the agent from before the rename (`com.user.deej-mac`), so the two never run at once.
 
 Quit from the menu really does quit. The agent uses `KeepAlive` with `SuccessfulExit` set to false,
 so a clean exit is left alone while a crash is still restarted.
@@ -164,8 +163,8 @@ so a clean exit is left alone while a crash is still restarted.
 Builds `dist/TheeJ-<version>.dmg`, taking the version from `appVersion` in
 [main.swift](Sources/deej-mac/main.swift). The app and the DMG are signed with Developer ID,
 notarized and stapled, and the DMG opens on a dark window with an arrow from TheeJ to Applications.
-Notarization needs a one-time `xcrun notarytool store-credentials theej` with an App Store Connect
-API key, as the top of `release.sh` shows.
+Notarization needs a one-time `xcrun notarytool store-credentials bihan` with an App Store Connect
+API key, as the top of `release.sh` shows. BiHan Brightness uses the same profile.
 
 ## Options
 
