@@ -41,6 +41,8 @@ cat > "$PLIST" <<EOF
 <plist version="1.0">
 <dict>
     <key>Label</key><string>$LABEL</string>
+    <!-- Login Items shows the app's name and icon for this agent, not a bare executable. -->
+    <key>AssociatedBundleIdentifiers</key><string>$LABEL</string>
     <key>ProgramArguments</key>
     <array>
         <string>$EXEC</string>${1:+

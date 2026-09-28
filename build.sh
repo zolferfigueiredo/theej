@@ -7,7 +7,8 @@ APP=.build/TheeJ.app
 VERSION=$(sed -n 's/^let appVersion = "\(.*\)"$/\1/p' Sources/deej-mac/main.swift)
 
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-swiftc -O -o "$APP/Contents/MacOS/TheeJ" Sources/deej-mac/main.swift
+# macOS 14 is the oldest the code builds for. A plain swiftc build targets the running macOS.
+swiftc -O -target arm64-apple-macos14 -o "$APP/Contents/MacOS/TheeJ" Sources/deej-mac/main.swift
 "$APP/Contents/MacOS/TheeJ" --iconset .build/AppIcon.iconset
 iconutil -c icns -o "$APP/Contents/Resources/AppIcon.icns" .build/AppIcon.iconset
 
@@ -22,9 +23,18 @@ cat > "$APP/Contents/Info.plist" <<EOF
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>$VERSION</string>
+    <key>CFBundleVersion</key><string>$VERSION</string>
+    <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
 </dict>
 </plist>
 EOF
+
+# A certificate rather than ad hoc gives TheeJ a Team ID, which Login Items needs to show its name
+# and icon instead of "unidentified developer".
+if ! codesign --force --sign "Apple Development" "$APP" 2>/dev/null; then
+    codesign --force --sign - "$APP"
+    echo "No Apple Development certificate found, so signed ad hoc."
+fi
 
 echo "Built: $APP"
