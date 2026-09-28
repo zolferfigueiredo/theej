@@ -16,7 +16,9 @@ pkill -x DeJota 2>/dev/null || true
 
 # Knobs saved under the DeJota bundle identifier, carried over once.
 if ! defaults read "$LABEL" knobs >/dev/null 2>&1 && defaults read com.zolfer.dejota knobs >/dev/null 2>&1; then
-    defaults write "$LABEL" knobs "$(defaults read com.zolfer.dejota knobs)"
+    # -string, or defaults tries to parse the JSON as a property list and fails, and set -e stops the
+    # install with the old agent already removed.
+    defaults write "$LABEL" knobs -string "$(defaults read com.zolfer.dejota knobs)"
 fi
 
 if [ "$1" = "--uninstall" ]; then
