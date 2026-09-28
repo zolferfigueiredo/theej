@@ -2,9 +2,14 @@
 set -e
 cd "$(dirname "$0")"
 
-LABEL=com.user.deej-mac
+LABEL=com.zolfer.dejota
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-EXEC="$PWD/.build/deej-mac"
+EXEC="$PWD/.build/DeJota"
+LOG=/tmp/dejota.log
+
+# The agent from before the rename to DeJota. Left running, it would fight this one for the port.
+launchctl bootout "gui/$UID/com.user.deej-mac" 2>/dev/null || true
+rm -f "$HOME/Library/LaunchAgents/com.user.deej-mac.plist"
 
 if [ "$1" = "--uninstall" ]; then
     launchctl bootout "gui/$UID/$LABEL" 2>/dev/null || true
@@ -17,7 +22,7 @@ fi
 
 # A manual ./run.sh would fight the agent over the volume. Match the process name, not the
 # command line: ./run.sh invokes it by relative path, and -f would also match this script.
-pkill -x deej-mac 2>/dev/null || true
+pkill -x DeJota 2>/dev/null || true
 
 mkdir -p "$HOME/Library/LaunchAgents"
 cat > "$PLIST" <<EOF
@@ -38,8 +43,8 @@ cat > "$PLIST" <<EOF
         <key>SuccessfulExit</key><false/>
     </dict>
     <key>ThrottleInterval</key><integer>5</integer>
-    <key>StandardOutPath</key><string>/tmp/deej-mac.log</string>
-    <key>StandardErrorPath</key><string>/tmp/deej-mac.log</string>
+    <key>StandardOutPath</key><string>$LOG</string>
+    <key>StandardErrorPath</key><string>$LOG</string>
 </dict>
 </plist>
 EOF
@@ -47,5 +52,5 @@ EOF
 launchctl bootout "gui/$UID/$LABEL" 2>/dev/null || true
 launchctl bootstrap "gui/$UID" "$PLIST"
 echo "Installed and running. It will start again at every login."
-echo "Logs:      /tmp/deej-mac.log"
+echo "Logs:      $LOG"
 echo "Uninstall: ./install.sh --uninstall"
