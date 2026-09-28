@@ -52,6 +52,8 @@ cat > "$PLIST" <<EOF
 EOF
 
 launchctl bootout "gui/$UID/$LABEL" 2>/dev/null || true
+# bootout returns before the old agent is gone, and bootstrapping over it fails with error 5.
+for _ in $(seq 50); do launchctl print "gui/$UID/$LABEL" >/dev/null 2>&1 || break; sleep 0.2; done
 launchctl bootstrap "gui/$UID" "$PLIST"
 echo "Installed and running. It will start again at every login."
 echo "Logs:      $LOG"
