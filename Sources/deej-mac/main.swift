@@ -29,6 +29,7 @@ enum Target: Hashable, Codable {
     // Index into the external displays sorted left to right, so 0 is the leftmost.
     case brightness(Int)
     case contrast(Int)
+    case builtinKeyboard
     case externalKeyboard
 }
 
@@ -66,7 +67,8 @@ func rank(_ target: Target) -> Int {
     case .nightShift: return 4
     case .brightness(let ordinal): return 10 + 2 * ordinal
     case .contrast(let ordinal): return 11 + 2 * ordinal
-    case .externalKeyboard: return 100
+    case .builtinKeyboard: return 100
+    case .externalKeyboard: return 101
     }
 }
 
@@ -84,6 +86,7 @@ func title(_ target: Target?) -> String {
     case .nightShift?: return "Night Shift warmth"
     case .brightness(let ordinal)?: return "Monitor \(ordinal + 1) brightness"
     case .contrast(let ordinal)?: return "Monitor \(ordinal + 1) contrast"
+    case .builtinKeyboard?: return "Built-in keyboard backlight"
     case .externalKeyboard?: return "External keyboard backlight"
     }
 }
@@ -246,6 +249,23 @@ let blueLight = coreBrightness("CBBlueLightClient", BlueLightClient.self) as? Bl
 func setNightShift(_ scalar: Float32) {
     if scalar > 0 { _ = blueLight?.setStrength?(Float(scalar), commit: true) }
     _ = blueLight?.setEnabled?(scalar > 0)
+}
+
+@objc protocol KeyboardClient {
+    @objc(copyKeyboardBacklightIDs) optional func copyKeyboardBacklightIDs() -> NSArray?
+    @objc(setBrightness:fadeSpeed:commit:forKeyboard:)
+    optional func setBrightness(_ value: Float, fadeSpeed: Int32, commit: Bool, forKeyboard id: UInt64) -> Bool
+}
+
+let keyboardLight = coreBrightness("KeyboardBrightnessClient", KeyboardClient.self) as? KeyboardClient
+
+// This setter, not setBrightness:forKeyboard:, is the one seen to light it on macOS 26. 0 mutes it
+// and anything above unmutes it. macOS still turns it off when idle or in bright light, and brings
+// it back at this level.
+func setBuiltinKeyboard(_ scalar: Float32) {
+    guard let id = (keyboardLight?.copyKeyboardBacklightIDs?()?.firstObject as? NSNumber)?.uint64Value
+    else { return }
+    _ = keyboardLight?.setBrightness?(Float(scalar), fadeSpeed: 0, commit: true, forKeyboard: id)
 }
 
 // MARK: - External keyboard backlight
@@ -879,7 +899,7 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
         let monitors: [Target?] = (0..<max(2, externalDisplays().count, assigned))
             .flatMap { [.brightness($0), .contrast($0)] }
         let choices: [Target?] = [nil, .master, .microphone, .builtinBrightness, .builtinContrast, .nightShift]
-            + monitors + [.externalKeyboard]
+            + monitors + [.builtinKeyboard, .externalKeyboard]
 
         for view in knobRows.arrangedSubviews { view.removeFromSuperview() }
         for (index, knob) in draft.enumerated() {
@@ -1148,6 +1168,9 @@ func handle(_ values: [Int]) {
                 }
                 showOSD(brightness ? osdBrightnessImage : osdBarImage, on: display.id, scalar)
             }
+        case .builtinKeyboard:
+            debounce(target, on: .main) { setBuiltinKeyboard(scalar) }
+            showOSD(osdKeyboardImage, on: builtinDisplayID() ?? CGMainDisplayID(), scalar)
         case .externalKeyboard:
             debounce(target, on: .main) { setExternalKeyboard(scalar) }
             showOSD(osdKeyboardImage, on: CGMainDisplayID(), scalar)
@@ -1289,7 +1312,7 @@ if args.contains("--selftest") {
     // serial column order. The rank bands must stay distinct as target kinds are added.
     precondition(ordered(targets(sample)).map(\.key) == [0, 1, 3, 2])
     let every: [Target] = [.master, .microphone, .builtinBrightness, .builtinContrast, .nightShift]
-        + (0..<16).flatMap { [.brightness($0), .contrast($0)] } + [.externalKeyboard]
+        + (0..<16).flatMap { [.brightness($0), .contrast($0)] } + [.builtinKeyboard, .externalKeyboard]
     precondition(Set(every.map(rank)).count == every.count)
     precondition(try! JSONDecoder().decode([Target].self, from: JSONEncoder().encode(every)) == every)
     // Knobs saved before the newer targets existed still load.
@@ -1350,6 +1373,9 @@ if setDisplayContrast == nil {
 }
 if blueLight == nil {
     fputs("CoreBrightness unavailable, Night Shift is disabled.\n", stderr)
+}
+if keyboardLight == nil {
+    fputs("CoreBrightness unavailable, the built-in keyboard backlight is disabled.\n", stderr)
 }
 
 let app = NSApplication.shared
