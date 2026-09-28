@@ -36,7 +36,9 @@ brew install m1ddc
 ```
 
 `build.sh` produces `.build/TheeJ.app`, a real app bundle, so macOS has an icon to show in System
-Settings, Activity Monitor and Finder.
+Settings, Activity Monitor and Finder. It is for Apple Silicon, macOS 14 or later, and signed with
+your Apple Development certificate when you have one, so Login Items shows TheeJ by name and icon
+rather than as an unidentified developer. Without one it is signed ad hoc.
 
 **Quit MonitorControl, BetterDisplay or any similar app first.** Two processes writing the same
 monitor over I2C will fight over the value.
@@ -142,9 +144,8 @@ knob settles, so a stray reading shorter than `brightnessSettle` never reaches a
 ```
 
 Installs a LaunchAgent that starts at login and restarts on crash. Logs to `/tmp/theej.log`
-(quiet: the status line is only printed to a terminal). It also removes the agents from before the
-renames (`com.user.deej-mac`, `com.zolfer.dejota`), so they never run at once, and carries knobs
-saved under `com.zolfer.dejota` over to the new domain.
+(quiet: the status line is only printed to a terminal), and shows in Login Items as TheeJ. It also
+removes the agent from before the rename (`com.user.deej-mac`), so the two never run at once.
 
 Quit from the menu really does quit. The agent uses `KeepAlive` with `SuccessfulExit` set to false,
 so a clean exit is left alone while a crash is still restarted.
@@ -152,6 +153,18 @@ so a clean exit is left alone while a crash is still restarted.
 ```bash
 ./install.sh --uninstall
 ```
+
+## Release
+
+```bash
+./release.sh
+```
+
+Builds `dist/TheeJ-<version>.dmg`, taking the version from `appVersion` in
+[main.swift](Sources/deej-mac/main.swift). The app and the DMG are signed with Developer ID,
+notarized and stapled, and the DMG opens on a dark window with an arrow from TheeJ to Applications.
+Notarization needs a one-time `xcrun notarytool store-credentials bihan` with an App Store Connect
+API key, as the top of `release.sh` shows. BiHan Brightness uses the same profile.
 
 ## Options
 

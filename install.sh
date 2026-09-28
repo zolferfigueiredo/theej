@@ -7,19 +7,9 @@ PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 EXEC="$PWD/.build/TheeJ.app/Contents/MacOS/TheeJ"
 LOG=/tmp/theej.log
 
-# The agents from before the renames. Left running, they would fight this one for the port.
-for OLD in com.user.deej-mac com.zolfer.dejota; do
-    launchctl bootout "gui/$UID/$OLD" 2>/dev/null || true
-    rm -f "$HOME/Library/LaunchAgents/$OLD.plist"
-done
-pkill -x DeJota 2>/dev/null || true
-
-# Knobs saved under the com.zolfer.theej bundle identifier, carried over once.
-if ! defaults read "$LABEL" knobs >/dev/null 2>&1 && defaults read com.zolfer.theej knobs >/dev/null 2>&1; then
-    # -string, or defaults tries to parse the JSON as a property list and fails, and set -e stops the
-    # install with the old agent already removed.
-    defaults write "$LABEL" knobs -string "$(defaults read com.zolfer.theej knobs)"
-fi
+# The agent from before the rename. Left running, it would fight this one for the port.
+launchctl bootout "gui/$UID/com.user.deej-mac" 2>/dev/null || true
+rm -f "$HOME/Library/LaunchAgents/com.user.deej-mac.plist"
 
 if [ "$1" = "--uninstall" ]; then
     launchctl bootout "gui/$UID/$LABEL" 2>/dev/null || true
@@ -41,6 +31,8 @@ cat > "$PLIST" <<EOF
 <plist version="1.0">
 <dict>
     <key>Label</key><string>$LABEL</string>
+    <!-- Login Items shows the app's name and icon for this agent, not a bare executable. -->
+    <key>AssociatedBundleIdentifiers</key><string>$LABEL</string>
     <key>ProgramArguments</key>
     <array>
         <string>$EXEC</string>${1:+
