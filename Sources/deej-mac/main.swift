@@ -315,12 +315,15 @@ func setExternalKeyboard(_ scalar: Float32) {
 }
 
 // ponytail: the three tunables. 1, 3 and 11 are the long-standing BezelServices graphic ids: sun,
-// speaker and keyboard backlight. There is none for contrast, Night Shift or a microphone, so those
-// borrow the sun and the speaker. totalChiclets sets the bar resolution: 100 fills smoothly on the
-// modern slider style, 16 gives the classic segmented look.
+// speaker and keyboard backlight. There is none for a microphone, contrast or Night Shift, so those
+// get TheeJ's own HUD with the SF Symbols below. totalChiclets sets the bar resolution: 100 fills
+// smoothly on the modern slider style, 16 gives the classic segmented look.
 let osdBrightnessImage: Int64 = 1
 let osdVolumeImage: Int64 = 3
 let osdKeyboardImage: Int64 = 11
+let hudMicrophone = "mic.fill"
+let hudContrast = "circle.lefthalf.filled"
+let hudNightShift = "moon.fill"
 let osdChiclets: UInt32 = 100
 let osdFadeMsec: UInt32 = 1000
 
@@ -353,6 +356,91 @@ func showOSD(_ image: Int64, on displayID: CGDirectDisplayID, _ scalar: Float32)
     osdHelper()?.showImage(image, onDisplayID: UInt32(displayID), priority: 0x1f4,
                            msecUntilFade: osdFadeMsec,
                            filledChiclets: filled, totalChiclets: osdChiclets, locked: false)
+    // Both squares sit in the same spot, and TheeJ's would hide this one until it faded.
+    DispatchQueue.main.async { hudShown += 1; hud?.window.orderOut(nil) }
+}
+
+// OSDUIHelper only draws its own graphics, so the jobs it has none for draw its square themselves:
+// the measurements BiHan Brightness took from it at 2x, with an SF Symbol for the graphic.
+final class HUDView: NSView {
+    var symbol: NSImage?
+    var scalar: Float32 = 0
+    override var isFlipped: Bool { true }
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor(white: 0, alpha: 0.25).setFill()
+        NSRect(x: 21, y: 173, width: 159, height: 6).fill()
+        hudInk.setFill()
+        let pitch = 160 / CGFloat(osdChiclets)
+        let filled = Int((scalar * Float32(osdChiclets)).rounded())
+        if pitch >= 4 {
+            for i in 0..<filled { NSRect(x: 21 + pitch * CGFloat(i), y: 173, width: pitch - 1, height: 6).fill() }
+        } else {
+            // One bar: chiclets this narrow, side by side, would show their antialiased edges as seams.
+            NSRect(x: 21, y: 173, width: 159 * CGFloat(filled) / CGFloat(osdChiclets), height: 6).fill()
+        }
+        guard let symbol else { return }
+        let fit = min(96 / symbol.size.width, 96 / symbol.size.height)
+        let size = NSSize(width: symbol.size.width * fit, height: symbol.size.height * fit)
+        symbol.draw(in: NSRect(x: 100 - size.width / 2, y: 87 - size.height / 2, width: size.width, height: size.height),
+                    from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+    }
+}
+
+let hudInk = NSColor(white: 0.55, alpha: 1)
+let hudSymbolStyle = NSImage.SymbolConfiguration(pointSize: 96, weight: .regular)
+    .applying(NSImage.SymbolConfiguration(paletteColors: [hudInk]))
+var hud: (window: NSWindow, view: HUDView)?  // main thread only, built on first use, once NSApp exists
+var hudShown = 0  // bumped per show, so an older fade leaves a newer HUD alone
+
+func makeHUD() -> (window: NSWindow, view: HUDView) {
+    let view = HUDView(frame: NSRect(x: 0, y: 0, width: 200, height: 200))
+    let window = NSWindow(contentRect: view.frame, styleMask: .borderless, backing: .buffered, defer: true)
+    window.level = .screenSaver
+    window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+    window.ignoresMouseEvents = true
+    window.isOpaque = false
+    window.backgroundColor = .clear
+    window.hasShadow = false
+    window.appearance = NSAppearance(named: .darkAqua)  // the dark square in light mode too
+    let blur = NSVisualEffectView(frame: view.frame)
+    blur.material = .hudWindow
+    blur.state = .active  // the app is never active, and the default state would render the blur inactive
+    blur.maskImage = NSImage(size: view.frame.size, flipped: false) {
+        NSBezierPath(roundedRect: $0, xRadius: 18, yRadius: 18).fill()
+        return true
+    }
+    blur.addSubview(view)
+    window.contentView = blur
+    return (window, view)
+}
+
+// Called from the serial thread, like showOSD.
+func showHUD(_ symbol: String, on displayID: CGDirectDisplayID, _ scalar: Float32) {
+    DispatchQueue.main.async {
+        guard let screen = NSScreen.screens.first(where: {
+            $0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID == displayID
+        }) else { return }
+        let (window, view) = hud ?? makeHUD()
+        hud = (window, view)
+        hudShown += 1
+        let shown = hudShown
+        view.symbol = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(hudSymbolStyle)
+        view.scalar = scalar
+        view.needsDisplay = true
+        window.setFrameOrigin(NSPoint(x: screen.frame.midX - 100, y: screen.frame.minY + 140))
+        window.alphaValue = 1
+        window.orderFrontRegardless()
+        // Faded by hand: an animator() fade keeps running over a newer show.
+        let fadeStart = Double(osdFadeMsec) / 1000
+        for i in 1...10 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + fadeStart + 0.03 * Double(i)) {
+                guard shown == hudShown else { return }
+                window.alphaValue = 1 - CGFloat(i) / 10
+                if i == 10 { window.orderOut(nil) }
+            }
+        }
+    }
 }
 
 func percent(_ scalar: Float32) -> Int {
@@ -1142,7 +1230,7 @@ func handle(_ values: [Int]) {
             showOSD(osdVolumeImage, on: CGMainDisplayID(), scalar)
         case .microphone:
             setVolume(scalar, input: true)
-            showOSD(osdVolumeImage, on: CGMainDisplayID(), scalar)
+            showHUD(hudMicrophone, on: CGMainDisplayID(), scalar)
         case .builtinBrightness:
             if let id = builtinDisplayID() {
                 // Main, not ddcQueue, so a stuck m1ddc can never hold the built-in up.
@@ -1152,11 +1240,11 @@ func handle(_ values: [Int]) {
         case .builtinContrast:
             if let id = builtinDisplayID() {
                 debounce(target, on: .main) { _ = setDisplayContrast?(Float(scalar)) }
-                showOSD(osdBrightnessImage, on: id, scalar)
+                showHUD(hudContrast, on: id, scalar)
             }
         case .nightShift:
             debounce(target, on: .main) { setNightShift(scalar) }
-            showOSD(osdBrightnessImage, on: CGMainDisplayID(), scalar)
+            showHUD(hudNightShift, on: CGMainDisplayID(), scalar)
         case .brightness(let ordinal), .contrast(let ordinal):
             let externals = externalDisplays()
             if ordinal < externals.count {
@@ -1167,7 +1255,8 @@ func handle(_ values: [Int]) {
                         fputs("\n\(title(target)) write failed. Is m1ddc installed?\n", stderr)
                     }
                 }
-                showOSD(osdBrightnessImage, on: display.id, scalar)
+                if brightness { showOSD(osdBrightnessImage, on: display.id, scalar) }
+                else { showHUD(hudContrast, on: display.id, scalar) }
             }
         case .builtinKeyboard:
             debounce(target, on: .main) { setBuiltinKeyboard(scalar) }

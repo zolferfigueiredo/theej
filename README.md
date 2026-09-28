@@ -118,7 +118,8 @@ asks for it directly over XPC to `com.apple.OSDUIHelper`.
 The HUD tracks the knob live. Everything but the volumes only changes once the knob has been still
 for a moment, so a turn lands as one clean change when you let go instead of flickering the panel
 through every position on the way. The volumes follow the knob immediately. macOS has no icon
-for contrast, Night Shift or a microphone, so those borrow the sun and the speaker. If the HUD ever
+for a microphone, contrast or Night Shift, so for those TheeJ draws the same square itself, with a
+microphone, a half-filled circle and a moon from SF Symbols. If the HUD ever
 stops working it is ignored: the change itself still happens.
 
 ## Jumpy knobs
