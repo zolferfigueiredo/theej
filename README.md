@@ -207,3 +207,8 @@ contrast knob at 0 leaves it close to black too. The knob is the way back.
 
 Per-app volume. That needs a virtual audio device (BlackHole / Background Music) and process-tap
 plumbing; this deliberately only does master.
+
+## License
+
+MIT, see [LICENSE](LICENSE). TheeJ is an independent client for the
+[deej](https://github.com/omriharel/deej) serial protocol and contains no deej code.
