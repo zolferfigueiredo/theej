@@ -18,8 +18,10 @@ let deadzone: Float32 = 0.01
 // This board's pots read backwards: slider down = full volume. Flip to false if you rewire them.
 let invertSliders = true
 
+// The case names are the JSON keys of saved knobs, so renaming one loses that knob's job.
 enum Target: Hashable, Codable {
     case master
+    case microphone
     case builtinBrightness
     // Index into the external displays sorted left to right, so 0 is the leftmost.
     case brightness(Int)
@@ -45,14 +47,15 @@ func targets(_ knobs: [Knob]) -> [Int: Target] {
     return result
 }
 
-// The menu and the status line read as volume, then the built-in, then externals left to right.
-// That is not the order of the serial columns driving them, so it needs its own ordering. The
-// bands are spaced so a new target kind cannot collide with a monitor ordinal.
+// The menu and the status line read as the volumes, then the built-in, then externals left to right.
+// That is not the order of the serial columns driving them, so it needs its own ordering. Monitors
+// start at 10, and activeDisplays() stops at 16, so a new target kind cannot collide with one.
 func rank(_ target: Target) -> Int {
     switch target {
     case .master: return 0
-    case .builtinBrightness: return 1
-    case .brightness(let ordinal): return 2 + ordinal
+    case .microphone: return 1
+    case .builtinBrightness: return 2
+    case .brightness(let ordinal): return 10 + ordinal
     }
 }
 
@@ -64,6 +67,7 @@ func title(_ target: Target?) -> String {
     switch target {
     case nil: return "Nothing"
     case .master?: return "Master volume"
+    case .microphone?: return "Microphone volume"
     case .builtinBrightness?: return "Built-in display brightness"
     case .brightness(let ordinal)?: return "Monitor \(ordinal + 1) brightness"
     }
@@ -79,9 +83,9 @@ let portOverride = args.first { $0.hasPrefix("/dev/") }
 // works on devices that expose no main volume element (e.g. some Bluetooth headsets).
 let virtualMainVolume: AudioObjectPropertySelector = 0x766D7663
 
-func defaultOutputDevice() -> AudioDeviceID? {
+func defaultDevice(input: Bool) -> AudioDeviceID? {
     var addr = AudioObjectPropertyAddress(
-        mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+        mSelector: input ? kAudioHardwarePropertyDefaultInputDevice : kAudioHardwarePropertyDefaultOutputDevice,
         mScope: kAudioObjectPropertyScopeGlobal,
         mElement: kAudioObjectPropertyElementMain)
     var dev = AudioDeviceID(0)
@@ -92,11 +96,11 @@ func defaultOutputDevice() -> AudioDeviceID? {
     return dev
 }
 
-func setScalar(_ dev: AudioDeviceID, _ selector: AudioObjectPropertySelector,
-               _ element: UInt32, _ value: Float32) -> Bool {
+func setScalar(_ dev: AudioDeviceID, _ scope: AudioObjectPropertyScope,
+               _ selector: AudioObjectPropertySelector, _ element: UInt32, _ value: Float32) -> Bool {
     var addr = AudioObjectPropertyAddress(
         mSelector: selector,
-        mScope: kAudioDevicePropertyScopeOutput,
+        mScope: scope,
         mElement: element)
     guard AudioObjectHasProperty(dev, &addr) else { return false }
     var v = value
@@ -104,12 +108,13 @@ func setScalar(_ dev: AudioDeviceID, _ selector: AudioObjectPropertySelector,
         dev, &addr, 0, nil, UInt32(MemoryLayout<Float32>.size), &v) == noErr
 }
 
-// Resolved per call so swapping output device (headphones connecting) just works.
-func setMasterVolume(_ scalar: Float32) {
-    guard let dev = defaultOutputDevice() else { return }
-    if setScalar(dev, virtualMainVolume, 0, scalar) { return }
-    _ = setScalar(dev, kAudioDevicePropertyVolumeScalar, 1, scalar)
-    _ = setScalar(dev, kAudioDevicePropertyVolumeScalar, 2, scalar)
+// Resolved per call so swapping device (headphones connecting) just works.
+func setVolume(_ scalar: Float32, input: Bool = false) {
+    guard let dev = defaultDevice(input: input) else { return }
+    let scope = input ? kAudioDevicePropertyScopeInput : kAudioDevicePropertyScopeOutput
+    if setScalar(dev, scope, virtualMainVolume, 0, scalar) { return }
+    _ = setScalar(dev, scope, kAudioDevicePropertyVolumeScalar, 1, scalar)
+    _ = setScalar(dev, scope, kAudioDevicePropertyVolumeScalar, 2, scalar)
 }
 
 // MARK: - Monitor brightness
@@ -203,10 +208,12 @@ func setBuiltinBrightness(_ id: CGDirectDisplayID, _ scalar: Float32) {
 }
 
 // ponytail: the three tunables. 1 and 3 are the long-standing BezelServices graphic ids, sun and
-// speaker. totalChiclets sets the bar resolution: 100 fills smoothly on the modern slider style,
-// 16 gives the classic segmented look.
+// speaker. 0 has no graphic, so the HUD shows the bar alone, for targets macOS has no icon for.
+// totalChiclets sets the bar resolution: 100 fills smoothly on the modern slider style, 16 gives
+// the classic segmented look.
 let osdBrightnessImage: Int64 = 1
 let osdVolumeImage: Int64 = 3
+let osdBarImage: Int64 = 0
 let osdChiclets: UInt32 = 100
 let osdFadeMsec: UInt32 = 1000
 
@@ -779,7 +786,7 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
             return nil
         }.max() ?? 0
         // Includes an assigned monitor that is unplugged right now, so Save cannot drop it.
-        let choices: [Target?] = [nil, .master, .builtinBrightness]
+        let choices: [Target?] = [nil, .master, .microphone, .builtinBrightness]
             + (0..<max(2, externalDisplays().count, assigned)).map { .brightness($0) }
 
         for view in knobRows.arrangedSubviews { view.removeFromSuperview() }
@@ -868,7 +875,7 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
 
             You can skip a knob, but please don't skip one that jumps around: turning it is what cleans it.
 
-            Volume and brightness hold still until you finish.
+            Every knob holds still until you finish.
             """
         alert.addButton(withTitle: "Start")
         alert.addButton(withTitle: "Cancel")
@@ -1014,12 +1021,15 @@ func handle(_ values: [Int]) {
         guard scalar != previous, extreme || abs(scalar - previous) >= deadzone else { continue }
         lastApplied[index] = scalar
 
-        // The HUD tracks the knob live while brightness waits for brightnessSettle, so the HUD
-        // is the only feedback during a turn. Do not debounce it.
+        // The volumes follow the knob. Everything else waits for brightnessSettle, and the HUD tracks
+        // the knob live, so the HUD is the only feedback during a turn. Do not debounce it.
         switch target {
         case .master:
-            setMasterVolume(scalar)
+            setVolume(scalar)
             showOSD(osdVolumeImage, on: CGMainDisplayID(), scalar)
+        case .microphone:
+            setVolume(scalar, input: true)
+            showOSD(osdBarImage, on: CGMainDisplayID(), scalar)
         case .builtinBrightness:
             if let id = builtinDisplayID() {
                 // Main, not ddcQueue, so a stuck m1ddc can never hold the built-in up.
@@ -1174,10 +1184,13 @@ if args.contains("--selftest") {
     // Menu order is volume, then the built-in, then externals left to right, which is not the
     // serial column order. The rank bands must stay distinct as target kinds are added.
     precondition(ordered(targets(sample)).map(\.key) == [0, 1, 3, 2])
-    precondition(Set([rank(.master), rank(.builtinBrightness),
-                      rank(.brightness(0)), rank(.brightness(1))]).count == 4)
-    let json = try! JSONEncoder().encode(sample)
-    precondition(try! JSONDecoder().decode([Knob].self, from: json) == sample)
+    let every: [Target] = [.master, .microphone, .builtinBrightness] + (0..<16).map { .brightness($0) }
+    precondition(Set(every.map(rank)).count == every.count)
+    precondition(try! JSONDecoder().decode([Target].self, from: JSONEncoder().encode(every)) == every)
+    // Knobs saved before the newer targets existed still load.
+    let saved = #"[{"target":{"master":{}},"column":0},{"target":{"brightness":{"_0":0}},"column":3},"#
+        + #"{"target":{"brightness":{"_0":1}},"column":2},{"column":4},{"target":{"builtinBrightness":{}},"column":1}]"#
+    precondition(try! JSONDecoder().decode([Knob].self, from: Data(saved.utf8)) == sample)
     precondition(parse("7|1023|0\r") == [7, 1023, 0])
     precondition(parse("7||0") == nil && parse("1024") == nil)
     // Calibration finds the knob that swings, times only while it turns, then counts sweeps.

@@ -14,7 +14,7 @@ panel** through DisplayServices. Arduino firmware is unchanged.
 - Shows the real macOS HUD on the display each knob controls
 - Menu bar icon showing connected or disconnected at a glance
 - Sets volume in-process via CoreAudio, with no `osascript`
-- Follows whichever output device is current, so Bluetooth headphones just work
+- Follows whichever output and input devices are current, so Bluetooth headphones just work
 - Identifies monitors by their CoreGraphics UUID and orders them by on-screen position, so two
   identical panels stay left and right across sleep and replug
 - Auto-detects the serial port and reconnects when the board is unplugged
@@ -57,9 +57,9 @@ which physical slider is which index.
 
 ## Settings and calibration
 
-**Settings** lists every knob by the letter on the box with a menu for what it does: nothing,
-master volume, the built-in display, or an external monitor. Monitors count left to right by their
-position in System Settings. The + and - buttons at the top right add or remove the last knob, down
+**Settings** lists every knob by the letter on the box with a menu for what it does: nothing, or
+one of the jobs under [What a knob can do](#what-a-knob-can-do). Monitors count left to right by
+their position in System Settings. The + and - buttons at the top right add or remove the last knob, down
 to none at all. A knob that has not been calibrated yet shows "Needs calibration" in red and does
 nothing until it is.
 
@@ -77,11 +77,22 @@ you move it, so saving never jumps the volume or a panel to wherever that knob h
 Steps 2 to 5 are the cure for jumpy knobs (below). The timers only run while the knob turns, and a
 short sound marks each new step, so you can watch the knob rather than the screen. Allow a minute or
 two per knob. Any knob can be skipped: it keeps the input it had, unless the run found that input on
-another knob. Volume and brightness hold still for the whole run, Cancel leaves everything as it
-was, and Settings comes to the front at the end to choose what each knob does.
+another knob. Every knob holds still for the whole run, Cancel leaves everything as it was, and
+Settings comes to the front at the end to choose what each knob does.
 
 A new knob only shows up once the Arduino sketch sends one more value. A knob the sketch does not
 send is never found, so skip it.
+
+## What a knob can do
+
+- **Master volume**: the current output device, through CoreAudio.
+- **Microphone volume**: the input volume of the current input device, the same slider as in
+  System Settings, Sound.
+- **Built-in display brightness**: the Retina panel, through DisplayServices.
+- **Monitor brightness**: each external monitor over DDC/CI, through m1ddc.
+
+The volumes follow the knob as it turns. Everything else waits for the knob to settle, as described
+under On-screen feedback.
 
 ## On-screen feedback
 
@@ -89,10 +100,11 @@ Turning a knob shows the same HUD macOS shows for its own brightness and volume 
 display that knob controls. macOS only raises that HUD from its media key handler, so the daemon
 asks for it directly over XPC to `com.apple.OSDUIHelper`.
 
-The HUD tracks the knob live. Brightness itself only changes once the knob has been still for a
-moment, so a turn lands as one clean change when you let go instead of flickering the panel
-through every position on the way. Volume follows the knob immediately. If the HUD ever stops
-working it is ignored: the volume or brightness change still happens.
+The HUD tracks the knob live. Everything but the volumes only changes once the knob has been still
+for a moment, so a turn lands as one clean change when you let go instead of flickering the panel
+through every position on the way. The volumes follow the knob immediately. A job macOS has no
+icon for, like the microphone, shows the bar alone. If the HUD ever stops working it is ignored:
+the change itself still happens.
 
 ## Jumpy knobs
 
