@@ -8,7 +8,11 @@ VERSION=$(sed -n 's/^let appVersion = "\(.*\)"$/\1/p' src/main.swift)
 
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # macOS 14 is the oldest the code builds for. A plain swiftc build targets the running macOS.
-swiftc -O -target arm64-apple-macos14 -o "$APP/Contents/MacOS/TheeJ" src/main.swift
+# One universal binary, so the same app runs on Apple Silicon and Intel.
+for arch in arm64 x86_64; do
+    swiftc -O -target $arch-apple-macos14 -o .build/TheeJ-$arch src/main.swift
+done
+lipo -create -output "$APP/Contents/MacOS/TheeJ" .build/TheeJ-arm64 .build/TheeJ-x86_64
 "$APP/Contents/MacOS/TheeJ" --iconset .build/AppIcon.iconset
 iconutil -c icns -o "$APP/Contents/Resources/AppIcon.icns" .build/AppIcon.iconset
 
