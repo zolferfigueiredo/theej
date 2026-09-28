@@ -94,8 +94,9 @@ send is never found, so skip it.
 - **Built-in display brightness**: the Retina panel, through DisplayServices.
 - **Built-in display contrast**: the Accessibility "Display contrast" setting, normal at the bottom
   of the knob and maximum at the top. External monitors ignore it.
-- **Night Shift warmth**: off at the bottom of the knob, then from least to most warm. It is macOS's
-  own Night Shift, so a schedule still switches it on and off at its set times.
+- **Night Shift warmth**: off at the bottom of the knob, then from least to most warm, on every
+  screen. It is macOS's own Night Shift, so a schedule still switches it on and off at its set
+  times.
 - **Monitor brightness** and **Monitor contrast**: each external monitor over DDC/CI, through
   m1ddc.
 - **Built-in keyboard backlight**: the MacBook keyboard. macOS still turns it off when the keyboard
@@ -172,7 +173,8 @@ Constants at the top of [Sources/deej-mac/main.swift](Sources/deej-mac/main.swif
 - `invertSliders`: `true` for boards where sliding down raises the value. Set to `false` if your
   pots are wired the other way.
 - `deadzone`: `0.01` (1%, about 10 ADC counts). Raise it if a value drifts while you aren't
-  touching the slider, lower it if the steps feel coarse.
+  touching the slider, lower it if the steps feel coarse. It is also how close to an end counts as
+  the end, so a knob turned all the way down always reaches 0.
 - `brightnessSettle`: `0.3` seconds. Every knob but the volumes applies only once it has been
   still this long, and every movement restarts the wait. This is also what hides wiper contact
   bounce, where a moving pot briefly reports its neighbour's value for up to about 0.11s, so keep it

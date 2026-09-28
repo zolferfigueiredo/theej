@@ -1120,12 +1120,14 @@ func handle(_ values: [Int]) {
     let mapping = targets(config.knobs)
     for (index, value) in values.enumerated() {
         let raw = Float32(value) / maxADC
-        let scalar = invertSliders ? 1 - raw : raw
+        let unsnapped = invertSliders ? 1 - raw : raw
+        // A pot often stops a count or two short of its rail, which would leave a light on at its
+        // dimmest. Snapping also stops a knob resting by an end from flicking onto it as `extreme`.
+        let scalar = unsnapped < deadzone ? 0 : unsnapped > 1 - deadzone ? 1 : unsnapped
         // Tracked, not applied: a knob that gains a job (on Save, or as a calibration ends with every
-        // knob parked at an end) waits to be moved instead of jumping there. Snapped so a knob resting
-        // by an end cannot flick onto it and pass the deadzone as `extreme`.
+        // knob parked at an end) waits to be moved instead of jumping there.
         guard !config.calibrating, let target = mapping[index] else {
-            lastApplied[index] = scalar < deadzone ? 0 : scalar > 1 - deadzone ? 1 : scalar
+            lastApplied[index] = scalar
             continue
         }
         let previous = lastApplied[index] ?? -1
