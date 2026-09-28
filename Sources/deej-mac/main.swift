@@ -337,64 +337,105 @@ final class Shared {
 
 let shared = Shared()
 
-// Drawn in code rather than shipped as an asset. isTemplate lets macOS handle light and dark
-// menu bars, which is also why the disconnected slash cannot use colour: a template image is
-// an alpha mask, so the gap around the slash has to be real transparency.
-func makeIcon(slashed: Bool, alpha: CGFloat = 1.0, side: CGFloat = 18) -> NSImage {
-    let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { _ in
-        let s = side / 24.0
+// The one fader both icons draw, so the menu bar and the app icon cannot drift apart. Numbers are
+// in a 24-unit design space, y down; `box` is where that square lands. Four marks either side, and
+// the knob sits on one and hides it: mark 2 when connected, just above the middle, and the last
+// mark when parked at the bottom. The sizes are tuned to stay crisp at 18pt on a Retina menu bar.
+struct Fader {
+    let rail: NSBezierPath, marks: [NSBezierPath], groove: NSBezierPath
+    let knob: NSBezierPath, railGap: NSBezierPath
+
+    init(parked: Bool, in box: NSRect) {
+        let s = box.width / 24
         func pt(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
-            NSPoint(x: x * s, y: (24 - y) * s)  // design space is y down, AppKit is y up
+            NSPoint(x: box.minX + x * s, y: box.maxY - y * s)
         }
+        func rect(_ cx: CGFloat, _ cy: CGFloat, _ w: CGFloat, _ h: CGFloat) -> NSRect {
+            let c = pt(cx, cy)
+            return NSRect(x: c.x - w * s / 2, y: c.y - h * s / 2, width: w * s, height: h * s)
+        }
+        func line(_ x0: CGFloat, _ y0: CGFloat, _ x1: CGFloat, _ y1: CGFloat, _ width: CGFloat) -> NSBezierPath {
+            let path = NSBezierPath()
+            path.move(to: pt(x0, y0))
+            path.line(to: pt(x1, y1))
+            path.lineWidth = width * s
+            path.lineCapStyle = .round
+            return path
+        }
+
+        let rows: [CGFloat] = [4, 9.33, 14.67, 20]
+        let knobY = parked ? rows[3] : rows[1]
+        rail = line(12, 3.33, 12, 20.67, 2.67)
+        // One path per mark: AppKit rasterises a thin many-part path differently on a 1x screen and
+        // each mark comes out about a pixel short.
+        marks = rows.filter { $0 != knobY }.flatMap { y in [line(6, y, 8, y, 1.33), line(16, y, 18, y, 1.33)] }
+        groove = line(9.33, knobY, 14.67, knobY, 1.33)
+        knob = NSBezierPath(roundedRect: rect(12, knobY, 10.67, 5.33), xRadius: 1.33 * s, yRadius: 1.33 * s)
+        railGap = NSBezierPath(rect: rect(12, knobY, 3, 8))
+    }
+}
+
+// Drawn in code rather than shipped as an asset. isTemplate lets macOS handle light and dark menu
+// bars, which is also why the gaps around the knob cannot use colour: a template image is an alpha
+// mask, so they have to be real transparency.
+func makeIcon(parked: Bool, alpha: CGFloat = 1.0, side: CGFloat = 18) -> NSImage {
+    let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { box in
+        let fader = Fader(parked: parked, in: box)
         let ink = NSColor.black.withAlphaComponent(alpha)
         ink.setStroke()
         ink.setFill()
-
-        let xs: [CGFloat] = [5, 12, 19]
-        let tracks = NSBezierPath()
-        tracks.lineWidth = 1.7 * s
-        tracks.lineCapStyle = .round
-        for x in xs {
-            tracks.move(to: pt(x, 3.5))
-            tracks.line(to: pt(x, 20.5))
-        }
-        tracks.stroke()
-
-        let knobY: [CGFloat] = [8.1, 14.6, 6.6]
-        let kw = 7.6 * s, kh = 3.4 * s
-        for (i, x) in xs.enumerated() {
-            let c = pt(x, knobY[i])
-            let r = NSRect(x: c.x - kw / 2, y: c.y - kh / 2, width: kw, height: kh)
-            NSBezierPath(roundedRect: r, xRadius: kh / 2, yRadius: kh / 2).fill()
-        }
-
-        if slashed {
-            let a = pt(1.6, 22.4), b = pt(22.4, 1.6)
-            let gap = NSBezierPath()
-            gap.move(to: a); gap.line(to: b)
-            gap.lineWidth = 5.4 * s
-            gap.lineCapStyle = .round
-            NSGraphicsContext.current?.compositingOperation = .clear
-            gap.stroke()
-            NSGraphicsContext.current?.compositingOperation = .sourceOver
-
-            let slash = NSBezierPath()
-            slash.move(to: a); slash.line(to: b)
-            slash.lineWidth = 2.8 * s
-            slash.lineCapStyle = .round
-            slash.stroke()
-        }
+        fader.rail.stroke()
+        fader.marks.forEach { $0.stroke() }
+        let context = NSGraphicsContext.current
+        context?.compositingOperation = .clear
+        fader.railGap.fill()
+        context?.compositingOperation = .sourceOver
+        fader.knob.fill()
+        context?.compositingOperation = .clear
+        fader.groove.stroke()
+        context?.compositingOperation = .sourceOver
         return true
     }
     image.isTemplate = true
     return image
 }
 
+// The same fader in the colours of the original artwork, on a dark tile laid out on Apple's icon
+// grid: an 824 square with 185 corners on a 1024 canvas. build.sh bakes it into AppIcon.icns.
+func makeAppIcon(side: CGFloat) -> NSImage {
+    NSImage(size: NSSize(width: side, height: side), flipped: false) { box in
+        let tile = box.insetBy(dx: side * 100 / 1024, dy: side * 100 / 1024)
+        let corner = side * 185 / 1024
+        NSGradient(starting: NSColor(white: 0.18, alpha: 1), ending: NSColor(white: 0.05, alpha: 1))?
+            .draw(in: NSBezierPath(roundedRect: tile, xRadius: corner, yRadius: corner), angle: -90)
+
+        let fader = Fader(parked: false, in: tile.insetBy(dx: tile.width * 0.14, dy: tile.width * 0.14))
+        NSColor(white: 0.45, alpha: 1).setStroke()
+        fader.rail.stroke()
+        NSColor(white: 0.9, alpha: 1).setStroke()
+        fader.marks.forEach { $0.stroke() }
+
+        NSGraphicsContext.saveGraphicsState()
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.55)
+        shadow.shadowOffset = NSSize(width: 0, height: -side * 0.012)
+        shadow.shadowBlurRadius = side * 0.024
+        shadow.set()
+        NSColor(white: 0.94, alpha: 1).setFill()
+        fader.knob.fill()
+        NSGraphicsContext.restoreGraphicsState()
+
+        NSColor(white: 0.35, alpha: 1).setStroke()
+        fader.groove.stroke()
+        return true
+    }
+}
+
 final class MenuBar: NSObject, NSMenuDelegate {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    private let connectedIcon = makeIcon(slashed: false)
-    private let disconnectedIcon = makeIcon(slashed: true)
-    private let busyIcon = makeIcon(slashed: false, alpha: 0.38)
+    private let connectedIcon = makeIcon(parked: false)
+    private let disconnectedIcon = makeIcon(parked: true)
+    private let busyIcon = makeIcon(parked: false, alpha: 0.38)
     private var aboutWindow: NSWindow?
 
     override init() {
@@ -450,8 +491,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
                                            NSTextField(labelWithString: "Version \(appVersion)")])
             text.orientation = .vertical
             text.setCustomSpacing(12, after: name)
-            let logo = NSImageView(image: makeIcon(slashed: false, side: 96))
-            logo.contentTintColor = .labelColor
+            let logo = NSImageView(image: makeAppIcon(side: 96))
             logo.widthAnchor.constraint(equalToConstant: 96).isActive = true
             logo.heightAnchor.constraint(equalToConstant: 96).isActive = true
             let row = NSStackView(views: [logo, text])
@@ -632,6 +672,28 @@ func serialLoop() {
 }
 
 // MARK: - Start
+
+// build.sh runs this to render the app icon at every size an .iconset needs, then iconutil packs it.
+if let flag = args.firstIndex(of: "--iconset"), flag + 1 < args.count {
+    let dir = URL(fileURLWithPath: args[flag + 1])
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    for points in [16, 32, 128, 256, 512] {
+        for scale in [1, 2] {
+            let px = points * scale
+            let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: px, pixelsHigh: px,
+                                       bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                       isPlanar: false, colorSpaceName: .deviceRGB,
+                                       bytesPerRow: 0, bitsPerPixel: 0)!
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+            makeAppIcon(side: CGFloat(px)).draw(in: NSRect(x: 0, y: 0, width: px, height: px))
+            NSGraphicsContext.restoreGraphicsState()
+            let name = "icon_\(points)x\(points)\(scale == 2 ? "@2x" : "").png"
+            try rep.representation(using: .png, properties: [:])!.write(to: dir.appendingPathComponent(name))
+        }
+    }
+    exit(0)
+}
 
 // precondition, not assert: build.sh compiles with -O, which strips assert entirely.
 if args.contains("--selftest") {
