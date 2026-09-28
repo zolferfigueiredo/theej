@@ -58,6 +58,18 @@ moment, so a turn lands as one clean change when you let go instead of flickerin
 through every position on the way. Volume follows the knob immediately. If the HUD ever stops
 working it is ignored: the volume or brightness change still happens.
 
+## Jumpy knobs
+
+If a knob's HUD jumps around while you turn it, the pot's track is oxidised. The wiper loses
+contact for anywhere from 15ms to a few hundred ms and the Arduino reads a stray value, often near
+the ends of travel. It builds up on knobs that rarely move, which is why the volume knob stays
+clean.
+
+Sweep the knob slowly from end to end a dozen or so times. Recordings of this board showed a dirty
+knob reading clean within about 15 seconds of sweeping. A drop of potentiometer contact cleaner
+makes it last. The panel is protected meanwhile: brightness only applies once the knob settles, so
+a stray reading shorter than `brightnessSettle` never reaches the display.
+
 ## Run at login
 
 ```bash
