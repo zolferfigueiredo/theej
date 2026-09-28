@@ -59,7 +59,7 @@ and the app icon by `makeAppIcon`.
 
 Clicking it, with either button, opens a menu: the profiles first, with a check by the active one
 and each one's shortcut, then Settings and Calibrate, then the current port and the
-live value of every knob, one per line, then Reconnect, then About TheeJ and Quit.
+live value of every knob, one per line, and Reconnect under them, then About TheeJ and Quit.
 
 Settings can show the active profile's name beside the icon, or hide the icon altogether. Opening
 TheeJ again while it runs, from Finder, Spotlight or `open`, brings up Settings, which is the way

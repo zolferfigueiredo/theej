@@ -1052,7 +1052,6 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             mi.isEnabled = false
             menu.addItem(mi)
         }
-        menu.addItem(.separator())
         menu.addItem(entry("Reconnect", #selector(reconnect), ""))
         menu.addItem(.separator())
         menu.addItem(entry("About \(appName)", #selector(about), ""))
