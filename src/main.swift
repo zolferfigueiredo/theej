@@ -1104,7 +1104,8 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             let text = NSStackView(views: [name,
                                            credit("By", "Zolfer Figueiredo", "http://zolfer.com/"),
                                            credit("Inspired by", "deej", "https://github.com/omriharel/deej"),
-                                           NSTextField(labelWithString: "Version \(appVersion)")])
+                                           NSTextField(labelWithString: "Version \(appVersion)"),
+                                           link("Website", "https://theej.zolfer.com/")])
             text.orientation = .vertical
             text.setCustomSpacing(12, after: name)
             let logo = NSImageView(image: makeAppIcon(side: 96, scale: 2))
@@ -1119,12 +1120,16 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     }
 
     // Only the name is a link. The tooltip holds the URL, so hovering also shows where it goes.
-    private func credit(_ prefix: String, _ name: String, _ url: String) -> NSStackView {
+    private func link(_ name: String, _ url: String) -> NSButton {
         let link = NSButton(title: name, target: self, action: #selector(openLink))
         link.isBordered = false
         link.contentTintColor = .linkColor
         link.toolTip = url
-        let line = NSStackView(views: [NSTextField(labelWithString: prefix), link])
+        return link
+    }
+
+    private func credit(_ prefix: String, _ name: String, _ url: String) -> NSStackView {
+        let line = NSStackView(views: [NSTextField(labelWithString: prefix), link(name, url)])
         line.spacing = 3
         line.alignment = .firstBaseline
         return line

@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 
 NAME=TheeJ
 ID="Developer ID Application: Zolfer Figueiredo (497V6MCDS8)"
-VERSION=$(sed -n 's/^let appVersion = "\(.*\)"$/\1/p' Sources/deej-mac/main.swift)
+VERSION=$(sed -n 's/^let appVersion = "\(.*\)"$/\1/p' src/main.swift)
 DMG="dist/$NAME-$VERSION.dmg"
 
 ./build.sh

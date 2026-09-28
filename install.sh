@@ -7,10 +7,6 @@ PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 EXEC="$PWD/.build/TheeJ.app/Contents/MacOS/TheeJ"
 LOG=/tmp/theej.log
 
-# The agent from before the rename. Left running, it would fight this one for the port.
-launchctl bootout "gui/$UID/com.user.deej-mac" 2>/dev/null || true
-rm -f "$HOME/Library/LaunchAgents/com.user.deej-mac.plist"
-
 if [ "$1" = "--uninstall" ]; then
     launchctl bootout "gui/$UID/$LABEL" 2>/dev/null || true
     rm -f "$PLIST"
