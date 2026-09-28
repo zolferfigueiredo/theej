@@ -23,8 +23,9 @@ panel** through DisplayServices. Arduino firmware is unchanged.
 
 Needs Xcode command line tools (`xcode-select --install`).
 
-External monitor brightness and contrast additionally need [m1ddc](https://github.com/waydabber/m1ddc),
-a small standalone binary. Apple Silicon only. Everything else works without it.
+External monitor brightness and contrast additionally need
+[m1ddc](https://github.com/waydabber/m1ddc), a small standalone binary. Apple Silicon only.
+Everything else works without it.
 
 ```bash
 brew install m1ddc
@@ -59,9 +60,9 @@ which physical slider is which index.
 
 **Settings** lists every knob by the letter on the box with a menu for what it does: nothing, or
 one of the jobs under [What a knob can do](#what-a-knob-can-do). Monitors count left to right by
-their position in System Settings. The + and - buttons at the top right add or remove the last knob, down
-to none at all. A knob that has not been calibrated yet shows "Needs calibration" in red and does
-nothing until it is.
+their position in System Settings. The + and - buttons at the top right add or remove the last
+knob, down to none at all. A knob that has not been calibrated yet shows "Needs calibration" in red
+and does nothing until it is.
 
 Save applies at once and leaves the window open. A knob given a new job takes it over the next time
 you move it, so saving never jumps the volume or a panel to wherever that knob happens to sit. With
@@ -89,6 +90,8 @@ send is never found, so skip it.
 - **Microphone volume**: the input volume of the current input device, the same slider as in
   System Settings, Sound.
 - **Built-in display brightness**: the Retina panel, through DisplayServices.
+- **Built-in display contrast**: the Accessibility "Display contrast" setting, normal at the bottom
+  of the knob and maximum at the top. External monitors ignore it.
 - **Monitor brightness** and **Monitor contrast**: each external monitor over DDC/CI, through
   m1ddc.
 
@@ -104,8 +107,8 @@ asks for it directly over XPC to `com.apple.OSDUIHelper`.
 The HUD tracks the knob live. Everything but the volumes only changes once the knob has been still
 for a moment, so a turn lands as one clean change when you let go instead of flickering the panel
 through every position on the way. The volumes follow the knob immediately. A job macOS has no
-icon for, like the microphone, shows the bar alone. If the HUD ever stops working it is ignored:
-the change itself still happens.
+icon for, like the microphone or contrast, shows the bar alone. If the HUD ever stops working it is
+ignored: the change itself still happens.
 
 ## Jumpy knobs
 

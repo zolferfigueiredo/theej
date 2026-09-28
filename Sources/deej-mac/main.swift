@@ -23,6 +23,7 @@ enum Target: Hashable, Codable {
     case master
     case microphone
     case builtinBrightness
+    case builtinContrast
     // Index into the external displays sorted left to right, so 0 is the leftmost.
     case brightness(Int)
     case contrast(Int)
@@ -57,6 +58,7 @@ func rank(_ target: Target) -> Int {
     case .master: return 0
     case .microphone: return 1
     case .builtinBrightness: return 2
+    case .builtinContrast: return 3
     case .brightness(let ordinal): return 10 + 2 * ordinal
     case .contrast(let ordinal): return 11 + 2 * ordinal
     }
@@ -72,6 +74,7 @@ func title(_ target: Target?) -> String {
     case .master?: return "Master volume"
     case .microphone?: return "Microphone volume"
     case .builtinBrightness?: return "Built-in display brightness"
+    case .builtinContrast?: return "Built-in display contrast"
     case .brightness(let ordinal)?: return "Monitor \(ordinal + 1) brightness"
     case .contrast(let ordinal)?: return "Monitor \(ordinal + 1) contrast"
     }
@@ -179,7 +182,7 @@ func externalDisplays() -> [Display] { orderExternals(activeDisplays()) }
 
 func builtinDisplayID() -> CGDirectDisplayID? { activeDisplays().first { $0.builtin }?.id }
 
-// MARK: - Built-in display brightness
+// MARK: - Built-in display
 
 // There is no public API for the built-in panel on Apple Silicon. This is the same private symbol
 // MonitorControl imports. Resolved once, and if it ever disappears the knob goes inert rather
@@ -201,6 +204,16 @@ func setBuiltinBrightness(_ id: CGDirectDisplayID, _ scalar: Float32) {
     // Without this, Control Center and the menu bar slider keep showing a stale value.
     services.changed?(id, Double(scalar))
 }
+
+// The Accessibility "Display contrast" setting, 0 normal to 1 maximum, which external monitors
+// ignore. Private, from SkyLight. The argument is a 32-bit Float, not a CGFloat.
+typealias SetContrastFn = @convention(c) (Float) -> Int32
+
+let setDisplayContrast: SetContrastFn? = {
+    guard let handle = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", RTLD_LAZY),
+          let sym = dlsym(handle, "CGSSetDisplayContrast") else { return nil }
+    return unsafeBitCast(sym, to: SetContrastFn.self)
+}()
 
 // MARK: - System HUD
 
@@ -794,7 +807,7 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
         // Includes an assigned monitor that is unplugged right now, so Save cannot drop it.
         let monitors: [Target?] = (0..<max(2, externalDisplays().count, assigned))
             .flatMap { [.brightness($0), .contrast($0)] }
-        let choices: [Target?] = [nil, .master, .microphone, .builtinBrightness] + monitors
+        let choices: [Target?] = [nil, .master, .microphone, .builtinBrightness, .builtinContrast] + monitors
 
         for view in knobRows.arrangedSubviews { view.removeFromSuperview() }
         for (index, knob) in draft.enumerated() {
@@ -1043,6 +1056,11 @@ func handle(_ values: [Int]) {
                 debounce(target, on: .main) { setBuiltinBrightness(id, scalar) }
                 showOSD(osdBrightnessImage, on: id, scalar)
             }
+        case .builtinContrast:
+            if let id = builtinDisplayID() {
+                debounce(target, on: .main) { _ = setDisplayContrast?(Float(scalar)) }
+                showOSD(osdBarImage, on: id, scalar)
+            }
         case .brightness(let ordinal), .contrast(let ordinal):
             let externals = externalDisplays()
             if ordinal < externals.count {
@@ -1192,7 +1210,7 @@ if args.contains("--selftest") {
     // Menu order is volume, then the built-in, then externals left to right, which is not the
     // serial column order. The rank bands must stay distinct as target kinds are added.
     precondition(ordered(targets(sample)).map(\.key) == [0, 1, 3, 2])
-    let every: [Target] = [.master, .microphone, .builtinBrightness]
+    let every: [Target] = [.master, .microphone, .builtinBrightness, .builtinContrast]
         + (0..<16).flatMap { [.brightness($0), .contrast($0)] }
     precondition(Set(every.map(rank)).count == every.count)
     precondition(try! JSONDecoder().decode([Target].self, from: JSONEncoder().encode(every)) == every)
@@ -1246,6 +1264,9 @@ if m1ddcPath == nil {
 }
 if displayServices == nil {
     fputs("DisplayServices unavailable, built-in brightness is disabled.\n", stderr)
+}
+if setDisplayContrast == nil {
+    fputs("CGSSetDisplayContrast unavailable, built-in contrast is disabled.\n", stderr)
 }
 
 let app = NSApplication.shared
