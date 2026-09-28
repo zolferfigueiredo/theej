@@ -7,7 +7,7 @@ import AppKit
 import IOKit.hid
 
 let appName = "DeJota"
-let appVersion = "1.1.0"
+let appVersion = "1.0.2"
 
 let baud = speed_t(B9600)
 let maxADC: Float32 = 1023.0
@@ -315,13 +315,12 @@ func setExternalKeyboard(_ scalar: Float32) {
 }
 
 // ponytail: the three tunables. 1, 3 and 11 are the long-standing BezelServices graphic ids: sun,
-// speaker and keyboard backlight. 0 has no graphic, so the HUD shows the bar alone, for targets macOS has no icon for.
-// totalChiclets sets the bar resolution: 100 fills smoothly on the modern slider style, 16 gives
-// the classic segmented look.
+// speaker and keyboard backlight. There is none for contrast, Night Shift or a microphone, so those
+// borrow the sun and the speaker. totalChiclets sets the bar resolution: 100 fills smoothly on the
+// modern slider style, 16 gives the classic segmented look.
 let osdBrightnessImage: Int64 = 1
 let osdVolumeImage: Int64 = 3
 let osdKeyboardImage: Int64 = 11
-let osdBarImage: Int64 = 0
 let osdChiclets: UInt32 = 100
 let osdFadeMsec: UInt32 = 1000
 
@@ -1143,7 +1142,7 @@ func handle(_ values: [Int]) {
             showOSD(osdVolumeImage, on: CGMainDisplayID(), scalar)
         case .microphone:
             setVolume(scalar, input: true)
-            showOSD(osdBarImage, on: CGMainDisplayID(), scalar)
+            showOSD(osdVolumeImage, on: CGMainDisplayID(), scalar)
         case .builtinBrightness:
             if let id = builtinDisplayID() {
                 // Main, not ddcQueue, so a stuck m1ddc can never hold the built-in up.
@@ -1153,11 +1152,11 @@ func handle(_ values: [Int]) {
         case .builtinContrast:
             if let id = builtinDisplayID() {
                 debounce(target, on: .main) { _ = setDisplayContrast?(Float(scalar)) }
-                showOSD(osdBarImage, on: id, scalar)
+                showOSD(osdBrightnessImage, on: id, scalar)
             }
         case .nightShift:
             debounce(target, on: .main) { setNightShift(scalar) }
-            showOSD(osdBarImage, on: CGMainDisplayID(), scalar)
+            showOSD(osdBrightnessImage, on: CGMainDisplayID(), scalar)
         case .brightness(let ordinal), .contrast(let ordinal):
             let externals = externalDisplays()
             if ordinal < externals.count {
@@ -1168,7 +1167,7 @@ func handle(_ values: [Int]) {
                         fputs("\n\(title(target)) write failed. Is m1ddc installed?\n", stderr)
                     }
                 }
-                showOSD(brightness ? osdBrightnessImage : osdBarImage, on: display.id, scalar)
+                showOSD(osdBrightnessImage, on: display.id, scalar)
             }
         case .builtinKeyboard:
             debounce(target, on: .main) { setBuiltinKeyboard(scalar) }
