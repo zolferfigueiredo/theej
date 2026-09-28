@@ -1042,7 +1042,6 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             menu.addItem(mi)
         }
         menu.addItem(.separator())
-        menu.addItem(entry("About \(appName)", #selector(about), ""))
         menu.addItem(entry("Settings", #selector(openSettings), ","))
         let calibrateItem = entry("Calibrate", #selector(calibrate), "")
         calibrateItem.isEnabled = state.connected && !setup.columns.isEmpty
@@ -1056,6 +1055,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         menu.addItem(.separator())
         menu.addItem(entry("Reconnect", #selector(reconnect), ""))
         menu.addItem(.separator())
+        menu.addItem(entry("About \(appName)", #selector(about), ""))
         menu.addItem(entry("Quit", #selector(quit), "q"))
     }
 
