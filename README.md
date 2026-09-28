@@ -12,6 +12,7 @@ backlight** over USB. Arduino firmware is unchanged.
 
 - Reads the deej serial protocol at 9600 baud, however many sliders the sketch sends
 - Settings picks what each knob does: a volume, a display, Night Shift or a keyboard backlight
+- Profiles switch every knob's job at once, from the menu bar or a global keyboard shortcut
 - Calibrate finds which input each knob is wired to and sweeps its pot clean
 - Shows the real macOS HUD on the display each knob controls
 - Menu bar icon showing connected or disconnected at a glance
@@ -51,11 +52,19 @@ A fader icon sits in the menu bar. While the Arduino is connected its knob sits 
 middle; when it is not, the knob drops to the bottom. The icon is a template image, so it follows
 light and dark menu bars automatically.
 
-The app icon, also shown in the About window, is the same fader in colour. Both are drawn in code
-from one shape, `Fader` in [main.swift](Sources/deej-mac/main.swift), so they always match.
+The app icon, also shown in the About window, is the mixer from
+[theej.zolfer.com](https://theej.zolfer.com/): three faders and an orange LED on a cream plate. Both
+icons are drawn in code in [main.swift](Sources/deej-mac/main.swift), the menu bar one by `Fader`
+and the app icon by `makeAppIcon`.
 
-Clicking it, with either button, opens a menu: About TheeJ, Settings and Calibrate first, then
-the current port and the live value of every knob, one per line, then Reconnect and Quit.
+Clicking it, with either button, opens a menu: the profiles first, with a check by the active one
+and each one's shortcut, then About TheeJ, Settings and Calibrate, then the current port and the
+live value of every knob, one per line, then Reconnect and Quit.
+
+Settings can show the active profile's name beside the icon, or hide the icon altogether. Opening
+TheeJ again while it runs, from Finder, Spotlight or `open`, brings up Settings, which is the way
+back with the icon hidden. A second copy started directly, as `./run.sh` does, asks the running one
+to show Settings and quits, so two copies never share the serial port.
 
 There is no Dock icon. When run from a terminal it also prints live slider values, so you can see
 which physical slider is which index.
@@ -63,14 +72,27 @@ which physical slider is which index.
 ## Settings and calibration
 
 **Settings** lists every knob by the letter on the box with a menu for what it does: nothing, or
-one of the jobs under [What a knob can do](#what-a-knob-can-do). Monitors count left to right by
-their position in System Settings. The + and - buttons at the top right add or remove the last
-knob, down to none at all. A knob that has not been calibrated yet shows "Needs calibration" in red
-and does nothing until it is.
+one of the jobs under [What a knob can do](#what-a-knob-can-do), grouped as volumes, brightness,
+contrast, Night Shift and keyboard backlights. Monitors count left to right by their position in
+System Settings. The + and - buttons beside Knobs add or remove the last knob, down to none at all.
+A knob that has not been calibrated yet shows "Needs calibration" in red and does nothing until it
+is.
 
-Save applies at once and leaves the window open. A knob given a new job takes it over the next time
-you move it, so saving never jumps the volume or a panel to wherever that knob happens to sit. With
-"Calibrate on save" checked (the default, and remembered), Save also offers to calibrate.
+Those jobs belong to a **profile**: a name, a job for every knob, and an optional keyboard shortcut.
+The menu at the top picks the profile you are editing, + adds one with every knob doing nothing,
+and - removes the one shown. Switch profiles from the menu bar, or with a profile's shortcut from
+any app. To set one, click Record Shortcut and press it; it needs ⌘ or ⌃, and Escape cancels. The
+ⓧ beside a shortcut removes it, as does Delete while recording. Shortcuts need no Accessibility or
+Input Monitoring permission.
+
+**Invert knobs** flips every knob's direction, for a board whose pots are wired the other way round.
+**Show profile name in menu bar** puts the active profile's name beside the icon. **Hide menu bar
+icon** removes the icon, name and all, and greys out the name option while it is on.
+
+Save applies at once, makes the profile shown the active one, and leaves the window open. A knob
+given a new job, by Save or by switching profiles, takes it over the next time you move it, so
+neither ever jumps the volume or a panel to wherever that knob happens to sit. With "Calibrate on
+save" checked (the default, and remembered), Save also offers to calibrate.
 **Calibrate** in the menu runs it any time the board is connected. For each knob, in letter order:
 
 1. Move it from one end to the other, so TheeJ can tell which knob it is.
@@ -181,12 +203,11 @@ List available ports with `ls /dev/cu.*`.
 What each knob does and which input it is on live in Settings, not in source. A fresh install has
 no knobs: add yours in Settings and calibrate. They are stored as JSON in the `com.zolfer.theej`
 defaults domain: `defaults read com.zolfer.theej` shows them, and `defaults delete
-com.zolfer.theej` followed by a restart clears them.
+com.zolfer.theej` followed by a restart clears them. Knobs saved by 1.0.2 or earlier become the
+Default profile the first time a newer TheeJ starts, and the old `knobs` key is left as it was.
 
 Constants at the top of [Sources/deej-mac/main.swift](Sources/deej-mac/main.swift), then rebuild:
 
-- `invertSliders`: `true` for boards where sliding down raises the value. Set to `false` if your
-  pots are wired the other way.
 - `deadzone`: `0.01` (1%, about 10 ADC counts). Raise it if a value drifts while you aren't
   touching the slider, lower it if the steps feel coarse. It is also how close to an end counts as
   the end, so a knob turned all the way down always reaches 0.
@@ -207,3 +228,8 @@ contrast knob at 0 leaves it close to black too. The knob is the way back.
 
 Per-app volume. That needs a virtual audio device (BlackHole / Background Music) and process-tap
 plumbing; this deliberately only does master.
+
+## License
+
+MIT, see [LICENSE](LICENSE). TheeJ is an independent client for the
+[deej](https://github.com/omriharel/deej) serial protocol and contains no deej code.
