@@ -991,6 +991,9 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     private let profileEdit = NSSegmentedControl()
     private let profileName = NSTextField(string: "")
     private let shortcutButton = NSButton(title: "", target: nil, action: nil)
+    private let removeShortcutButton = NSButton(
+        image: NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Remove shortcut")!,
+        target: nil, action: nil)
     private var recorder: Any?  // the key monitor while a shortcut is being recorded
     private let profileRows = NSStackView()
     private let knobRows = NSStackView()
@@ -1159,9 +1162,14 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             shortcutButton.action = #selector(recordShortcut)
             shortcutButton.toolTip = "Use ⌘ or ⌃ with a key. Delete clears it, Escape cancels."
             shortcutButton.widthAnchor.constraint(equalToConstant: 180).isActive = true
+            removeShortcutButton.isBordered = false
+            removeShortcutButton.contentTintColor = .secondaryLabelColor
+            removeShortcutButton.toolTip = "Remove shortcut"
+            removeShortcutButton.target = self
+            removeShortcutButton.action = #selector(removeShortcut)
             let profileGroup = group(profileRows)
             setRows(profileRows, [row([NSTextField(labelWithString: "Name")], profileName),
-                                  row([NSTextField(labelWithString: "Shortcut")], shortcutButton)])
+                                  row([NSTextField(labelWithString: "Shortcut")], removeShortcutButton, shortcutButton)])
             let knobGroup = group(knobRows)
 
             let caption = NSTextField(labelWithString: "Choose what each knob does in this profile.")
@@ -1246,11 +1254,11 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         return box
     }
 
-    private func row(_ leading: [NSView], _ trailing: NSView) -> NSStackView {
+    private func row(_ leading: [NSView], _ trailing: NSView...) -> NSStackView {
         let row = NSStackView()
         row.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
         for view in leading { row.addView(view, in: .leading) }
-        row.addView(trailing, in: .trailing)
+        for view in trailing { row.addView(view, in: .trailing) }
         return row
     }
 
@@ -1415,6 +1423,12 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         }
         recorder = nil
         shortcutButton.title = draft.profile.shortcut?.label ?? "Record Shortcut"
+        removeShortcutButton.isHidden = draft.profile.shortcut == nil
+    }
+
+    @objc private func removeShortcut() {
+        draft.profile.shortcut = nil
+        stopRecording()
     }
 
     @objc private func saveSettings() {

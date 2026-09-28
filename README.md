@@ -81,8 +81,9 @@ is.
 Those jobs belong to a **profile**: a name, a job for every knob, and an optional keyboard shortcut.
 The menu at the top picks the profile you are editing, + adds one with every knob doing nothing,
 and - removes the one shown. Switch profiles from the menu bar, or with a profile's shortcut from
-any app. To set one, click Record Shortcut and press it; it needs ⌘ or ⌃, Delete clears it and
-Escape cancels. Shortcuts need no Accessibility or Input Monitoring permission.
+any app. To set one, click Record Shortcut and press it; it needs ⌘ or ⌃, and Escape cancels. The
+ⓧ beside a shortcut removes it, as does Delete while recording. Shortcuts need no Accessibility or
+Input Monitoring permission.
 
 **Invert knobs** flips every knob's direction, for a board whose pots are wired the other way round.
 **Show profile name in menu bar** puts the active profile's name beside the icon. **Hide menu bar
