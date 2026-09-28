@@ -632,8 +632,8 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
             let name = NSTextField(labelWithString: appName)
             name.font = .boldSystemFont(ofSize: 16)
             let text = NSStackView(views: [name,
-                                           NSTextField(labelWithString: "By Zolfer Figueiredo"),
-                                           NSTextField(labelWithString: "Inspired by deej"),
+                                           credit("By", "Zolfer Figueiredo", "http://zolfer.com/"),
+                                           credit("Inspired by", "deej", "https://github.com/omriharel/deej"),
                                            NSTextField(labelWithString: "Version \(appVersion)")])
             text.orientation = .vertical
             text.setCustomSpacing(12, after: name)
@@ -647,6 +647,22 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
             aboutWindow = makeWindow("", row)
         }
         present(aboutWindow!)
+    }
+
+    // Only the name is a link. The tooltip holds the URL, so hovering also shows where it goes.
+    private func credit(_ prefix: String, _ name: String, _ url: String) -> NSStackView {
+        let link = NSButton(title: name, target: self, action: #selector(openLink))
+        link.isBordered = false
+        link.contentTintColor = .linkColor
+        link.toolTip = url
+        let line = NSStackView(views: [NSTextField(labelWithString: prefix), link])
+        line.spacing = 3
+        line.alignment = .firstBaseline
+        return line
+    }
+
+    @objc private func openLink(_ sender: NSButton) {
+        if let url = sender.toolTip.flatMap(URL.init(string:)) { NSWorkspace.shared.open(url) }
     }
 
     // MARK: Settings
