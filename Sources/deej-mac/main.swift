@@ -5,7 +5,7 @@ import CoreGraphics
 import ColorSync
 import AppKit
 
-let appName = "DeJota"
+let appName = "TheeJ"
 let appVersion = "1.0.1"
 
 let baud = speed_t(B9600)
@@ -32,7 +32,7 @@ struct Knob: Codable, Equatable {
     var target: Target?
 }
 
-// The domain is the bundle identifier, com.zolfer.dejota. A suite with that name is refused, since
+// The domain is the bundle identifier, com.zolfer.theej. A suite with that name is refused, since
 // it is the app's own domain.
 let prefs = UserDefaults.standard
 
@@ -252,7 +252,7 @@ let brightnessSettle = 0.3
 
 // Serial so two DDC writes never overlap. A write blocks for ~77ms, so it must never run on the
 // serial thread: lines would back up behind it and stall the volume knob too.
-let ddcQueue = DispatchQueue(label: "dejota.ddc")
+let ddcQueue = DispatchQueue(label: "theej.ddc")
 
 var pendingBrightness: [Target: DispatchWorkItem] = [:]  // serial thread only, like lastApplied
 
@@ -434,7 +434,7 @@ final class Shared {
         return (knobs, calibrating)
     }
 
-    // Stored as a JSON string rather than data so `defaults read com.zolfer.dejota` is readable.
+    // Stored as a JSON string rather than data so `defaults read com.zolfer.theej` is readable.
     func setKnobs(_ value: [Knob]) {
         lock.lock(); knobs = value; lock.unlock()
         if let json = try? JSONEncoder().encode(value) {

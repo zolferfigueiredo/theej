@@ -2,14 +2,22 @@
 set -e
 cd "$(dirname "$0")"
 
-LABEL=com.zolfer.dejota
+LABEL=com.zolfer.theej
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-EXEC="$PWD/.build/DeJota.app/Contents/MacOS/DeJota"
-LOG=/tmp/dejota.log
+EXEC="$PWD/.build/TheeJ.app/Contents/MacOS/TheeJ"
+LOG=/tmp/theej.log
 
-# The agent from before the rename to DeJota. Left running, it would fight this one for the port.
-launchctl bootout "gui/$UID/com.user.deej-mac" 2>/dev/null || true
-rm -f "$HOME/Library/LaunchAgents/com.user.deej-mac.plist"
+# The agents from before the renames. Left running, they would fight this one for the port.
+for OLD in com.user.deej-mac com.zolfer.dejota; do
+    launchctl bootout "gui/$UID/$OLD" 2>/dev/null || true
+    rm -f "$HOME/Library/LaunchAgents/$OLD.plist"
+done
+pkill -x DeJota 2>/dev/null || true
+
+# Knobs saved under the DeJota bundle identifier, carried over once.
+if ! defaults read "$LABEL" knobs >/dev/null 2>&1 && defaults read com.zolfer.dejota knobs >/dev/null 2>&1; then
+    defaults write "$LABEL" knobs "$(defaults read com.zolfer.dejota knobs)"
+fi
 
 if [ "$1" = "--uninstall" ]; then
     launchctl bootout "gui/$UID/$LABEL" 2>/dev/null || true
@@ -22,7 +30,7 @@ fi
 
 # A manual ./run.sh would fight the agent over the volume. Match the process name, not the
 # command line: ./run.sh invokes it by relative path, and -f would also match this script.
-pkill -x DeJota 2>/dev/null || true
+pkill -x TheeJ 2>/dev/null || true
 
 mkdir -p "$HOME/Library/LaunchAgents"
 cat > "$PLIST" <<EOF
