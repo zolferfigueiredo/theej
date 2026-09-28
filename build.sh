@@ -4,11 +4,11 @@ cd "$(dirname "$0")"
 
 # A real .app, so macOS has an icon to show in System Settings, Activity Monitor and Finder.
 APP=.build/TheeJ.app
-VERSION=$(sed -n 's/^let appVersion = "\(.*\)"$/\1/p' Sources/deej-mac/main.swift)
+VERSION=$(sed -n 's/^let appVersion = "\(.*\)"$/\1/p' src/main.swift)
 
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # macOS 14 is the oldest the code builds for. A plain swiftc build targets the running macOS.
-swiftc -O -target arm64-apple-macos14 -o "$APP/Contents/MacOS/TheeJ" Sources/deej-mac/main.swift
+swiftc -O -target arm64-apple-macos14 -o "$APP/Contents/MacOS/TheeJ" src/main.swift
 "$APP/Contents/MacOS/TheeJ" --iconset .build/AppIcon.iconset
 iconutil -c icns -o "$APP/Contents/Resources/AppIcon.icns" .build/AppIcon.iconset
 
