@@ -92,6 +92,8 @@ send is never found, so skip it.
 - **Built-in display brightness**: the Retina panel, through DisplayServices.
 - **Built-in display contrast**: the Accessibility "Display contrast" setting, normal at the bottom
   of the knob and maximum at the top. External monitors ignore it.
+- **Night Shift warmth**: off at the bottom of the knob, then from least to most warm. It is macOS's
+  own Night Shift, so a schedule still switches it on and off at its set times.
 - **Monitor brightness** and **Monitor contrast**: each external monitor over DDC/CI, through
   m1ddc.
 

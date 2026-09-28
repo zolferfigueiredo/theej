@@ -24,6 +24,7 @@ enum Target: Hashable, Codable {
     case microphone
     case builtinBrightness
     case builtinContrast
+    case nightShift
     // Index into the external displays sorted left to right, so 0 is the leftmost.
     case brightness(Int)
     case contrast(Int)
@@ -59,6 +60,7 @@ func rank(_ target: Target) -> Int {
     case .microphone: return 1
     case .builtinBrightness: return 2
     case .builtinContrast: return 3
+    case .nightShift: return 4
     case .brightness(let ordinal): return 10 + 2 * ordinal
     case .contrast(let ordinal): return 11 + 2 * ordinal
     }
@@ -75,6 +77,7 @@ func title(_ target: Target?) -> String {
     case .microphone?: return "Microphone volume"
     case .builtinBrightness?: return "Built-in display brightness"
     case .builtinContrast?: return "Built-in display contrast"
+    case .nightShift?: return "Night Shift warmth"
     case .brightness(let ordinal)?: return "Monitor \(ordinal + 1) brightness"
     case .contrast(let ordinal)?: return "Monitor \(ordinal + 1) contrast"
     }
@@ -214,6 +217,31 @@ let setDisplayContrast: SetContrastFn? = {
           let sym = dlsym(handle, "CGSSetDisplayContrast") else { return nil }
     return unsafeBitCast(sym, to: SetContrastFn.self)
 }()
+
+// MARK: - CoreBrightness
+
+// No headers. Each protocol names the selectors, class_addProtocol lets a plain `as?` reach the
+// class, and `optional` makes each call check respondsToSelector, so a selector that disappears
+// leaves the knob inert instead of crashing the daemon.
+func coreBrightness(_ name: String, _ proto: Protocol) -> NSObject? {
+    _ = dlopen("/System/Library/PrivateFrameworks/CoreBrightness.framework/CoreBrightness", RTLD_LAZY)
+    guard let type = NSClassFromString(name) as? NSObject.Type else { return nil }
+    _ = class_addProtocol(type, proto)
+    return type.init()
+}
+
+@objc protocol BlueLightClient {
+    @objc(setStrength:commit:) optional func setStrength(_ strength: Float, commit: Bool) -> Bool
+    @objc(setEnabled:) optional func setEnabled(_ enabled: Bool) -> Bool
+}
+
+let blueLight = coreBrightness("CBBlueLightClient", BlueLightClient.self) as? BlueLightClient
+
+// 0 switches it off without storing 0 as the warmth, so Control Center still turns it back on warm.
+func setNightShift(_ scalar: Float32) {
+    if scalar > 0 { _ = blueLight?.setStrength?(Float(scalar), commit: true) }
+    _ = blueLight?.setEnabled?(scalar > 0)
+}
 
 // MARK: - System HUD
 
@@ -807,7 +835,8 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
         // Includes an assigned monitor that is unplugged right now, so Save cannot drop it.
         let monitors: [Target?] = (0..<max(2, externalDisplays().count, assigned))
             .flatMap { [.brightness($0), .contrast($0)] }
-        let choices: [Target?] = [nil, .master, .microphone, .builtinBrightness, .builtinContrast] + monitors
+        let choices: [Target?] = [nil, .master, .microphone, .builtinBrightness, .builtinContrast, .nightShift]
+            + monitors
 
         for view in knobRows.arrangedSubviews { view.removeFromSuperview() }
         for (index, knob) in draft.enumerated() {
@@ -1061,6 +1090,9 @@ func handle(_ values: [Int]) {
                 debounce(target, on: .main) { _ = setDisplayContrast?(Float(scalar)) }
                 showOSD(osdBarImage, on: id, scalar)
             }
+        case .nightShift:
+            debounce(target, on: .main) { setNightShift(scalar) }
+            showOSD(osdBarImage, on: CGMainDisplayID(), scalar)
         case .brightness(let ordinal), .contrast(let ordinal):
             let externals = externalDisplays()
             if ordinal < externals.count {
@@ -1210,7 +1242,7 @@ if args.contains("--selftest") {
     // Menu order is volume, then the built-in, then externals left to right, which is not the
     // serial column order. The rank bands must stay distinct as target kinds are added.
     precondition(ordered(targets(sample)).map(\.key) == [0, 1, 3, 2])
-    let every: [Target] = [.master, .microphone, .builtinBrightness, .builtinContrast]
+    let every: [Target] = [.master, .microphone, .builtinBrightness, .builtinContrast, .nightShift]
         + (0..<16).flatMap { [.brightness($0), .contrast($0)] }
     precondition(Set(every.map(rank)).count == every.count)
     precondition(try! JSONDecoder().decode([Target].self, from: JSONEncoder().encode(every)) == every)
@@ -1267,6 +1299,9 @@ if displayServices == nil {
 }
 if setDisplayContrast == nil {
     fputs("CGSSetDisplayContrast unavailable, built-in contrast is disabled.\n", stderr)
+}
+if blueLight == nil {
+    fputs("CoreBrightness unavailable, Night Shift is disabled.\n", stderr)
 }
 
 let app = NSApplication.shared
