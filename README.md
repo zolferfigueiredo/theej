@@ -166,8 +166,7 @@ knob settles, so a stray reading shorter than `brightnessSettle` never reaches a
 ```
 
 Installs a LaunchAgent that starts at login and restarts on crash. Logs to `/tmp/theej.log`
-(quiet: the status line is only printed to a terminal), and shows in Login Items as TheeJ. It also
-removes the agent from before the rename (`com.user.deej-mac`), so the two never run at once.
+(quiet: the status line is only printed to a terminal), and shows in Login Items as TheeJ.
 
 Quit from the menu really does quit. The agent uses `KeepAlive` with `SuccessfulExit` set to false,
 so a clean exit is left alone while a crash is still restarted.
