@@ -4,7 +4,7 @@ cd "$(dirname "$0")"
 
 LABEL=com.zolfer.dejota
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-EXEC="$PWD/.build/DeJota"
+EXEC="$PWD/.build/DeJota.app/Contents/MacOS/DeJota"
 LOG=/tmp/dejota.log
 
 # The agent from before the rename to DeJota. Left running, it would fight this one for the port.

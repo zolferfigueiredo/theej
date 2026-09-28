@@ -32,6 +32,9 @@ brew install m1ddc
 ./run.sh
 ```
 
+`build.sh` produces `.build/DeJota.app`, a real app bundle, so macOS has an icon to show in System
+Settings, Activity Monitor and Finder.
+
 **Quit MonitorControl, BetterDisplay or any similar app first.** Two processes writing the same
 monitor over I2C will fight over the value.
 
@@ -39,8 +42,12 @@ It prints live slider values so you can see which physical slider is which index
 
 ## Menu bar
 
-A faders icon sits in the menu bar. When the Arduino is not connected it gains a heavy diagonal
-slash. The icon is a template image, so it follows light and dark menu bars automatically.
+A fader icon sits in the menu bar. While the Arduino is connected its knob sits just above the
+middle; when it is not, the knob drops to the bottom. The icon is a template image, so it follows
+light and dark menu bars automatically.
+
+The app icon, also shown in the About window, is the same fader in colour. Both are drawn in code
+from one shape, `Fader` in [main.swift](Sources/deej-mac/main.swift), so they always match.
 
 Clicking it, with either button, opens a menu: About DeJota, Settings and Calibrate first, then
 the current port and the live value of every knob, one per line, then Reconnect and Quit.
