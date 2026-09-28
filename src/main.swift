@@ -8,7 +8,7 @@ import IOKit.hid
 import Carbon.HIToolbox
 
 let appName = "TheeJ"
-let appVersion = "1.0.3"
+let appVersion = "1.0.4"
 
 let baud = speed_t(B9600)
 let maxADC: Float32 = 1023.0
