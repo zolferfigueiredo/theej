@@ -129,11 +129,10 @@ List available ports with `ls /dev/cu.*`.
 
 ## Tuning
 
-What each knob does and which input it is on live in Settings, not in source. They are stored as
-JSON in the `com.zolfer.dejota` defaults domain: `defaults read com.zolfer.dejota` shows them, and
-`defaults delete com.zolfer.dejota` followed by a restart goes back to `defaultKnobs`, this board's
-wiring (A volume on input 0, B and C the left and right monitors on inputs 3 and 2, D nothing on
-input 4, E the built-in display on input 1).
+What each knob does and which input it is on live in Settings, not in source. A fresh install has
+no knobs: add yours in Settings and calibrate. They are stored as JSON in the `com.zolfer.dejota`
+defaults domain: `defaults read com.zolfer.dejota` shows them, and `defaults delete
+com.zolfer.dejota` followed by a restart clears them.
 
 Constants at the top of [Sources/deej-mac/main.swift](Sources/deej-mac/main.swift), then rebuild:
 

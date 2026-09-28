@@ -32,15 +32,6 @@ struct Knob: Codable, Equatable {
     var target: Target?
 }
 
-// This board as wired, used until Settings saves something. The letters do not follow the columns.
-let defaultKnobs = [
-    Knob(column: 0, target: .master),             // A
-    Knob(column: 3, target: .brightness(0)),      // B
-    Knob(column: 2, target: .brightness(1)),      // C
-    Knob(column: 4, target: nil),                 // D
-    Knob(column: 1, target: .builtinBrightness),  // E
-]
-
 // Named after the LaunchAgent label rather than the binary, so renaming the binary keeps settings.
 let prefs = UserDefaults(suiteName: "com.zolfer.dejota")!
 
@@ -429,7 +420,7 @@ final class Shared {
     private var lines: [String] = []
     private var reconnectFlag = false
     private var knobs = prefs.string(forKey: "knobs")
-        .flatMap { try? JSONDecoder().decode([Knob].self, from: Data($0.utf8)) } ?? defaultKnobs
+        .flatMap { try? JSONDecoder().decode([Knob].self, from: Data($0.utf8)) } ?? []
     private var calibrating = false
 
     func snapshot() -> (connected: Bool, port: String?, lines: [String]) {
@@ -965,15 +956,6 @@ var lastApplied: [Int: Float32] = [:]
 var lastPrint = Date.distantPast
 let interactive = isatty(1) != 0
 
-func describe(_ target: Target, _ scalar: Float32) -> String {
-    let value = String(format: "%3d", Int(scalar * 100))
-    switch target {
-    case .master: return "vol \(value)%"
-    case .builtinBrightness: return "mac \(value)%"
-    case .brightness(let ordinal): return "mon\(ordinal + 1) \(value)%"
-    }
-}
-
 func handle(_ values: [Int]) {
     let config = shared.config()
     let mapping = targets(config.knobs)
@@ -1024,7 +1006,7 @@ func handle(_ values: [Int]) {
         return
     }
 
-    let lines = ordered(mapping).map { describe($0.value, lastApplied[$0.key] ?? 0) }
+    let lines = ordered(mapping).map { "\(title($0.value)) \(percent(lastApplied[$0.key] ?? 0))%" }
     shared.setLines(lines)  // every line, so a job changed in Settings shows before the knob moves
 
     // Silent under launchd (no tty), so the log file doesn't grow forever.
@@ -1122,16 +1104,18 @@ if args.contains("--selftest") {
     precondition(orderExternals([fake("R", 2560, false), fake("BUILTIN", -1470, true),
                                  fake("L", 0, false)]).map(\.uuid) == ["L", "R"])
     precondition(orderExternals([fake("BUILTIN", 0, true)]).isEmpty)
-    // With nothing saved, the knobs drive what this board always has.
-    precondition(targets(defaultKnobs) == [0: .master, 1: .builtinBrightness,
-                                           3: .brightness(0), 2: .brightness(1)])
+    // A knob with no job maps to nothing.
+    let sample = [Knob(column: 0, target: .master), Knob(column: 3, target: .brightness(0)),
+                  Knob(column: 2, target: .brightness(1)), Knob(column: 4, target: nil),
+                  Knob(column: 1, target: .builtinBrightness)]
+    precondition(targets(sample) == [0: .master, 1: .builtinBrightness, 3: .brightness(0), 2: .brightness(1)])
     // Menu order is volume, then the built-in, then externals left to right, which is not the
     // serial column order. The rank bands must stay distinct as target kinds are added.
-    precondition(ordered(targets(defaultKnobs)).map(\.key) == [0, 1, 3, 2])
+    precondition(ordered(targets(sample)).map(\.key) == [0, 1, 3, 2])
     precondition(Set([rank(.master), rank(.builtinBrightness),
                       rank(.brightness(0)), rank(.brightness(1))]).count == 4)
-    let json = try! JSONEncoder().encode(defaultKnobs)
-    precondition(try! JSONDecoder().decode([Knob].self, from: json) == defaultKnobs)
+    let json = try! JSONEncoder().encode(sample)
+    precondition(try! JSONDecoder().decode([Knob].self, from: json) == sample)
     precondition(parse("7|1023|0\r") == [7, 1023, 0])
     precondition(parse("7||0") == nil && parse("1024") == nil)
     // Calibration finds the knob that swings, times only while it turns, then counts sweeps.
