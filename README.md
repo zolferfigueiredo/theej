@@ -52,8 +52,10 @@ A fader icon sits in the menu bar. While the Arduino is connected its knob sits 
 middle; when it is not, the knob drops to the bottom. The icon is a template image, so it follows
 light and dark menu bars automatically.
 
-The app icon, also shown in the About window, is the same fader in colour. Both are drawn in code
-from one shape, `Fader` in [main.swift](Sources/deej-mac/main.swift), so they always match.
+The app icon, also shown in the About window, is the mixer from
+[theej.zolfer.com](https://theej.zolfer.com/): three faders and an orange LED on a cream plate. Both
+icons are drawn in code in [main.swift](Sources/deej-mac/main.swift), the menu bar one by `Fader`
+and the app icon by `makeAppIcon`.
 
 Clicking it, with either button, opens a menu: the profiles first, with a check by the active one
 and each one's shortcut, then About TheeJ, Settings and Calibrate, then the current port and the

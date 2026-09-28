@@ -788,10 +788,10 @@ final class Shared {
 
 let shared = Shared()
 
-// The one fader both icons draw, so the menu bar and the app icon cannot drift apart. Numbers are
-// in a 24-unit design space, y down; `box` is where that square lands. Four marks either side, and
-// the knob sits on one and hides it: mark 2 when connected, just above the middle, and the last
-// mark when parked at the bottom. The sizes are tuned to stay crisp at 18pt on a Retina menu bar.
+// The menu bar's fader. Numbers are in a 24-unit design space, y down; `box` is where that square
+// lands. Four marks either side, and the knob sits on one and hides it: mark 2 when connected, just
+// above the middle, and the last mark when parked at the bottom. The sizes are tuned to stay crisp at
+// 18pt on a Retina menu bar.
 struct Fader {
     let rail: NSBezierPath, marks: [NSBezierPath], groove: NSBezierPath
     let knob: NSBezierPath, railGap: NSBezierPath
@@ -851,35 +851,132 @@ func makeIcon(parked: Bool, alpha: CGFloat = 1.0, side: CGFloat = 18) -> NSImage
     return image
 }
 
-// The same fader in the colours of the original artwork, on a dark tile laid out on Apple's icon
-// grid: an 824 square with 185 corners on a 1024 canvas. build.sh bakes it into AppIcon.icns.
-func makeAppIcon(side: CGFloat) -> NSImage {
-    NSImage(size: NSSize(width: side, height: side), flipped: false) { box in
-        let tile = box.insetBy(dx: side * 100 / 1024, dy: side * 100 / 1024)
-        let corner = side * 185 / 1024
-        NSGradient(starting: NSColor(white: 0.18, alpha: 1), ending: NSColor(white: 0.05, alpha: 1))?
-            .draw(in: NSBezierPath(roundedRect: tile, xRadius: corner, yRadius: corner), angle: -90)
+// The mixer from theej.zolfer.com, three faders and an orange LED on a cream plate, laid out on
+// Apple's icon grid: an 824 square with 185 corners on a 1024 canvas. build.sh bakes it into
+// AppIcon.icns. Drawn in those 1024 units with y down, into a bitmap made here: its base space stays
+// y-up, so a shadow of negative height falls down the screen whatever draws the image.
+func makeAppIcon(side: CGFloat, scale: CGFloat = 1) -> NSImage {
+    let px = Int(side * scale), s = side * scale / 1024
+    let srgb = CGColorSpace(name: CGColorSpace.sRGB)!
+    let ctx = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0, space: srgb,
+                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    ctx.translateBy(x: 0, y: CGFloat(px))
+    ctx.scaleBy(x: s, y: -s)
 
-        let fader = Fader(parked: false, in: tile.insetBy(dx: tile.width * 0.14, dy: tile.width * 0.14))
-        NSColor(white: 0.45, alpha: 1).setStroke()
-        fader.rail.stroke()
-        NSColor(white: 0.9, alpha: 1).setStroke()
-        fader.marks.forEach { $0.stroke() }
-
-        NSGraphicsContext.saveGraphicsState()
-        let shadow = NSShadow()
-        shadow.shadowColor = NSColor.black.withAlphaComponent(0.55)
-        shadow.shadowOffset = NSSize(width: 0, height: -side * 0.012)
-        shadow.shadowBlurRadius = side * 0.024
-        shadow.set()
-        NSColor(white: 0.94, alpha: 1).setFill()
-        fader.knob.fill()
-        NSGraphicsContext.restoreGraphicsState()
-
-        NSColor(white: 0.35, alpha: 1).setStroke()
-        fader.groove.stroke()
-        return true
+    func rgb(_ hex: Int, _ alpha: CGFloat = 1) -> CGColor {
+        CGColor(srgbRed: CGFloat(hex >> 16) / 255, green: CGFloat(hex >> 8 & 0xff) / 255,
+                blue: CGFloat(hex & 0xff) / 255, alpha: alpha)
     }
+    func gray(_ white: CGFloat, _ alpha: CGFloat = 1) -> CGColor {
+        CGColor(srgbRed: white, green: white, blue: white, alpha: alpha)
+    }
+    func rounded(_ rect: CGRect, _ radius: CGFloat) -> CGPath {
+        CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+    }
+    func paint(_ path: CGPath, _ topToBottom: [CGColor]) {
+        ctx.saveGState()
+        ctx.addPath(path)
+        ctx.clip()
+        let box = path.boundingBox
+        ctx.drawLinearGradient(CGGradient(colorsSpace: srgb, colors: topToBottom as CFArray, locations: nil)!,
+                               start: CGPoint(x: 0, y: box.minY), end: CGPoint(x: 0, y: box.maxY), options: [])
+        ctx.restoreGState()
+    }
+    // The shadow of everything outside the path, cast inside it: up shades the bottom edge of a
+    // raised plate, down shades the top of a cut.
+    func inset(_ path: CGPath, dy: CGFloat, blur: CGFloat, _ color: CGColor) {
+        ctx.saveGState()
+        ctx.addPath(path)
+        ctx.clip()
+        ctx.setShadow(offset: CGSize(width: 0, height: dy * s), blur: blur * s, color: color)
+        ctx.addRect(CGRect(x: -100, y: -100, width: 1224, height: 1224))
+        ctx.addPath(path)
+        ctx.fillPath(using: .evenOdd)
+        ctx.restoreGState()
+    }
+
+    // Cream enamel lit from above, each pixel up to 2% lighter or darker for grain. The fixed seed
+    // keeps every build the same. Row 0 lands at the bottom of the y down space.
+    let top: [CGFloat] = [0xf1, 0xec, 0xe2], bottom: [CGFloat] = [0xdd, 0xd5, 0xc6]
+    var plate = [UInt8](repeating: 255, count: px * px * 4)
+    var seed: UInt64 = 1
+    for i in stride(from: 0, to: plate.count, by: 4) {
+        let t = min(1, max(0, (924 - CGFloat(i / 4 / px) / s) / 824))
+        seed = seed &* 6364136223846793005 &+ 1442695040888963407
+        let grain = CGFloat(Int(seed >> 56) - 128) * 0.04
+        for c in 0..<3 {
+            plate[i + c] = UInt8(max(0, min(255, top[c] + (bottom[c] - top[c]) * t * t * (3 - 2 * t) + grain)))
+        }
+    }
+    let tile = rounded(CGRect(x: 100, y: 100, width: 824, height: 824), 185)
+    ctx.saveGState()
+    ctx.addPath(tile)
+    ctx.clip()
+    ctx.draw(CGImage(width: px, height: px, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: px * 4, space: srgb,
+                     bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
+                     provider: CGDataProvider(data: Data(plate) as CFData)!, decode: nil,
+                     shouldInterpolate: false, intent: .defaultIntent)!,
+             in: CGRect(x: 0, y: 0, width: 1024, height: 1024))
+    ctx.restoreGState()
+    inset(tile, dy: 16, blur: 34, gray(0, 0.2))
+    inset(tile, dy: -5, blur: 6, gray(1, 0.9))
+
+    for (x, knob) in [(322, 360), (512, 610), (702, 470)] as [(CGFloat, CGFloat)] {
+        let slot = rounded(CGRect(x: x - 17, y: 250, width: 34, height: 540), 17)
+        ctx.addPath(slot)
+        ctx.setFillColor(rgb(0x161514))
+        ctx.fillPath()
+        inset(slot, dy: -10, blur: 14, gray(0))
+        ctx.saveGState()
+        ctx.translateBy(x: 0, y: 2)
+        ctx.addPath(slot)
+        ctx.setStrokeColor(gray(1, 0.35))
+        ctx.setLineWidth(3)
+        ctx.strokePath()
+        ctx.restoreGState()
+        ctx.setStrokeColor(rgb(0xa39d92))
+        ctx.setLineWidth(8)
+        ctx.setLineCap(.round)
+        for y in stride(from: CGFloat(270), through: 770, by: 100) {
+            ctx.move(to: CGPoint(x: x + 58, y: y))
+            ctx.addLine(to: CGPoint(x: x + 84, y: y))
+        }
+        ctx.strokePath()
+
+        let cap = CGRect(x: x - 66, y: knob - 38, width: 132, height: 76)
+        let body = rounded(cap, 15.2)
+        ctx.saveGState()
+        ctx.setShadow(offset: CGSize(width: 0, height: -12 * s), blur: 24 * s, color: gray(0, 0.55))
+        ctx.addPath(body)
+        ctx.fillPath()
+        ctx.restoreGState()
+        paint(body, [gray(0.24), gray(0.1), gray(0.05)])
+        paint(rounded(cap.insetBy(dx: 5.3, dy: 6.1), 10.6), [gray(0.2), gray(0.08)])
+        ctx.saveGState()
+        ctx.addPath(body)
+        ctx.clip()
+        ctx.move(to: CGPoint(x: cap.minX + 15, y: cap.minY + 2))
+        ctx.addLine(to: CGPoint(x: cap.maxX - 15, y: cap.minY + 2))
+        ctx.setStrokeColor(gray(1, 0.18))
+        ctx.setLineWidth(4)
+        ctx.strokePath()
+        ctx.restoreGState()
+        ctx.addPath(rounded(CGRect(x: x - 39.6, y: knob - 4.6, width: 79.2, height: 9.2), 4.6))
+        ctx.setFillColor(rgb(0xebe5d9))
+        ctx.fillPath()
+    }
+
+    let led = CGPoint(x: 212, y: 212)
+    ctx.drawRadialGradient(CGGradient(colorsSpace: srgb, colors: [rgb(0xff5a1f, 0.55), rgb(0xff5a1f, 0)] as CFArray,
+                                      locations: nil)!,
+                           startCenter: led, startRadius: 13, endCenter: led, endRadius: 70, options: [])
+    ctx.addEllipse(in: CGRect(x: led.x - 22, y: led.y - 22, width: 44, height: 44))
+    ctx.clip()
+    ctx.drawRadialGradient(CGGradient(colorsSpace: srgb, colors: [rgb(0xffd999), rgb(0xff5a1f), rgb(0xb33c0c)] as CFArray,
+                                      locations: [0, 0.45, 1])!,
+                           startCenter: CGPoint(x: led.x - 6.6, y: led.y - 7.7), startRadius: 0, endCenter: led,
+                           endRadius: 22, options: .drawsAfterEndLocation)
+    return NSImage(cgImage: ctx.makeImage()!, size: NSSize(width: side, height: side))
 }
 
 final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate, NSTextFieldDelegate {
@@ -1007,7 +1104,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
                                            NSTextField(labelWithString: "Version \(appVersion)")])
             text.orientation = .vertical
             text.setCustomSpacing(12, after: name)
-            let logo = NSImageView(image: makeAppIcon(side: 96))
+            let logo = NSImageView(image: makeAppIcon(side: 96, scale: 2))
             logo.widthAnchor.constraint(equalToConstant: 96).isActive = true
             logo.heightAnchor.constraint(equalToConstant: 96).isActive = true
             let row = NSStackView(views: [logo, text])
