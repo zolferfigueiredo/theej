@@ -16,7 +16,7 @@ let deadzone: Float32 = 0.01
 // This board's pots read backwards: slider down = full volume. Flip to false if you rewire them.
 let invertSliders = true
 
-enum Target {
+enum Target: Hashable {
     case master
     case builtinBrightness
     // Index into the external displays sorted left to right, so 0 is the leftmost.
@@ -161,8 +161,6 @@ let displayServices: (set: SetBrightnessFn, changed: BrightnessChangedFn?)? = {
             changedSym.map { unsafeBitCast($0, to: BrightnessChangedFn.self) })
 }()
 
-// In-process and fast, unlike the DDC path, so this is called straight from handle() with no
-// worker and no rate limiting.
 func setBuiltinBrightness(_ id: CGDirectDisplayID, _ scalar: Float32) {
     guard let services = displayServices, services.set(id, Float(scalar)) == 0 else { return }
     // Without this, Control Center and the menu bar slider keep showing a stale value.
@@ -221,23 +219,28 @@ func percent(_ scalar: Float32) -> Int {
     return min(100, max(0, Int(scalar * 100 + 0.5)))
 }
 
-// ponytail: 250ms between writes. One m1ddc call measures ~77ms and DDC/CI is slow in its
-// own right, so a fast sweep drops intermediate positions instead of queueing them. Lower it
-// if the knob feels laggy, raise it if the panel struggles to keep up.
-let brightnessInterval = 0.25
+// ponytail: brightness applies once a knob has been still this long; each movement restarts the
+// wait. It must stay well above ~110ms, the longest wiper dropout on this board (a moving pot
+// briefly reads its neighbour's value), or a dropout reaches the panel as a flash.
+let brightnessSettle = 0.3
 
-let brightnessLock = NSLock()
-var brightnessDesired: [Int: Int] = [:]
+// Serial so two DDC writes never overlap. A write blocks for ~77ms, so it must never run on the
+// serial thread: lines would back up behind it and stall the volume knob too.
+let ddcQueue = DispatchQueue(label: "dejota.ddc")
 
-func requestBrightness(_ ordinal: Int, _ value: Int) {
-    brightnessLock.lock()
-    brightnessDesired[ordinal] = value
-    brightnessLock.unlock()
+var pendingBrightness: [Target: DispatchWorkItem] = [:]  // serial thread only, like lastApplied
+
+func debounce(_ target: Target, on queue: DispatchQueue, _ apply: @escaping () -> Void) {
+    pendingBrightness[target]?.cancel()
+    let work = DispatchWorkItem(block: apply)
+    pendingBrightness[target] = work
+    queue.asyncAfter(deadline: .now() + brightnessSettle, execute: work)
 }
 
 func writeBrightness(_ uuid: String, _ value: Int) -> Bool {
     guard let m1ddc = m1ddcPath else { return false }
     let task = Process()
+// Write only, never read back: these Dells answer `get luminance` with 0.
     task.executableURL = URL(fileURLWithPath: m1ddc)
     task.arguments = ["display", uuid, "set", "luminance", String(value)]
     task.standardOutput = FileHandle.nullDevice
@@ -245,41 +248,6 @@ func writeBrightness(_ uuid: String, _ value: Int) -> Bool {
     guard (try? task.run()) != nil else { return false }
     task.waitUntilExit()
     return task.terminationStatus == 0
-}
-
-// Never call this from the serial thread. Lines arrive every ~10ms and a write blocks for
-// ~77ms, so doing it inline would back up the serial buffer and stall the volume knob too.
-// handle() only records the wanted value; this thread applies whatever the newest one is.
-func brightnessWorker() {
-    // Worker-owned. Deliberately the value last requested, never a reading: these Dells
-    // answer `get luminance` with 0, so comparing against hardware would rewrite forever.
-    var applied: [Int: Int] = [:]
-    var warned = false
-
-    while true {
-        Thread.sleep(forTimeInterval: brightnessInterval)
-
-        brightnessLock.lock()
-        let desired = brightnessDesired
-        brightnessLock.unlock()
-
-        let pending = desired.filter { applied[$0.key] != $0.value }.sorted { $0.key < $1.key }
-        if pending.isEmpty { continue }
-
-        let externals = externalDisplays()
-        for (ordinal, value) in pending {
-            guard ordinal < externals.count else { continue }
-            if writeBrightness(externals[ordinal].uuid, value) {
-                applied[ordinal] = value
-                warned = false
-            } else if !warned {
-                // Warn once per outage, not several times a second. Unplugging a monitor
-                // lands here, and so does m1ddc missing entirely.
-                warned = true
-                fputs("\nBrightness write failed (monitor \(ordinal + 1)). Is m1ddc installed?\n", stderr)
-            }
-        }
-    }
 }
 
 // MARK: - Serial
@@ -515,22 +483,28 @@ func handle(_ values: [Int]) {
         lastApplied[index] = scalar
         changed = true
 
-        // The HUD is deliberately not rate limited. The DDC write is throttled to 250ms, so a
-        // HUD that tracks the knob at full speed is what makes the panel feel responsive.
+        // The HUD tracks the knob live while brightness waits for brightnessSettle, so the HUD
+        // is the only feedback during a turn. Do not debounce it.
         switch target {
         case .master:
             setMasterVolume(scalar)
             showOSD(osdVolumeImage, on: CGMainDisplayID(), scalar)
         case .builtinBrightness:
             if let id = builtinDisplayID() {
-                setBuiltinBrightness(id, scalar)
+                // Main, not ddcQueue, so a stuck m1ddc can never hold the built-in up.
+                debounce(target, on: .main) { setBuiltinBrightness(id, scalar) }
                 showOSD(osdBrightnessImage, on: id, scalar)
             }
         case .brightness(let ordinal):
-            requestBrightness(ordinal, percent(scalar))
             let externals = externalDisplays()
             if ordinal < externals.count {
-                showOSD(osdBrightnessImage, on: externals[ordinal].id, scalar)
+                let display = externals[ordinal]
+                debounce(target, on: ddcQueue) {
+                    if !writeBrightness(display.uuid, percent(scalar)) {
+                        fputs("\nBrightness write failed (monitor \(ordinal + 1)). Is m1ddc installed?\n", stderr)
+                    }
+                }
+                showOSD(osdBrightnessImage, on: display.id, scalar)
             }
         }
     }
@@ -657,6 +631,11 @@ if displayServices == nil {
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)  // menu bar only, no Dock icon
 menuBar = MenuBar()
-Thread.detachNewThread(brightnessWorker)
 DispatchQueue.global(qos: .utility).async { serialLoop() }
 app.run()
+    // A burst of movement lands as one write carrying the last value.
+    var landed: [Int] = []
+    for v in 1...3 { debounce(.brightness(0), on: ddcQueue) { landed.append(v) } }
+    Thread.sleep(forTimeInterval: brightnessSettle * 2)
+    ddcQueue.sync {}
+    precondition(landed == [3])
