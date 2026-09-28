@@ -1,6 +1,6 @@
-# deej-mac
+# DeJota
 
-macOS client for an existing [deej](https://github.com/omriharel/deej) Arduino: master volume,
+A macOS client for an existing [deej](https://github.com/omriharel/deej) Arduino: master volume,
 external monitor brightness, and built-in display brightness, with the native macOS HUD.
 
 Upstream deej is Windows-only for audio (it uses Windows Core Audio for per-app sessions). This is a
@@ -41,8 +41,8 @@ It prints live slider values so you can see which physical slider is which index
 A faders icon sits in the menu bar. When the Arduino is not connected it gains a heavy diagonal
 slash. The icon is a template image, so it follows light and dark menu bars automatically.
 
-Clicking it, with either button, opens a menu showing the current port and the live value of every
-knob, plus Reconnect and Quit.
+Clicking it, with either button, opens a menu: About DeJota first, then the current port and the
+live value of every knob, one per line, then Reconnect and Quit.
 
 There is no Dock icon and no window. When run from a terminal it also prints live slider values,
 so you can see which physical slider is which index.
@@ -53,9 +53,10 @@ Turning a knob shows the same HUD macOS shows for its own brightness and volume 
 display that knob controls. macOS only raises that HUD from its media key handler, so the daemon
 asks for it directly over XPC to `com.apple.OSDUIHelper`.
 
-The HUD is not rate limited, so it tracks the knob smoothly even while an external panel is still
-stepping toward the value at its slower DDC pace. If the HUD ever stops working it is ignored: the
-volume or brightness change still happens.
+The HUD tracks the knob live. Brightness itself only changes once the knob has been still for a
+moment, so a turn lands as one clean change when you let go instead of flickering the panel
+through every position on the way. Volume follows the knob immediately. If the HUD ever stops
+working it is ignored: the volume or brightness change still happens.
 
 ## Run at login
 
@@ -63,8 +64,9 @@ volume or brightness change still happens.
 ./install.sh
 ```
 
-Installs a LaunchAgent that starts at login and restarts on crash. Logs to `/tmp/deej-mac.log`
-(quiet: the status line is only printed to a terminal).
+Installs a LaunchAgent that starts at login and restarts on crash. Logs to `/tmp/dejota.log`
+(quiet: the status line is only printed to a terminal). It also removes the agent from before the
+rename (`com.user.deej-mac`), so the two never run at once.
 
 Quit from the menu really does quit. The agent uses `KeepAlive` with `SuccessfulExit` set to false,
 so a clean exit is left alone while a crash is still restarted.
@@ -97,9 +99,11 @@ Constants at the top of [Sources/deej-mac/main.swift](Sources/deej-mac/main.swif
   pots are wired the other way.
 - `deadzone`: `0.01` (1%, about 10 ADC counts). Raise it if a value drifts while you aren't
   touching the slider, lower it if the steps feel coarse.
-- `brightnessInterval`: `0.25` seconds between DDC writes to external monitors. One write takes
-  about 77ms and DDC/CI is slow, so a fast sweep drops intermediate positions and applies the final
-  one. The built-in display is not affected: it is an in-process call and applies immediately.
+- `brightnessSettle`: `0.3` seconds. A brightness knob applies only once it has been still this
+  long, and every movement restarts the wait. This is also what hides wiper contact bounce, where a
+  moving pot briefly reports its neighbour's value for up to about 0.11s, so keep it well above
+  that. Lower it if letting go feels laggy, raise it if a slow turn still applies partway. Volume
+  is not affected.
 - `osdChiclets`: `100`, the HUD bar resolution. Drop it to `16` for the classic segmented look.
 - `osdFadeMsec`: how long the HUD stays up.
 

@@ -5,6 +5,9 @@ import CoreGraphics
 import ColorSync
 import AppKit
 
+let appName = "DeJota"
+let appVersion = "1.0.1"
+
 let baud = speed_t(B9600)
 let maxADC: Float32 = 1023.0
 let sliderCount = 5
@@ -16,7 +19,7 @@ let deadzone: Float32 = 0.01
 // This board's pots read backwards: slider down = full volume. Flip to false if you rewire them.
 let invertSliders = true
 
-enum Target {
+enum Target: Hashable {
     case master
     case builtinBrightness
     // Index into the external displays sorted left to right, so 0 is the leftmost.
@@ -161,8 +164,6 @@ let displayServices: (set: SetBrightnessFn, changed: BrightnessChangedFn?)? = {
             changedSym.map { unsafeBitCast($0, to: BrightnessChangedFn.self) })
 }()
 
-// In-process and fast, unlike the DDC path, so this is called straight from handle() with no
-// worker and no rate limiting.
 func setBuiltinBrightness(_ id: CGDirectDisplayID, _ scalar: Float32) {
     guard let services = displayServices, services.set(id, Float(scalar)) == 0 else { return }
     // Without this, Control Center and the menu bar slider keep showing a stale value.
@@ -221,20 +222,25 @@ func percent(_ scalar: Float32) -> Int {
     return min(100, max(0, Int(scalar * 100 + 0.5)))
 }
 
-// ponytail: 250ms between writes. One m1ddc call measures ~77ms and DDC/CI is slow in its
-// own right, so a fast sweep drops intermediate positions instead of queueing them. Lower it
-// if the knob feels laggy, raise it if the panel struggles to keep up.
-let brightnessInterval = 0.25
+// ponytail: brightness applies once a knob has been still this long; each movement restarts the
+// wait. It must stay well above ~110ms, the longest wiper dropout on this board (a moving pot
+// briefly reads its neighbour's value), or a dropout reaches the panel as a flash.
+let brightnessSettle = 0.3
 
-let brightnessLock = NSLock()
-var brightnessDesired: [Int: Int] = [:]
+// Serial so two DDC writes never overlap. A write blocks for ~77ms, so it must never run on the
+// serial thread: lines would back up behind it and stall the volume knob too.
+let ddcQueue = DispatchQueue(label: "dejota.ddc")
 
-func requestBrightness(_ ordinal: Int, _ value: Int) {
-    brightnessLock.lock()
-    brightnessDesired[ordinal] = value
-    brightnessLock.unlock()
+var pendingBrightness: [Target: DispatchWorkItem] = [:]  // serial thread only, like lastApplied
+
+func debounce(_ target: Target, on queue: DispatchQueue, _ apply: @escaping () -> Void) {
+    pendingBrightness[target]?.cancel()
+    let work = DispatchWorkItem(block: apply)
+    pendingBrightness[target] = work
+    queue.asyncAfter(deadline: .now() + brightnessSettle, execute: work)
 }
 
+// Write only, never read back: these Dells answer `get luminance` with 0.
 func writeBrightness(_ uuid: String, _ value: Int) -> Bool {
     guard let m1ddc = m1ddcPath else { return false }
     let task = Process()
@@ -245,41 +251,6 @@ func writeBrightness(_ uuid: String, _ value: Int) -> Bool {
     guard (try? task.run()) != nil else { return false }
     task.waitUntilExit()
     return task.terminationStatus == 0
-}
-
-// Never call this from the serial thread. Lines arrive every ~10ms and a write blocks for
-// ~77ms, so doing it inline would back up the serial buffer and stall the volume knob too.
-// handle() only records the wanted value; this thread applies whatever the newest one is.
-func brightnessWorker() {
-    // Worker-owned. Deliberately the value last requested, never a reading: these Dells
-    // answer `get luminance` with 0, so comparing against hardware would rewrite forever.
-    var applied: [Int: Int] = [:]
-    var warned = false
-
-    while true {
-        Thread.sleep(forTimeInterval: brightnessInterval)
-
-        brightnessLock.lock()
-        let desired = brightnessDesired
-        brightnessLock.unlock()
-
-        let pending = desired.filter { applied[$0.key] != $0.value }.sorted { $0.key < $1.key }
-        if pending.isEmpty { continue }
-
-        let externals = externalDisplays()
-        for (ordinal, value) in pending {
-            guard ordinal < externals.count else { continue }
-            if writeBrightness(externals[ordinal].uuid, value) {
-                applied[ordinal] = value
-                warned = false
-            } else if !warned {
-                // Warn once per outage, not several times a second. Unplugging a monitor
-                // lands here, and so does m1ddc missing entirely.
-                warned = true
-                fputs("\nBrightness write failed (monitor \(ordinal + 1)). Is m1ddc installed?\n", stderr)
-            }
-        }
-    }
 }
 
 // MARK: - Serial
@@ -329,14 +300,13 @@ final class Shared {
     private let lock = NSLock()
     private var connected = false
     private var port: String?
-    // Preformatted rather than raw values: there are three targets now and the menu wants the
-    // same string the terminal prints, so it is built once where the values already are.
-    private var summary = ""
+    // Preformatted, one per knob in menu order: the same strings the terminal prints.
+    private var lines: [String] = []
     private var reconnectFlag = false
 
-    func snapshot() -> (connected: Bool, port: String?, summary: String) {
+    func snapshot() -> (connected: Bool, port: String?, lines: [String]) {
         lock.lock(); defer { lock.unlock() }
-        return (connected, port, summary)
+        return (connected, port, lines)
     }
 
     func setConnected(_ value: Bool, port newPort: String?) {
@@ -349,8 +319,8 @@ final class Shared {
         DispatchQueue.main.async { menuBar?.refresh() }
     }
 
-    func setSummary(_ text: String) {
-        lock.lock(); summary = text; lock.unlock()
+    func setLines(_ value: [String]) {
+        lock.lock(); lines = value; lock.unlock()
     }
 
     func requestReconnect() {
@@ -370,8 +340,7 @@ let shared = Shared()
 // Drawn in code rather than shipped as an asset. isTemplate lets macOS handle light and dark
 // menu bars, which is also why the disconnected slash cannot use colour: a template image is
 // an alpha mask, so the gap around the slash has to be real transparency.
-func makeIcon(slashed: Bool, alpha: CGFloat = 1.0) -> NSImage {
-    let side: CGFloat = 18
+func makeIcon(slashed: Bool, alpha: CGFloat = 1.0, side: CGFloat = 18) -> NSImage {
     let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { _ in
         let s = side / 24.0
         func pt(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
@@ -426,21 +395,14 @@ final class MenuBar: NSObject, NSMenuDelegate {
     private let connectedIcon = makeIcon(slashed: false)
     private let disconnectedIcon = makeIcon(slashed: true)
     private let busyIcon = makeIcon(slashed: false, alpha: 0.38)
-    private let statusEntry = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private var aboutWindow: NSWindow?
 
     override init() {
         super.init()
         let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false
-
-        statusEntry.isEnabled = false
-        menu.addItem(statusEntry)
-        menu.addItem(.separator())
-        menu.addItem(entry("Reconnect", #selector(reconnect), ""))
-        menu.addItem(.separator())
-        menu.addItem(entry("Quit deej", #selector(quit), "q"))
-
+        menuNeedsUpdate(menu)
         item.menu = menu  // assigned permanently, so left and right click both open it
         refresh()
     }
@@ -452,20 +414,72 @@ final class MenuBar: NSObject, NSMenuDelegate {
         return mi
     }
 
-    // Rebuilt as the menu opens, so the status line is never stale.
+    // Rebuilt as the menu opens, so the status lines are never stale.
     func menuNeedsUpdate(_ menu: NSMenu) {
         let state = shared.snapshot()
-        statusEntry.title = state.connected
-            ? "Connected: \(state.port ?? "?")   \(state.summary)"
-            : "Not connected"
+        let status = state.connected ? ["Connected: \(state.port ?? "?")"] + state.lines : ["Not connected"]
+        menu.removeAllItems()
+        menu.addItem(entry("About \(appName)", #selector(about), ""))
+        menu.addItem(.separator())
+        for line in status {
+            let mi = NSMenuItem(title: line, action: nil, keyEquivalent: "")
+            mi.isEnabled = false
+            menu.addItem(mi)
+        }
+        menu.addItem(.separator())
+        menu.addItem(entry("Reconnect", #selector(reconnect), ""))
+        menu.addItem(.separator())
+        menu.addItem(entry("Quit", #selector(quit), "q"))
     }
 
+    // No knob values here: this only runs when the connection changes, so they would be stale.
     func refresh() {
         let state = shared.snapshot()
         item.button?.image = state.connected ? connectedIcon : disconnectedIcon
-        item.button?.toolTip = state.connected
-            ? "deej: \(state.port ?? "connected"), \(state.summary)"
-            : "deej: not connected"
+        item.button?.toolTip = "\(appName): \(state.connected ? state.port ?? "connected" : "not connected")"
+    }
+
+    // Same layout as BiHan Brightness's About window.
+    @objc private func about() {
+        if aboutWindow == nil {
+            let name = NSTextField(labelWithString: appName)
+            name.font = .boldSystemFont(ofSize: 16)
+            let text = NSStackView(views: [name,
+                                           link("By Zolfer Figueiredo", "http://zolfer.com/"),
+                                           link("Inspired by deej", "https://github.com/omriharel/deej"),
+                                           NSTextField(labelWithString: "Version \(appVersion)")])
+            text.orientation = .vertical
+            text.setCustomSpacing(12, after: name)
+            let logo = NSImageView(image: makeIcon(slashed: false, side: 96))
+            logo.contentTintColor = .labelColor
+            logo.widthAnchor.constraint(equalToConstant: 96).isActive = true
+            logo.heightAnchor.constraint(equalToConstant: 96).isActive = true
+            let row = NSStackView(views: [logo, text])
+            row.spacing = 24
+            row.edgeInsets = NSEdgeInsets(top: 16, left: 24, bottom: 24, right: 40)
+            let window = NSWindow(contentRect: .zero, styleMask: [.titled, .closable],
+                                  backing: .buffered, defer: false)
+            window.contentView = row
+            window.setContentSize(row.fittingSize)
+            window.isReleasedWhenClosed = false
+            window.center()
+            aboutWindow = window
+        }
+        NSApp.activate()  // a menu bar app is never frontmost on its own
+        aboutWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    // The tooltip holds the URL, so hovering also shows where the link goes.
+    private func link(_ title: String, _ url: String) -> NSButton {
+        let button = NSButton(title: title, target: self, action: #selector(openLink))
+        button.isBordered = false
+        button.contentTintColor = .linkColor
+        button.toolTip = url
+        return button
+    }
+
+    @objc private func openLink(_ sender: NSButton) {
+        if let url = sender.toolTip.flatMap(URL.init(string:)) { NSWorkspace.shared.open(url) }
     }
 
     @objc private func reconnect() {
@@ -481,7 +495,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
 // MARK: - Dispatch
 
 // The previous version printed a retry line every 2 seconds while the device was missing, which
-// grew /tmp/deej-mac.log to 1.2MB over one night. Log transitions only, never on a timer.
+// grew the log to 1.2MB over one night. Log transitions only, never on a timer.
 var lastLogged = ""
 func log(_ message: String) {
     guard message != lastLogged else { return }
@@ -515,28 +529,34 @@ func handle(_ values: [Int]) {
         lastApplied[index] = scalar
         changed = true
 
-        // The HUD is deliberately not rate limited. The DDC write is throttled to 250ms, so a
-        // HUD that tracks the knob at full speed is what makes the panel feel responsive.
+        // The HUD tracks the knob live while brightness waits for brightnessSettle, so the HUD
+        // is the only feedback during a turn. Do not debounce it.
         switch target {
         case .master:
             setMasterVolume(scalar)
             showOSD(osdVolumeImage, on: CGMainDisplayID(), scalar)
         case .builtinBrightness:
             if let id = builtinDisplayID() {
-                setBuiltinBrightness(id, scalar)
+                // Main, not ddcQueue, so a stuck m1ddc can never hold the built-in up.
+                debounce(target, on: .main) { setBuiltinBrightness(id, scalar) }
                 showOSD(osdBrightnessImage, on: id, scalar)
             }
         case .brightness(let ordinal):
-            requestBrightness(ordinal, percent(scalar))
             let externals = externalDisplays()
             if ordinal < externals.count {
-                showOSD(osdBrightnessImage, on: externals[ordinal].id, scalar)
+                let display = externals[ordinal]
+                debounce(target, on: ddcQueue) {
+                    if !writeBrightness(display.uuid, percent(scalar)) {
+                        fputs("\nBrightness write failed (monitor \(ordinal + 1)). Is m1ddc installed?\n", stderr)
+                    }
+                }
+                showOSD(osdBrightnessImage, on: display.id, scalar)
             }
         }
     }
 
-    let summary = orderedIndices.map(describe).joined(separator: "  ")
-    if changed { shared.setSummary(summary) }
+    let lines = orderedIndices.map(describe)
+    if changed { shared.setLines(lines) }
 
     // Silent under launchd (no tty), so the log file doesn't grow forever.
     guard interactive, Date().timeIntervalSince(lastPrint) >= 0.5 else { return }
@@ -544,7 +564,7 @@ func handle(_ values: [Int]) {
     let cols = values.enumerated()
         .map { "\(mapping[$0.offset] != nil ? "*" : " ")\($0.offset):\(String(format: "%4d", $0.element))" }
         .joined()
-    print("\r\(cols)   \(summary)  ", terminator: "")
+    print("\r\(cols)   \(lines.joined(separator: "  "))  ", terminator: "")
     fflush(stdout)
 }
 
@@ -633,6 +653,12 @@ if args.contains("--selftest") {
     precondition(orderedIndices == [0, 1, 3, 2])
     precondition(Set([rank(.master), rank(.builtinBrightness),
                       rank(.brightness(0)), rank(.brightness(1))]).count == 4)
+    // A burst of movement lands as one write carrying the last value.
+    var landed: [Int] = []
+    for v in 1...3 { debounce(.brightness(0), on: ddcQueue) { landed.append(v) } }
+    Thread.sleep(forTimeInterval: brightnessSettle * 2)
+    ddcQueue.sync {}
+    precondition(landed == [3])
     print("selftest ok")
     exit(0)
 }
@@ -640,11 +666,11 @@ if args.contains("--selftest") {
 setvbuf(stdout, nil, _IOLBF, 0)
 for index in orderedIndices {
     switch mapping[index]! {
-    case .master: print("deej-mac: slider \(index) controls macOS output volume")
+    case .master: print("\(appName): slider \(index) controls macOS output volume")
     case .builtinBrightness:
-        print("deej-mac: slider \(index) controls built-in display brightness")
+        print("\(appName): slider \(index) controls built-in display brightness")
     case .brightness(let ordinal):
-        print("deej-mac: slider \(index) controls external monitor \(ordinal + 1) brightness")
+        print("\(appName): slider \(index) controls external monitor \(ordinal + 1) brightness")
     }
 }
 if m1ddcPath == nil {
@@ -657,6 +683,5 @@ if displayServices == nil {
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)  // menu bar only, no Dock icon
 menuBar = MenuBar()
-Thread.detachNewThread(brightnessWorker)
 DispatchQueue.global(qos: .utility).async { serialLoop() }
 app.run()
