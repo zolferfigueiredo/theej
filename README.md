@@ -42,7 +42,7 @@ It prints live slider values so you can see which physical slider is which index
 A faders icon sits in the menu bar. When the Arduino is not connected it gains a heavy diagonal
 slash. The icon is a template image, so it follows light and dark menu bars automatically.
 
-Clicking it, with either button, opens a menu: About DeJota, Settings… and Calibrate… first, then
+Clicking it, with either button, opens a menu: About DeJota, Settings and Calibrate first, then
 the current port and the live value of every knob, one per line, then Reconnect and Quit.
 
 There is no Dock icon. When run from a terminal it also prints live slider values, so you can see
@@ -50,16 +50,18 @@ which physical slider is which index.
 
 ## Settings and calibration
 
-**Settings…** lists every knob by the letter on the box, the input it is wired to, and what it does:
-nothing, master volume, the built-in display, or an external monitor. Monitors count left to right
-by their position in System Settings. The + and - buttons add or remove the last knob. Save applies
-at once, no rebuild. A knob given a new job takes it over the next time you move it, so saving never
-jumps the volume or a panel to wherever that knob happens to sit.
+**Settings** lists every knob by the letter on the box with a menu for what it does: nothing,
+master volume, the built-in display, or an external monitor. Monitors count left to right by their
+position in System Settings. The + and - buttons at the top right add or remove the last knob, down
+to none at all. A knob that has not been calibrated yet shows "Needs calibration" in red and does
+nothing until it is.
 
-Saving with more knobs than before offers to calibrate, and **Calibrate…** runs it any time the board
-is connected. For each knob, in letter order:
+Save applies at once and leaves the window open. A knob given a new job takes it over the next time
+you move it, so saving never jumps the volume or a panel to wherever that knob happens to sit. With
+"Calibrate on save" checked (the default, and remembered), Save also offers to calibrate.
+**Calibrate** in the menu runs it any time the board is connected. For each knob, in letter order:
 
-1. Move it from one end to the other, so DeJota can find which input it is on.
+1. Move it from one end to the other, so DeJota can tell which knob it is.
 2. Turn it slowly, back and forth, for 20 seconds.
 3. Turn it fast for 20 seconds.
 4. Turn it slowly again for 20 seconds.
@@ -69,7 +71,7 @@ Steps 2 to 5 are the cure for jumpy knobs (below). The timers only run while the
 short sound marks each new step, so you can watch the knob rather than the screen. Allow a minute or
 two per knob. Any knob can be skipped: it keeps the input it had, unless the run found that input on
 another knob. Volume and brightness hold still for the whole run, Cancel leaves everything as it
-was, and Settings opens at the end to choose what each knob does.
+was, and Settings comes to the front at the end to choose what each knob does.
 
 A new knob only shows up once the Arduino sketch sends one more value. A knob the sketch does not
 send is never found, so skip it.
@@ -92,7 +94,7 @@ contact for anywhere from 15ms to a few hundred ms and the Arduino reads a stray
 the ends of travel. It builds up on knobs that rarely move, which is why the volume knob stays
 clean.
 
-Sweep the knob slowly from end to end a dozen or so times. **Calibrate…** in the menu walks you
+Sweep the knob slowly from end to end a dozen or so times. **Calibrate** in the menu walks you
 through it, one knob at a time. Recordings of this board showed a dirty
 knob reading clean within about 15 seconds of sweeping. A drop of potentiometer contact cleaner
 makes it last. The panel is protected meanwhile: brightness only applies once the knob settles, so

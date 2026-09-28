@@ -543,6 +543,9 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
     private var aboutWindow: NSWindow?
     private var settingsWindow: NSWindow?
     private var draft: [Knob] = []
+    private let knobRows = NSStackView()
+    private let knobEdit = NSSegmentedControl()
+    private let calibrateOnSave = NSButton(checkboxWithTitle: "Calibrate on save", target: nil, action: nil)
     private var calibrationWindow: NSWindow?
     private var calibrator: Calibrator?
     private let stepTitle = NSTextField(labelWithString: "")
@@ -573,9 +576,9 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
         let status = state.connected ? ["Connected: \(state.port ?? "?")"] + state.lines : ["Not connected"]
         menu.removeAllItems()
         menu.addItem(entry("About \(appName)", #selector(about), ""))
-        menu.addItem(entry("Settings…", #selector(openSettings), ","))
-        let calibrateItem = entry("Calibrate…", #selector(calibrate), "")
-        calibrateItem.isEnabled = state.connected
+        menu.addItem(entry("Settings", #selector(openSettings), ","))
+        let calibrateItem = entry("Calibrate", #selector(calibrate), "")
+        calibrateItem.isEnabled = state.connected && !shared.config().knobs.isEmpty
         menu.addItem(calibrateItem)
         menu.addItem(.separator())
         for line in status {
@@ -650,12 +653,79 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
 
     // A second click keeps unsaved edits in an open window.
     @objc private func openSettings() {
-        if settingsWindow?.isVisible != true { draft = shared.config().knobs }
+        if settingsWindow?.isVisible != true {
+            draft = shared.config().knobs
+            calibrateOnSave.state = prefs.object(forKey: "calibrateOnSave") as? Bool == false ? .off : .on
+        }
         showSettings()
     }
 
-    // Rebuilt whole on every change, which keeps each popup's tag equal to its knob index.
+    // Laid out as a System Settings group. Built once; after that only the knob rows change.
     private func showSettings() {
+        if let window = settingsWindow {
+            reloadKnobs()
+            fit(window)
+        } else {
+            let heading = NSTextField(labelWithString: "Knobs")
+            heading.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
+            knobEdit.segmentCount = 2
+            knobEdit.trackingMode = .momentary
+            knobEdit.setImage(NSImage(systemSymbolName: "plus", accessibilityDescription: "Add a knob"),
+                              forSegment: 0)
+            knobEdit.setImage(NSImage(systemSymbolName: "minus", accessibilityDescription: "Remove the last knob"),
+                              forSegment: 1)
+            knobEdit.setToolTip("Add a knob", forSegment: 0)
+            knobEdit.setToolTip("Remove the last knob", forSegment: 1)
+            knobEdit.target = self
+            knobEdit.action = #selector(editKnobs)
+            let header = NSStackView()
+            header.addView(heading, in: .leading)
+            header.addView(knobEdit, in: .trailing)
+
+            knobRows.orientation = .vertical
+            knobRows.spacing = 0
+            knobRows.alignment = .trailing  // separators are narrower than the rows, which insets them on the left
+            let group = NSBox()
+            group.boxType = .custom
+            group.cornerRadius = 10
+            group.borderColor = .separatorColor
+            group.fillColor = .quaternarySystemFill
+            group.addSubview(knobRows)
+            knobRows.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                knobRows.topAnchor.constraint(equalTo: group.topAnchor),
+                knobRows.bottomAnchor.constraint(equalTo: group.bottomAnchor),
+                knobRows.leadingAnchor.constraint(equalTo: group.leadingAnchor),
+                knobRows.trailingAnchor.constraint(equalTo: group.trailingAnchor),
+                group.widthAnchor.constraint(equalToConstant: 420),
+            ])
+
+            let caption = NSTextField(labelWithString: "Choose what each knob does.")
+            caption.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+            caption.textColor = .secondaryLabelColor
+            let save = NSButton(title: "Save", target: self, action: #selector(saveSettings))
+            save.keyEquivalent = "\r"
+            let footer = NSStackView()
+            footer.addView(calibrateOnSave, in: .leading)
+            footer.addView(save, in: .trailing)
+
+            let content = NSStackView(views: [header, group, caption, footer])
+            content.orientation = .vertical
+            content.alignment = .leading
+            content.spacing = 8
+            content.setCustomSpacing(20, after: caption)
+            content.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+            content.setHuggingPriority(.defaultHigh, for: .horizontal)  // else fittingSize drops the right inset
+            header.widthAnchor.constraint(equalTo: group.widthAnchor).isActive = true
+            footer.widthAnchor.constraint(equalTo: group.widthAnchor).isActive = true
+            reloadKnobs()
+            settingsWindow = makeWindow("\(appName) Settings", content)
+        }
+        present(settingsWindow!)
+    }
+
+    // Rebuilt on every change, which keeps each popup's tag equal to its knob index.
+    private func reloadKnobs() {
         let assigned = draft.compactMap { knob -> Int? in
             if case .brightness(let ordinal)? = knob.target { return ordinal + 1 }
             return nil
@@ -664,10 +734,16 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
         let choices: [Target?] = [nil, .master, .builtinBrightness]
             + (0..<max(2, externalDisplays().count, assigned)).map { .brightness($0) }
 
-        var rows: [[NSView]] = draft.enumerated().map { index, knob in
-            let input = NSTextField(labelWithString: knob.column.map { "Input \($0)" } ?? "Not calibrated")
-            input.textColor = .secondaryLabelColor
+        for view in knobRows.arrangedSubviews { view.removeFromSuperview() }
+        for (index, knob) in draft.enumerated() {
+            if index > 0 {
+                let line = NSBox()
+                line.boxType = .separator
+                knobRows.addArrangedSubview(line)
+                line.widthAnchor.constraint(equalTo: knobRows.widthAnchor, constant: -12).isActive = true
+            }
             let popup = NSPopUpButton()
+            popup.isBordered = false
             for choice in choices {
                 popup.addItem(withTitle: title(choice))
                 popup.lastItem?.representedObject = choice
@@ -677,67 +753,49 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
             popup.target = self
             popup.action = #selector(pick)
             popup.setAccessibilityLabel("Knob \(letter(index))")
-            return [NSTextField(labelWithString: "Knob \(letter(index))"), input, popup]
+            let row = NSStackView()
+            row.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
+            row.addView(NSTextField(labelWithString: "Knob \(letter(index))"), in: .leading)
+            if knob.column == nil {
+                let warning = NSTextField(labelWithString: "Needs calibration")
+                warning.textColor = .systemRed
+                row.addView(warning, in: .leading)
+            }
+            row.addView(popup, in: .trailing)
+            knobRows.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalTo: knobRows.widthAnchor).isActive = true
         }
-
-        let add = NSButton(image: NSImage(systemSymbolName: "plus", accessibilityDescription: "Add a knob")!,
-                           target: self, action: #selector(addKnob))
-        add.toolTip = "Add a knob"
-        add.isEnabled = draft.count < 26  // letters end at Z
-        let remove = NSButton(image: NSImage(systemSymbolName: "minus",
-                                             accessibilityDescription: "Remove the last knob")!,
-                              target: self, action: #selector(removeKnob))
-        remove.toolTip = "Remove the last knob"
-        remove.isEnabled = draft.count > 1
-        let save = NSButton(title: "Save", target: self, action: #selector(saveSettings))
-        save.keyEquivalent = "\r"
-        rows.append([NSStackView(views: [add, remove]), NSGridCell.emptyContentView, save])
-
-        let grid = NSGridView(views: rows)
-        grid.rowAlignment = .firstBaseline
-        grid.rowSpacing = 8
-        grid.columnSpacing = 12
-        let buttons = grid.row(at: grid.numberOfRows - 1)
-        buttons.rowAlignment = .none
-        buttons.yPlacement = .center
-        buttons.topPadding = 12
-        grid.cell(for: save)?.xPlacement = .trailing
-
-        let content = NSStackView(views: [NSTextField(labelWithString: "Choose what each knob does."), grid])
-        content.orientation = .vertical
-        content.alignment = .leading
-        content.spacing = 16
-        content.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
-        content.setHuggingPriority(.defaultHigh, for: .horizontal)  // else fittingSize drops the right inset
-        if let window = settingsWindow {
-            window.contentView = content
-            fit(window)
-        } else {
-            settingsWindow = makeWindow("\(appName) Settings", content)
+        if draft.isEmpty {
+            let empty = NSTextField(labelWithString: "No knobs. Press + to add one.")
+            empty.textColor = .secondaryLabelColor
+            let row = NSStackView()
+            row.edgeInsets = NSEdgeInsets(top: 14, left: 12, bottom: 14, right: 12)
+            row.addView(empty, in: .center)
+            knobRows.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalTo: knobRows.widthAnchor).isActive = true
         }
-        present(settingsWindow!)
+        knobEdit.setEnabled(draft.count < 26, forSegment: 0)  // letters end at Z
+        knobEdit.setEnabled(!draft.isEmpty, forSegment: 1)
     }
 
     @objc private func pick(_ sender: NSPopUpButton) {
         draft[sender.tag].target = sender.selectedItem?.representedObject as? Target
     }
 
-    @objc private func addKnob() {
-        draft.append(Knob(column: nil, target: nil))
-        showSettings()
-    }
-
-    @objc private func removeKnob() {
-        guard draft.count > 1 else { return }
-        draft.removeLast()
+    @objc private func editKnobs(_ sender: NSSegmentedControl) {
+        if sender.selectedSegment == 0 {
+            if draft.count < 26 { draft.append(Knob(column: nil, target: nil)) }
+        } else if !draft.isEmpty {
+            draft.removeLast()
+        }
         showSettings()
     }
 
     @objc private func saveSettings() {
-        let added = draft.count > shared.config().knobs.count
+        let calibrateNow = calibrateOnSave.state == .on
+        prefs.set(calibrateNow, forKey: "calibrateOnSave")
         shared.setKnobs(draft)
-        settingsWindow?.close()
-        if added && shared.snapshot().connected { calibrate() }
+        if calibrateNow && shared.snapshot().connected { calibrate() }
     }
 
     // MARK: Calibration
@@ -750,14 +808,15 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
             return
         }
         let count = shared.config().knobs.count
+        guard count > 0 else { return }
         let turns = Int(Calibrator.turnSeconds)
         let alert = NSAlert()
         alert.icon = makeIcon(slashed: false, side: 64)  // an unbundled binary's own icon is a folder
         alert.messageText = count == 1 ? "Calibrate knob A?" : "Calibrate knobs A to \(letter(count - 1))?"
         alert.informativeText = """
             This takes about \(count == 1 ? "a minute" : "\(count) minutes, one per knob"). For each \
-            knob, \(appName) first finds which input it is wired to. Then you turn it slowly, fast, and \
-            slowly again for \(turns) seconds each, and sweep it from one end to the other \
+            knob, you first move it from one end to the other so \(appName) can tell which one it is. \
+            Then you turn it slowly, fast, and slowly again for \(turns) seconds each, and sweep it \
             \(Calibrator.sweepsNeeded) times. The timers only run while the knob turns.
 
             You can skip a knob, but please don't skip one that jumps around: turning it is what cleans it.
@@ -820,7 +879,7 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
     private func showStep() {
         guard let run = calibrator, let window = calibrationWindow else { return }
         let name = letter(run.knob)
-        let found = run.found[run.knob].map { "Found it on input \($0). " } ?? ""
+        let found = run.found[run.knob] == nil ? "" : "Found it. "
         stepTitle.stringValue = "Knob \(name), \(run.knob + 1) of \(run.found.count)"
         stepBody.stringValue = [
             "Move knob \(name) from one end to the other.",
