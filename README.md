@@ -27,8 +27,8 @@ backlight** over USB. Arduino firmware is unchanged.
 Needs Xcode command line tools (`xcode-select --install`).
 
 External monitor brightness and contrast additionally need
-[m1ddc](https://github.com/waydabber/m1ddc), a small standalone binary. Apple Silicon only.
-Everything else works without it.
+[m1ddc](https://github.com/waydabber/m1ddc), a small standalone binary. Apple Silicon only, so on
+an Intel Mac external monitors are not available. Everything else works without it.
 
 ```bash
 brew install m1ddc
@@ -37,9 +37,10 @@ brew install m1ddc
 ```
 
 `build.sh` produces `.build/TheeJ.app`, a real app bundle, so macOS has an icon to show in System
-Settings, Activity Monitor and Finder. It is for Apple Silicon, macOS 14 or later, and signed with
-your Apple Development certificate when you have one, so Login Items shows TheeJ by name and icon
-rather than as an unidentified developer. Without one it is signed ad hoc.
+Settings, Activity Monitor and Finder. It is a universal app for Apple Silicon and Intel, macOS 14
+or later, and signed with your Apple Development certificate when you have one, so Login Items
+shows TheeJ by name and icon rather than as an unidentified developer. Without one it is signed ad
+hoc.
 
 **Quit MonitorControl, BetterDisplay or any similar app first.** Two processes writing the same
 monitor over I2C will fight over the value.
