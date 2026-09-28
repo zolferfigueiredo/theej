@@ -25,6 +25,7 @@ enum Target: Hashable, Codable {
     case builtinBrightness
     // Index into the external displays sorted left to right, so 0 is the leftmost.
     case brightness(Int)
+    case contrast(Int)
 }
 
 // The array index is the letter on the box (A = 0). column is the serial field the knob arrives
@@ -49,13 +50,15 @@ func targets(_ knobs: [Knob]) -> [Int: Target] {
 
 // The menu and the status line read as the volumes, then the built-in, then externals left to right.
 // That is not the order of the serial columns driving them, so it needs its own ordering. Monitors
-// start at 10, and activeDisplays() stops at 16, so a new target kind cannot collide with one.
+// take two ranks each from 10, and activeDisplays() stops at 16, so a target kind below 10 or from
+// 42 up cannot collide with one.
 func rank(_ target: Target) -> Int {
     switch target {
     case .master: return 0
     case .microphone: return 1
     case .builtinBrightness: return 2
-    case .brightness(let ordinal): return 10 + ordinal
+    case .brightness(let ordinal): return 10 + 2 * ordinal
+    case .contrast(let ordinal): return 11 + 2 * ordinal
     }
 }
 
@@ -70,6 +73,7 @@ func title(_ target: Target?) -> String {
     case .microphone?: return "Microphone volume"
     case .builtinBrightness?: return "Built-in display brightness"
     case .brightness(let ordinal)?: return "Monitor \(ordinal + 1) brightness"
+    case .contrast(let ordinal)?: return "Monitor \(ordinal + 1) contrast"
     }
 }
 
@@ -252,9 +256,9 @@ func percent(_ scalar: Float32) -> Int {
     return min(100, max(0, Int(scalar * 100 + 0.5)))
 }
 
-// ponytail: brightness applies once a knob has been still this long; each movement restarts the
-// wait. It must stay well above ~110ms, the longest wiper dropout on this board (a moving pot
-// briefly reads its neighbour's value), or a dropout reaches the panel as a flash.
+// ponytail: every job but the volumes applies once a knob has been still this long; each movement
+// restarts the wait. It must stay well above ~110ms, the longest wiper dropout on this board (a
+// moving pot briefly reads its neighbour's value), or a dropout reaches the panel as a flash.
 let brightnessSettle = 0.3
 
 // Serial so two DDC writes never overlap. A write blocks for ~77ms, so it must never run on the
@@ -270,12 +274,12 @@ func debounce(_ target: Target, on queue: DispatchQueue, _ apply: @escaping () -
     queue.asyncAfter(deadline: .now() + brightnessSettle, execute: work)
 }
 
-// Write only, never read back: these Dells answer `get luminance` with 0.
-func writeBrightness(_ uuid: String, _ value: Int) -> Bool {
+// Write only, never read back: these Dells answer every `get` with 0.
+func writeDDC(_ uuid: String, _ feature: String, _ value: Int) -> Bool {
     guard let m1ddc = m1ddcPath else { return false }
     let task = Process()
     task.executableURL = URL(fileURLWithPath: m1ddc)
-    task.arguments = ["display", uuid, "set", "luminance", String(value)]
+    task.arguments = ["display", uuid, "set", feature, String(value)]
     task.standardOutput = FileHandle.nullDevice
     task.standardError = FileHandle.nullDevice
     guard (try? task.run()) != nil else { return false }
@@ -782,12 +786,15 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
     // Rebuilt on every change, which keeps each popup's tag equal to its knob index.
     private func reloadKnobs() {
         let assigned = draft.compactMap { knob -> Int? in
-            if case .brightness(let ordinal)? = knob.target { return ordinal + 1 }
-            return nil
+            switch knob.target {
+            case .brightness(let ordinal)?, .contrast(let ordinal)?: return ordinal + 1
+            default: return nil
+            }
         }.max() ?? 0
         // Includes an assigned monitor that is unplugged right now, so Save cannot drop it.
-        let choices: [Target?] = [nil, .master, .microphone, .builtinBrightness]
-            + (0..<max(2, externalDisplays().count, assigned)).map { .brightness($0) }
+        let monitors: [Target?] = (0..<max(2, externalDisplays().count, assigned))
+            .flatMap { [.brightness($0), .contrast($0)] }
+        let choices: [Target?] = [nil, .master, .microphone, .builtinBrightness] + monitors
 
         for view in knobRows.arrangedSubviews { view.removeFromSuperview() }
         for (index, knob) in draft.enumerated() {
@@ -1036,16 +1043,17 @@ func handle(_ values: [Int]) {
                 debounce(target, on: .main) { setBuiltinBrightness(id, scalar) }
                 showOSD(osdBrightnessImage, on: id, scalar)
             }
-        case .brightness(let ordinal):
+        case .brightness(let ordinal), .contrast(let ordinal):
             let externals = externalDisplays()
             if ordinal < externals.count {
                 let display = externals[ordinal]
+                let brightness = target == .brightness(ordinal)
                 debounce(target, on: ddcQueue) {
-                    if !writeBrightness(display.uuid, percent(scalar)) {
-                        fputs("\nBrightness write failed (monitor \(ordinal + 1)). Is m1ddc installed?\n", stderr)
+                    if !writeDDC(display.uuid, brightness ? "luminance" : "contrast", percent(scalar)) {
+                        fputs("\n\(title(target)) write failed. Is m1ddc installed?\n", stderr)
                     }
                 }
-                showOSD(osdBrightnessImage, on: display.id, scalar)
+                showOSD(brightness ? osdBrightnessImage : osdBarImage, on: display.id, scalar)
             }
         }
     }
@@ -1184,7 +1192,8 @@ if args.contains("--selftest") {
     // Menu order is volume, then the built-in, then externals left to right, which is not the
     // serial column order. The rank bands must stay distinct as target kinds are added.
     precondition(ordered(targets(sample)).map(\.key) == [0, 1, 3, 2])
-    let every: [Target] = [.master, .microphone, .builtinBrightness] + (0..<16).map { .brightness($0) }
+    let every: [Target] = [.master, .microphone, .builtinBrightness]
+        + (0..<16).flatMap { [.brightness($0), .contrast($0)] }
     precondition(Set(every.map(rank)).count == every.count)
     precondition(try! JSONDecoder().decode([Target].self, from: JSONEncoder().encode(every)) == every)
     // Knobs saved before the newer targets existed still load.
@@ -1233,7 +1242,7 @@ for (index, knob) in shared.config().knobs.enumerated() {
     print("\(appName): knob \(letter(index)), \(input): \(title(knob.target))")
 }
 if m1ddcPath == nil {
-    fputs("m1ddc not found, external brightness is disabled. brew install m1ddc\n", stderr)
+    fputs("m1ddc not found, external brightness and contrast are disabled. brew install m1ddc\n", stderr)
 }
 if displayServices == nil {
     fputs("DisplayServices unavailable, built-in brightness is disabled.\n", stderr)

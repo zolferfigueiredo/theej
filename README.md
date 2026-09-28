@@ -23,8 +23,8 @@ panel** through DisplayServices. Arduino firmware is unchanged.
 
 Needs Xcode command line tools (`xcode-select --install`).
 
-External monitor brightness additionally needs [m1ddc](https://github.com/waydabber/m1ddc), a small
-standalone binary. Apple Silicon only. Volume and built-in brightness work without it.
+External monitor brightness and contrast additionally need [m1ddc](https://github.com/waydabber/m1ddc),
+a small standalone binary. Apple Silicon only. Everything else works without it.
 
 ```bash
 brew install m1ddc
@@ -89,7 +89,8 @@ send is never found, so skip it.
 - **Microphone volume**: the input volume of the current input device, the same slider as in
   System Settings, Sound.
 - **Built-in display brightness**: the Retina panel, through DisplayServices.
-- **Monitor brightness**: each external monitor over DDC/CI, through m1ddc.
+- **Monitor brightness** and **Monitor contrast**: each external monitor over DDC/CI, through
+  m1ddc.
 
 The volumes follow the knob as it turns. Everything else waits for the knob to settle, as described
 under On-screen feedback.
@@ -169,8 +170,8 @@ Constants at the top of [Sources/deej-mac/main.swift](Sources/deej-mac/main.swif
 - `Calibrator.turnSeconds` and `Calibrator.sweepsNeeded`, further down with the calibration code:
   `20` seconds per turning step and `10` sweeps per knob.
 
-Turning a brightness knob fully down sets the backlight to 0 and the panel goes black. The knob is
-the way back.
+Turning a brightness knob fully down sets the backlight to 0 and the panel goes black, and a monitor
+contrast knob at 0 leaves it close to black too. The knob is the way back.
 
 ## Not included
 
