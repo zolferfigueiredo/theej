@@ -8,7 +8,7 @@ import IOKit.hid
 import Carbon.HIToolbox
 
 let appName = "TheeJ"
-let appVersion = "1.0.2"
+let appVersion = "1.0.3"
 
 let baud = speed_t(B9600)
 let maxADC: Float32 = 1023.0
@@ -1344,16 +1344,31 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         showSettings()
     }
 
+    private func confirm(_ message: String, _ info: String, then action: @escaping () -> Void) {
+        guard let window = settingsWindow else { return }
+        let alert = NSAlert()
+        alert.messageText = message
+        alert.informativeText = info
+        alert.addButton(withTitle: "Remove").hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        alert.beginSheetModal(for: window) { if $0 == .alertFirstButtonReturn { action() } }
+    }
+
     @objc private func editProfiles(_ sender: NSSegmentedControl) {
         if sender.selectedSegment == 0 {
             draft.profiles.append(Profile(name: "Profile \(draft.profiles.count + 1)"))
             draft.active = draft.profiles.count - 1
+            showSettings()
+            settingsWindow?.makeFirstResponder(profileName)
         } else if draft.profiles.count > 1 {
-            draft.profiles.remove(at: draft.active)
-            draft.active = min(draft.active, draft.profiles.count - 1)
+            let name = draft.profile.name.trimmingCharacters(in: .whitespaces)
+            confirm("Remove \(name.isEmpty ? "this profile" : "“\(name)”")?",
+                    "Its knob choices and shortcut go with it.") { [self] in
+                draft.profiles.remove(at: draft.active)
+                draft.active = min(draft.active, draft.profiles.count - 1)
+                showSettings()
+            }
         }
-        showSettings()
-        if sender.selectedSegment == 0 { settingsWindow?.makeFirstResponder(profileName) }
     }
 
     func controlTextDidChange(_ obj: Notification) {
@@ -1371,14 +1386,18 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     @objc private func editKnobs(_ sender: NSSegmentedControl) {
         if sender.selectedSegment == 0 {
             if draft.columns.count < 26 { draft.columns.append(nil) }
+            showSettings()
         } else if !draft.columns.isEmpty {
-            draft.columns.removeLast()
-            // Else a knob added back would take up the removed knob's jobs.
-            for index in draft.profiles.indices {
-                draft.profiles[index].targets = Array(draft.profiles[index].targets.prefix(draft.columns.count))
+            confirm("Remove knob \(letter(draft.columns.count - 1))?",
+                    "What it does in every profile goes with it.") { [self] in
+                draft.columns.removeLast()
+                // Else a knob added back would take up the removed knob's jobs.
+                for index in draft.profiles.indices {
+                    draft.profiles[index].targets = Array(draft.profiles[index].targets.prefix(draft.columns.count))
+                }
+                showSettings()
             }
         }
-        showSettings()
     }
 
     @objc private func toggleOption() {
