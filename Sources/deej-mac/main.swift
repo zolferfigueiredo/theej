@@ -4,9 +4,10 @@ import CoreAudio
 import CoreGraphics
 import ColorSync
 import AppKit
+import IOKit.hid
 
 let appName = "TheeJ"
-let appVersion = "1.0.1"
+let appVersion = "1.0.2"
 
 let baud = speed_t(B9600)
 let maxADC: Float32 = 1023.0
@@ -18,11 +19,18 @@ let deadzone: Float32 = 0.01
 // This board's pots read backwards: slider down = full volume. Flip to false if you rewire them.
 let invertSliders = true
 
+// The case names are the JSON keys of saved knobs, so renaming one loses that knob's job.
 enum Target: Hashable, Codable {
     case master
+    case microphone
     case builtinBrightness
+    case builtinContrast
+    case nightShift
     // Index into the external displays sorted left to right, so 0 is the leftmost.
     case brightness(Int)
+    case contrast(Int)
+    case builtinKeyboard
+    case externalKeyboard
 }
 
 // The array index is the letter on the box (A = 0). column is the serial field the knob arrives
@@ -45,14 +53,22 @@ func targets(_ knobs: [Knob]) -> [Int: Target] {
     return result
 }
 
-// The menu and the status line read as volume, then the built-in, then externals left to right.
-// That is not the order of the serial columns driving them, so it needs its own ordering. The
-// bands are spaced so a new target kind cannot collide with a monitor ordinal.
+// The menu and the status line read as the volumes, the built-in display and Night Shift, externals
+// left to right, then keyboards. That is not the order of the serial columns driving them, so it
+// needs its own ordering. Monitors
+// take two ranks each from 10, and activeDisplays() stops at 16, so a target kind below 10 or from
+// 42 up cannot collide with one.
 func rank(_ target: Target) -> Int {
     switch target {
     case .master: return 0
-    case .builtinBrightness: return 1
-    case .brightness(let ordinal): return 2 + ordinal
+    case .microphone: return 1
+    case .builtinBrightness: return 2
+    case .builtinContrast: return 3
+    case .nightShift: return 4
+    case .brightness(let ordinal): return 10 + 2 * ordinal
+    case .contrast(let ordinal): return 11 + 2 * ordinal
+    case .builtinKeyboard: return 100
+    case .externalKeyboard: return 101
     }
 }
 
@@ -64,8 +80,14 @@ func title(_ target: Target?) -> String {
     switch target {
     case nil: return "Nothing"
     case .master?: return "Master volume"
+    case .microphone?: return "Microphone volume"
     case .builtinBrightness?: return "Built-in display brightness"
+    case .builtinContrast?: return "Built-in display contrast"
+    case .nightShift?: return "Night Shift warmth"
     case .brightness(let ordinal)?: return "Monitor \(ordinal + 1) brightness"
+    case .contrast(let ordinal)?: return "Monitor \(ordinal + 1) contrast"
+    case .builtinKeyboard?: return "Built-in keyboard backlight"
+    case .externalKeyboard?: return "External keyboard backlight"
     }
 }
 
@@ -79,9 +101,9 @@ let portOverride = args.first { $0.hasPrefix("/dev/") }
 // works on devices that expose no main volume element (e.g. some Bluetooth headsets).
 let virtualMainVolume: AudioObjectPropertySelector = 0x766D7663
 
-func defaultOutputDevice() -> AudioDeviceID? {
+func defaultDevice(input: Bool) -> AudioDeviceID? {
     var addr = AudioObjectPropertyAddress(
-        mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+        mSelector: input ? kAudioHardwarePropertyDefaultInputDevice : kAudioHardwarePropertyDefaultOutputDevice,
         mScope: kAudioObjectPropertyScopeGlobal,
         mElement: kAudioObjectPropertyElementMain)
     var dev = AudioDeviceID(0)
@@ -92,11 +114,11 @@ func defaultOutputDevice() -> AudioDeviceID? {
     return dev
 }
 
-func setScalar(_ dev: AudioDeviceID, _ selector: AudioObjectPropertySelector,
-               _ element: UInt32, _ value: Float32) -> Bool {
+func setScalar(_ dev: AudioDeviceID, _ scope: AudioObjectPropertyScope,
+               _ selector: AudioObjectPropertySelector, _ element: UInt32, _ value: Float32) -> Bool {
     var addr = AudioObjectPropertyAddress(
         mSelector: selector,
-        mScope: kAudioDevicePropertyScopeOutput,
+        mScope: scope,
         mElement: element)
     guard AudioObjectHasProperty(dev, &addr) else { return false }
     var v = value
@@ -104,12 +126,13 @@ func setScalar(_ dev: AudioDeviceID, _ selector: AudioObjectPropertySelector,
         dev, &addr, 0, nil, UInt32(MemoryLayout<Float32>.size), &v) == noErr
 }
 
-// Resolved per call so swapping output device (headphones connecting) just works.
-func setMasterVolume(_ scalar: Float32) {
-    guard let dev = defaultOutputDevice() else { return }
-    if setScalar(dev, virtualMainVolume, 0, scalar) { return }
-    _ = setScalar(dev, kAudioDevicePropertyVolumeScalar, 1, scalar)
-    _ = setScalar(dev, kAudioDevicePropertyVolumeScalar, 2, scalar)
+// Resolved per call so swapping device (headphones connecting) just works.
+func setVolume(_ scalar: Float32, input: Bool = false) {
+    guard let dev = defaultDevice(input: input) else { return }
+    let scope = input ? kAudioDevicePropertyScopeInput : kAudioDevicePropertyScopeOutput
+    if setScalar(dev, scope, virtualMainVolume, 0, scalar) { return }
+    _ = setScalar(dev, scope, kAudioDevicePropertyVolumeScalar, 1, scalar)
+    _ = setScalar(dev, scope, kAudioDevicePropertyVolumeScalar, 2, scalar)
 }
 
 // MARK: - Monitor brightness
@@ -170,7 +193,7 @@ func externalDisplays() -> [Display] { orderExternals(activeDisplays()) }
 
 func builtinDisplayID() -> CGDirectDisplayID? { activeDisplays().first { $0.builtin }?.id }
 
-// MARK: - Built-in display brightness
+// MARK: - Built-in display
 
 // There is no public API for the built-in panel on Apple Silicon. This is the same private symbol
 // MonitorControl imports. Resolved once, and if it ever disappears the knob goes inert rather
@@ -193,6 +216,95 @@ func setBuiltinBrightness(_ id: CGDirectDisplayID, _ scalar: Float32) {
     services.changed?(id, Double(scalar))
 }
 
+// The Accessibility "Display contrast" setting, 0 normal to 1 maximum, which external monitors
+// ignore. Private, from SkyLight. The argument is a 32-bit Float, not a CGFloat.
+typealias SetContrastFn = @convention(c) (Float) -> Int32
+
+let setDisplayContrast: SetContrastFn? = {
+    guard let handle = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", RTLD_LAZY),
+          let sym = dlsym(handle, "CGSSetDisplayContrast") else { return nil }
+    return unsafeBitCast(sym, to: SetContrastFn.self)
+}()
+
+// MARK: - CoreBrightness
+
+// No headers. Each protocol names the selectors, class_addProtocol lets a plain `as?` reach the
+// class, and `optional` makes each call check respondsToSelector, so a selector that disappears
+// leaves the knob inert instead of crashing the daemon.
+func coreBrightness(_ name: String, _ proto: Protocol) -> NSObject? {
+    _ = dlopen("/System/Library/PrivateFrameworks/CoreBrightness.framework/CoreBrightness", RTLD_LAZY)
+    guard let type = NSClassFromString(name) as? NSObject.Type else { return nil }
+    _ = class_addProtocol(type, proto)
+    return type.init()
+}
+
+@objc protocol BlueLightClient {
+    @objc(setStrength:commit:) optional func setStrength(_ strength: Float, commit: Bool) -> Bool
+    @objc(setEnabled:) optional func setEnabled(_ enabled: Bool) -> Bool
+}
+
+let blueLight = coreBrightness("CBBlueLightClient", BlueLightClient.self) as? BlueLightClient
+
+// 0 switches it off without storing 0 as the warmth, so Control Center still turns it back on warm.
+func setNightShift(_ scalar: Float32) {
+    if scalar > 0 { _ = blueLight?.setStrength?(Float(scalar), commit: true) }
+    _ = blueLight?.setEnabled?(scalar > 0)
+}
+
+@objc protocol KeyboardClient {
+    @objc(copyKeyboardBacklightIDs) optional func copyKeyboardBacklightIDs() -> NSArray?
+    @objc(setBrightness:fadeSpeed:commit:forKeyboard:)
+    optional func setBrightness(_ value: Float, fadeSpeed: Int32, commit: Bool, forKeyboard id: UInt64) -> Bool
+}
+
+let keyboardLight = coreBrightness("KeyboardBrightnessClient", KeyboardClient.self) as? KeyboardClient
+
+// This setter, not setBrightness:forKeyboard:, is the one seen to light it on macOS 26. 0 mutes it
+// and anything above unmutes it. macOS still turns it off when idle or in bright light, and brings
+// it back at this level.
+func setBuiltinKeyboard(_ scalar: Float32) {
+    guard let id = (keyboardLight?.copyKeyboardBacklightIDs?()?.firstObject as? NSNumber)?.uint64Value
+    else { return }
+    _ = keyboardLight?.setBrightness?(Float(scalar), fadeSpeed: 0, commit: true, forKeyboard: id)
+}
+
+// MARK: - External keyboard backlight
+
+// A QMK keyboard with VIA, over its raw HID interface. A vendor usage page needs no Input Monitoring
+// permission, and the device is not seized, so VIA and Keychron Launcher still work alongside.
+// ponytail: the first VIA keyboard found. Main thread only, as debounce(on: .main) runs it.
+var viaKeyboard: IOHIDDevice?
+
+func openVIAKeyboard() -> IOHIDDevice? {
+    let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
+    IOHIDManagerSetDeviceMatching(manager, [kIOHIDPrimaryUsagePageKey: 0xFF60, kIOHIDPrimaryUsageKey: 0x61] as CFDictionary)
+    guard let device = (IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice>)?.first,
+          IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone)) == kIOReturnSuccess else { return nil }
+    return device
+}
+
+// Both VIA dialects, each ignored by a keyboard that speaks the other. Protocol 9 (older Keychron
+// firmware) is [set value, rgblight brightness, value]; protocol 12 is [set value, RGB matrix
+// channel, brightness, value]. Never the save command, so a replug brings back the keyboard's own
+// level and its flash is never written.
+func viaReports(_ scalar: Float32) -> [[UInt8]] {
+    let value = UInt8((max(0, min(1, scalar)) * 255).rounded())
+    return [[0x07, 0x80, value], [0x07, 0x03, 0x01, value]].map { $0 + [UInt8](repeating: 0, count: 32 - $0.count) }
+}
+
+func setExternalKeyboard(_ scalar: Float32) {
+    // A handle from before an unplug fails, and the second pass opens the keyboard again.
+    for _ in 0..<2 {
+        if viaKeyboard == nil { viaKeyboard = openVIAKeyboard() }
+        guard let device = viaKeyboard else { return }
+        // Report ID 0, with no ID byte in the buffer: QMK's raw HID descriptor has none.
+        if viaReports(scalar).allSatisfy({
+            IOHIDDeviceSetReport(device, kIOHIDReportTypeOutput, 0, $0, $0.count) == kIOReturnSuccess
+        }) { return }
+        viaKeyboard = nil
+    }
+}
+
 // MARK: - System HUD
 
 // The same XPC service and selector MonitorControl uses, taken from its binary. Private, so every
@@ -202,11 +314,16 @@ func setBuiltinBrightness(_ id: CGDirectDisplayID, _ scalar: Float32) {
                    filledChiclets: UInt32, totalChiclets: UInt32, locked: Bool)
 }
 
-// ponytail: the three tunables. 1 and 3 are the long-standing BezelServices graphic ids, sun and
-// speaker. totalChiclets sets the bar resolution: 100 fills smoothly on the modern slider style,
-// 16 gives the classic segmented look.
+// ponytail: the three tunables. 1, 3 and 11 are the long-standing BezelServices graphic ids: sun,
+// speaker and keyboard backlight. There is none for a microphone, contrast or Night Shift, so those
+// get TheeJ's own HUD with the SF Symbols below. totalChiclets sets the bar resolution: 100 fills
+// smoothly on the modern slider style, 16 gives the classic segmented look.
 let osdBrightnessImage: Int64 = 1
 let osdVolumeImage: Int64 = 3
+let osdKeyboardImage: Int64 = 11
+let hudMicrophone = "mic.fill"
+let hudContrast = "circle.lefthalf.filled"
+let hudNightShift = "moon.fill"
 let osdChiclets: UInt32 = 100
 let osdFadeMsec: UInt32 = 1000
 
@@ -239,15 +356,100 @@ func showOSD(_ image: Int64, on displayID: CGDirectDisplayID, _ scalar: Float32)
     osdHelper()?.showImage(image, onDisplayID: UInt32(displayID), priority: 0x1f4,
                            msecUntilFade: osdFadeMsec,
                            filledChiclets: filled, totalChiclets: osdChiclets, locked: false)
+    // Both squares sit in the same spot, and TheeJ's would hide this one until it faded.
+    DispatchQueue.main.async { hudShown += 1; hud?.window.orderOut(nil) }
+}
+
+// OSDUIHelper only draws its own graphics, so the jobs it has none for draw its square themselves:
+// the measurements BiHan Brightness took from it at 2x, with an SF Symbol for the graphic.
+final class HUDView: NSView {
+    var symbol: NSImage?
+    var scalar: Float32 = 0
+    override var isFlipped: Bool { true }
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor(white: 0, alpha: 0.25).setFill()
+        NSRect(x: 21, y: 173, width: 159, height: 6).fill()
+        hudInk.setFill()
+        let pitch = 160 / CGFloat(osdChiclets)
+        let filled = Int((scalar * Float32(osdChiclets)).rounded())
+        if pitch >= 4 {
+            for i in 0..<filled { NSRect(x: 21 + pitch * CGFloat(i), y: 173, width: pitch - 1, height: 6).fill() }
+        } else {
+            // One bar: chiclets this narrow, side by side, would show their antialiased edges as seams.
+            NSRect(x: 21, y: 173, width: 159 * CGFloat(filled) / CGFloat(osdChiclets), height: 6).fill()
+        }
+        guard let symbol else { return }
+        let fit = min(96 / symbol.size.width, 96 / symbol.size.height)
+        let size = NSSize(width: symbol.size.width * fit, height: symbol.size.height * fit)
+        symbol.draw(in: NSRect(x: 100 - size.width / 2, y: 87 - size.height / 2, width: size.width, height: size.height),
+                    from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+    }
+}
+
+let hudInk = NSColor(white: 0.55, alpha: 1)
+let hudSymbolStyle = NSImage.SymbolConfiguration(pointSize: 96, weight: .regular)
+    .applying(NSImage.SymbolConfiguration(paletteColors: [hudInk]))
+var hud: (window: NSWindow, view: HUDView)?  // main thread only, built on first use, once NSApp exists
+var hudShown = 0  // bumped per show, so an older fade leaves a newer HUD alone
+
+func makeHUD() -> (window: NSWindow, view: HUDView) {
+    let view = HUDView(frame: NSRect(x: 0, y: 0, width: 200, height: 200))
+    let window = NSWindow(contentRect: view.frame, styleMask: .borderless, backing: .buffered, defer: true)
+    window.level = .screenSaver
+    window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+    window.ignoresMouseEvents = true
+    window.isOpaque = false
+    window.backgroundColor = .clear
+    window.hasShadow = false
+    window.appearance = NSAppearance(named: .darkAqua)  // the dark square in light mode too
+    let blur = NSVisualEffectView(frame: view.frame)
+    blur.material = .hudWindow
+    blur.state = .active  // the app is never active, and the default state would render the blur inactive
+    blur.maskImage = NSImage(size: view.frame.size, flipped: false) {
+        NSBezierPath(roundedRect: $0, xRadius: 18, yRadius: 18).fill()
+        return true
+    }
+    blur.addSubview(view)
+    window.contentView = blur
+    return (window, view)
+}
+
+// Called from the serial thread, like showOSD.
+func showHUD(_ symbol: String, on displayID: CGDirectDisplayID, _ scalar: Float32) {
+    DispatchQueue.main.async {
+        guard let screen = NSScreen.screens.first(where: {
+            $0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID == displayID
+        }) else { return }
+        let (window, view) = hud ?? makeHUD()
+        hud = (window, view)
+        hudShown += 1
+        let shown = hudShown
+        view.symbol = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(hudSymbolStyle)
+        view.scalar = scalar
+        view.needsDisplay = true
+        window.setFrameOrigin(NSPoint(x: screen.frame.midX - 100, y: screen.frame.minY + 140))
+        window.alphaValue = 1
+        window.orderFrontRegardless()
+        // Faded by hand: an animator() fade keeps running over a newer show.
+        let fadeStart = Double(osdFadeMsec) / 1000
+        for i in 1...10 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + fadeStart + 0.03 * Double(i)) {
+                guard shown == hudShown else { return }
+                window.alphaValue = 1 - CGFloat(i) / 10
+                if i == 10 { window.orderOut(nil) }
+            }
+        }
+    }
 }
 
 func percent(_ scalar: Float32) -> Int {
     return min(100, max(0, Int(scalar * 100 + 0.5)))
 }
 
-// ponytail: brightness applies once a knob has been still this long; each movement restarts the
-// wait. It must stay well above ~110ms, the longest wiper dropout on this board (a moving pot
-// briefly reads its neighbour's value), or a dropout reaches the panel as a flash.
+// ponytail: every job but the volumes applies once a knob has been still this long; each movement
+// restarts the wait. It must stay well above ~110ms, the longest wiper dropout on this board (a
+// moving pot briefly reads its neighbour's value), or a dropout reaches the panel as a flash.
 let brightnessSettle = 0.3
 
 // Serial so two DDC writes never overlap. A write blocks for ~77ms, so it must never run on the
@@ -263,12 +465,12 @@ func debounce(_ target: Target, on queue: DispatchQueue, _ apply: @escaping () -
     queue.asyncAfter(deadline: .now() + brightnessSettle, execute: work)
 }
 
-// Write only, never read back: these Dells answer `get luminance` with 0.
-func writeBrightness(_ uuid: String, _ value: Int) -> Bool {
+// Write only, never read back: these Dells answer every `get` with 0.
+func writeDDC(_ uuid: String, _ feature: String, _ value: Int) -> Bool {
     guard let m1ddc = m1ddcPath else { return false }
     let task = Process()
     task.executableURL = URL(fileURLWithPath: m1ddc)
-    task.arguments = ["display", uuid, "set", "luminance", String(value)]
+    task.arguments = ["display", uuid, "set", feature, String(value)]
     task.standardOutput = FileHandle.nullDevice
     task.standardError = FileHandle.nullDevice
     guard (try? task.run()) != nil else { return false }
@@ -775,12 +977,16 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
     // Rebuilt on every change, which keeps each popup's tag equal to its knob index.
     private func reloadKnobs() {
         let assigned = draft.compactMap { knob -> Int? in
-            if case .brightness(let ordinal)? = knob.target { return ordinal + 1 }
-            return nil
+            switch knob.target {
+            case .brightness(let ordinal)?, .contrast(let ordinal)?: return ordinal + 1
+            default: return nil
+            }
         }.max() ?? 0
         // Includes an assigned monitor that is unplugged right now, so Save cannot drop it.
-        let choices: [Target?] = [nil, .master, .builtinBrightness]
-            + (0..<max(2, externalDisplays().count, assigned)).map { .brightness($0) }
+        let monitors: [Target?] = (0..<max(2, externalDisplays().count, assigned))
+            .flatMap { [.brightness($0), .contrast($0)] }
+        let choices: [Target?] = [nil, .master, .microphone, .builtinBrightness, .builtinContrast, .nightShift]
+            + monitors + [.builtinKeyboard, .externalKeyboard]
 
         for view in knobRows.arrangedSubviews { view.removeFromSuperview() }
         for (index, knob) in draft.enumerated() {
@@ -868,7 +1074,7 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
 
             You can skip a knob, but please don't skip one that jumps around: turning it is what cleans it.
 
-            Volume and brightness hold still until you finish.
+            Every knob holds still until you finish.
             """
         alert.addButton(withTitle: "Start")
         alert.addButton(withTitle: "Cancel")
@@ -1001,12 +1207,14 @@ func handle(_ values: [Int]) {
     let mapping = targets(config.knobs)
     for (index, value) in values.enumerated() {
         let raw = Float32(value) / maxADC
-        let scalar = invertSliders ? 1 - raw : raw
+        let unsnapped = invertSliders ? 1 - raw : raw
+        // A pot often stops a count or two short of its rail, which would leave a light on at its
+        // dimmest. Snapping also stops a knob resting by an end from flicking onto it as `extreme`.
+        let scalar = unsnapped < deadzone ? 0 : unsnapped > 1 - deadzone ? 1 : unsnapped
         // Tracked, not applied: a knob that gains a job (on Save, or as a calibration ends with every
-        // knob parked at an end) waits to be moved instead of jumping there. Snapped so a knob resting
-        // by an end cannot flick onto it and pass the deadzone as `extreme`.
+        // knob parked at an end) waits to be moved instead of jumping there.
         guard !config.calibrating, let target = mapping[index] else {
-            lastApplied[index] = scalar < deadzone ? 0 : scalar > 1 - deadzone ? 1 : scalar
+            lastApplied[index] = scalar
             continue
         }
         let previous = lastApplied[index] ?? -1
@@ -1014,29 +1222,48 @@ func handle(_ values: [Int]) {
         guard scalar != previous, extreme || abs(scalar - previous) >= deadzone else { continue }
         lastApplied[index] = scalar
 
-        // The HUD tracks the knob live while brightness waits for brightnessSettle, so the HUD
-        // is the only feedback during a turn. Do not debounce it.
+        // The volumes follow the knob. Everything else waits for brightnessSettle, and the HUD tracks
+        // the knob live, so the HUD is the only feedback during a turn. Do not debounce it.
         switch target {
         case .master:
-            setMasterVolume(scalar)
+            setVolume(scalar)
             showOSD(osdVolumeImage, on: CGMainDisplayID(), scalar)
+        case .microphone:
+            setVolume(scalar, input: true)
+            showHUD(hudMicrophone, on: CGMainDisplayID(), scalar)
         case .builtinBrightness:
             if let id = builtinDisplayID() {
                 // Main, not ddcQueue, so a stuck m1ddc can never hold the built-in up.
                 debounce(target, on: .main) { setBuiltinBrightness(id, scalar) }
                 showOSD(osdBrightnessImage, on: id, scalar)
             }
-        case .brightness(let ordinal):
+        case .builtinContrast:
+            if let id = builtinDisplayID() {
+                debounce(target, on: .main) { _ = setDisplayContrast?(Float(scalar)) }
+                showHUD(hudContrast, on: id, scalar)
+            }
+        case .nightShift:
+            debounce(target, on: .main) { setNightShift(scalar) }
+            showHUD(hudNightShift, on: CGMainDisplayID(), scalar)
+        case .brightness(let ordinal), .contrast(let ordinal):
             let externals = externalDisplays()
             if ordinal < externals.count {
                 let display = externals[ordinal]
+                let brightness = target == .brightness(ordinal)
                 debounce(target, on: ddcQueue) {
-                    if !writeBrightness(display.uuid, percent(scalar)) {
-                        fputs("\nBrightness write failed (monitor \(ordinal + 1)). Is m1ddc installed?\n", stderr)
+                    if !writeDDC(display.uuid, brightness ? "luminance" : "contrast", percent(scalar)) {
+                        fputs("\n\(title(target)) write failed. Is m1ddc installed?\n", stderr)
                     }
                 }
-                showOSD(osdBrightnessImage, on: display.id, scalar)
+                if brightness { showOSD(osdBrightnessImage, on: display.id, scalar) }
+                else { showHUD(hudContrast, on: display.id, scalar) }
             }
+        case .builtinKeyboard:
+            debounce(target, on: .main) { setBuiltinKeyboard(scalar) }
+            showOSD(osdKeyboardImage, on: builtinDisplayID() ?? CGMainDisplayID(), scalar)
+        case .externalKeyboard:
+            debounce(target, on: .main) { setExternalKeyboard(scalar) }
+            showOSD(osdKeyboardImage, on: CGMainDisplayID(), scalar)
         }
     }
 
@@ -1174,10 +1401,16 @@ if args.contains("--selftest") {
     // Menu order is volume, then the built-in, then externals left to right, which is not the
     // serial column order. The rank bands must stay distinct as target kinds are added.
     precondition(ordered(targets(sample)).map(\.key) == [0, 1, 3, 2])
-    precondition(Set([rank(.master), rank(.builtinBrightness),
-                      rank(.brightness(0)), rank(.brightness(1))]).count == 4)
-    let json = try! JSONEncoder().encode(sample)
-    precondition(try! JSONDecoder().decode([Knob].self, from: json) == sample)
+    let every: [Target] = [.master, .microphone, .builtinBrightness, .builtinContrast, .nightShift]
+        + (0..<16).flatMap { [.brightness($0), .contrast($0)] } + [.builtinKeyboard, .externalKeyboard]
+    precondition(Set(every.map(rank)).count == every.count)
+    precondition(try! JSONDecoder().decode([Target].self, from: JSONEncoder().encode(every)) == every)
+    // Knobs saved before the newer targets existed still load.
+    let saved = #"[{"target":{"master":{}},"column":0},{"target":{"brightness":{"_0":0}},"column":3},"#
+        + #"{"target":{"brightness":{"_0":1}},"column":2},{"column":4},{"target":{"builtinBrightness":{}},"column":1}]"#
+    precondition(try! JSONDecoder().decode([Knob].self, from: Data(saved.utf8)) == sample)
+    precondition(viaReports(1).map { Array($0.prefix(4)) } == [[7, 0x80, 255, 0], [7, 3, 1, 255]])
+    precondition(viaReports(0.1).allSatisfy { $0.count == 32 })
     precondition(parse("7|1023|0\r") == [7, 1023, 0])
     precondition(parse("7||0") == nil && parse("1024") == nil)
     // Calibration finds the knob that swings, times only while it turns, then counts sweeps.
@@ -1220,10 +1453,19 @@ for (index, knob) in shared.config().knobs.enumerated() {
     print("\(appName): knob \(letter(index)), \(input): \(title(knob.target))")
 }
 if m1ddcPath == nil {
-    fputs("m1ddc not found, external brightness is disabled. brew install m1ddc\n", stderr)
+    fputs("m1ddc not found, external brightness and contrast are disabled. brew install m1ddc\n", stderr)
 }
 if displayServices == nil {
     fputs("DisplayServices unavailable, built-in brightness is disabled.\n", stderr)
+}
+if setDisplayContrast == nil {
+    fputs("CGSSetDisplayContrast unavailable, built-in contrast is disabled.\n", stderr)
+}
+if blueLight == nil {
+    fputs("CoreBrightness unavailable, Night Shift is disabled.\n", stderr)
+}
+if keyboardLight == nil {
+    fputs("CoreBrightness unavailable, the built-in keyboard backlight is disabled.\n", stderr)
 }
 
 let app = NSApplication.shared
