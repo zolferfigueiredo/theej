@@ -155,6 +155,18 @@ so a clean exit is left alone while a crash is still restarted.
 ./install.sh --uninstall
 ```
 
+## Release
+
+```bash
+./release.sh
+```
+
+Builds `dist/TheeJ-<version>.dmg`, taking the version from `appVersion` in
+[main.swift](Sources/deej-mac/main.swift). The app and the DMG are signed with Developer ID,
+notarized and stapled, and the DMG opens on a dark window with an arrow from TheeJ to Applications.
+Notarization needs a one-time `xcrun notarytool store-credentials theej` with an App Store Connect
+API key, as the top of `release.sh` shows.
+
 ## Options
 
 ```bash
