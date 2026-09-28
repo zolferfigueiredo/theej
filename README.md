@@ -54,7 +54,7 @@ light and dark menu bars automatically.
 
 The app icon, also shown in the About window, is the mixer from
 [theej.zolfer.com](https://theej.zolfer.com/): three faders and an orange LED on a cream plate. Both
-icons are drawn in code in [main.swift](Sources/deej-mac/main.swift), the menu bar one by `Fader`
+icons are drawn in code in [main.swift](src/main.swift), the menu bar one by `Fader`
 and the app icon by `makeAppIcon`.
 
 Clicking it, with either button, opens a menu: the profiles first, with a check by the active one
@@ -183,7 +183,7 @@ so a clean exit is left alone while a crash is still restarted.
 ```
 
 Builds `dist/TheeJ-<version>.dmg`, taking the version from `appVersion` in
-[main.swift](Sources/deej-mac/main.swift). The app and the DMG are signed with Developer ID,
+[main.swift](src/main.swift). The app and the DMG are signed with Developer ID,
 notarized and stapled, and the DMG opens on a dark window with an arrow from TheeJ to Applications.
 Notarization needs a one-time `xcrun notarytool store-credentials bihan` with an App Store Connect
 API key, as the top of `release.sh` shows. BiHan Brightness uses the same profile.
@@ -206,7 +206,7 @@ defaults domain: `defaults read com.zolfer.theej` shows them, and `defaults dele
 com.zolfer.theej` followed by a restart clears them. Knobs saved by 1.0.2 or earlier become the
 Default profile the first time a newer TheeJ starts, and the old `knobs` key is left as it was.
 
-Constants at the top of [Sources/deej-mac/main.swift](Sources/deej-mac/main.swift), then rebuild:
+Constants at the top of [src/main.swift](src/main.swift), then rebuild:
 
 - `deadzone`: `0.01` (1%, about 10 ADC counts). Raise it if a value drifts while you aren't
   touching the slider, lower it if the steps feel coarse. It is also how close to an end counts as
