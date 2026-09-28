@@ -5,6 +5,7 @@ import CoreGraphics
 import ColorSync
 import AppKit
 import IOKit.hid
+import Carbon.HIToolbox
 
 let appName = "TheeJ"
 let appVersion = "1.0.2"
@@ -16,10 +17,7 @@ let maxADC: Float32 = 1023.0
 // lower it if the volume feels steppy. Cheap pots vary; this is the knob to turn.
 let deadzone: Float32 = 0.01
 
-// This board's pots read backwards: slider down = full volume. Flip to false if you rewire them.
-let invertSliders = true
-
-// The case names are the JSON keys of saved knobs, so renaming one loses that knob's job.
+// The case names are the JSON keys of saved profiles, so renaming one loses that knob's job.
 enum Target: Hashable, Codable {
     case master
     case microphone
@@ -33,42 +31,128 @@ enum Target: Hashable, Codable {
     case externalKeyboard
 }
 
-// The array index is the letter on the box (A = 0). column is the serial field the knob arrives
-// on, which calibration finds: nil until it has. A nil target means the knob does nothing.
-struct Knob: Codable, Equatable {
+// Knobs as saved before profiles, each with its own job. Only read, to make the first profile.
+struct Knob: Decodable, Equatable {
     var column: Int?
     var target: Target?
+}
+
+// Indexed like Setup.columns. A knob past the end of targets does nothing.
+struct Profile: Codable, Equatable {
+    var name: String
+    var targets: [Target?] = []
+    var shortcut: Shortcut?
+
+    func target(_ knob: Int) -> Target? { knob < targets.count ? targets[knob] : nil }
+}
+
+// keyCode is what Carbon registers. key is what that key types with no modifiers, which a menu
+// takes as its key equivalent. modifiers holds only ⌃⌥⇧⌘.
+struct Shortcut: Codable, Equatable {
+    var keyCode: UInt16
+    var modifiers: UInt
+    var key: String
+
+    var flags: NSEvent.ModifierFlags { NSEvent.ModifierFlags(rawValue: modifiers) }
+
+    var label: String {
+        let symbols = [(NSEvent.ModifierFlags.control, "⌃"), (.option, "⌥"), (.shift, "⇧"), (.command, "⌘")]
+        let scalar = key.unicodeScalars.first?.value ?? 0
+        // AppKit types the keys with no character as private use scalars from 0xF700.
+        let name = switch scalar {
+        case 0xF704...0xF726: "F\(scalar - 0xF703)"
+        case 0xF700: "↑"
+        case 0xF701: "↓"
+        case 0xF702: "←"
+        case 0xF703: "→"
+        case 0x20: "Space"
+        case 0x0D: "↩"
+        case 0x09: "⇥"
+        case 0x7F: "⌫"
+        default: key.uppercased()
+        }
+        return symbols.filter { flags.contains($0.0) }.map(\.1).joined() + name
+    }
 }
 
 // The domain is the bundle identifier, com.zolfer.theej. A suite with that name is refused, since
 // it is the app's own domain.
 let prefs = UserDefaults.standard
 
+// Everything Settings saves. columns[i] is the serial field knob i (A = 0) arrives on, which
+// calibration finds: nil until it has.
+struct Setup: Equatable {
+    var columns: [Int?] = []
+    var profiles = [Profile(name: "Default")]
+    var active = 0
+    var invert = false
+    var showName = false
+    var hideIcon = false
+
+    var profile: Profile {
+        get { profiles[active] }
+        set { profiles[active] = newValue }
+    }
+
+    var mapping: [Int: Target] { targets(columns, profile.targets) }
+
+    // JSON strings rather than data, so `defaults read com.zolfer.theej` is readable.
+    static func load() -> Setup {
+        func decode<T: Decodable>(_ key: String) -> T? {
+            prefs.string(forKey: key).flatMap { try? JSONDecoder().decode(T.self, from: Data($0.utf8)) }
+        }
+        var setup = Setup()
+        if let profiles: [Profile] = decode("profiles"), !profiles.isEmpty {
+            setup.profiles = profiles
+            setup.columns = decode("columns") ?? []
+        } else if let knobs: [Knob] = decode("knobs") {
+            setup.columns = knobs.map(\.column)
+            setup.profile.targets = knobs.map(\.target)
+        }
+        setup.active = min(max(prefs.integer(forKey: "profile"), 0), setup.profiles.count - 1)
+        setup.invert = prefs.bool(forKey: "invertKnobs")
+        setup.showName = prefs.bool(forKey: "showProfileName")
+        setup.hideIcon = prefs.bool(forKey: "hideMenuBarIcon")
+        return setup
+    }
+
+    func save() {
+        func encode<T: Encodable>(_ value: T, _ key: String) {
+            guard let json = try? JSONEncoder().encode(value) else { return }
+            prefs.set(String(decoding: json, as: UTF8.self), forKey: key)
+        }
+        encode(columns, "columns")
+        encode(profiles, "profiles")
+        prefs.set(active, forKey: "profile")
+        prefs.set(invert, forKey: "invertKnobs")
+        prefs.set(showName, forKey: "showProfileName")
+        prefs.set(hideIcon, forKey: "hideMenuBarIcon")
+    }
+}
+
 // A loop, not Dictionary(uniqueKeysWithValues:), which traps on a duplicate column.
-func targets(_ knobs: [Knob]) -> [Int: Target] {
+func targets(_ columns: [Int?], _ jobs: [Target?]) -> [Int: Target] {
     var result: [Int: Target] = [:]
-    for knob in knobs {
-        if let column = knob.column, let target = knob.target { result[column] = target }
+    for (column, target) in zip(columns, jobs) {
+        if let column, let target { result[column] = target }
     }
     return result
 }
 
-// The menu and the status line read as the volumes, the built-in display and Night Shift, externals
-// left to right, then keyboards. That is not the order of the serial columns driving them, so it
-// needs its own ordering. Monitors
-// take two ranks each from 10, and activeDisplays() stops at 16, so a target kind below 10 or from
-// 42 up cannot collide with one.
+// The one order for the jobs in Settings and the status lines, which is not the order of the serial
+// columns driving them. Each hundred is a group that Settings separates. Monitors count left to right
+// within theirs, and activeDisplays() stops at 16, so they cannot reach the next group.
 func rank(_ target: Target) -> Int {
     switch target {
     case .master: return 0
     case .microphone: return 1
-    case .builtinBrightness: return 2
-    case .builtinContrast: return 3
-    case .nightShift: return 4
-    case .brightness(let ordinal): return 10 + 2 * ordinal
-    case .contrast(let ordinal): return 11 + 2 * ordinal
-    case .builtinKeyboard: return 100
-    case .externalKeyboard: return 101
+    case .builtinBrightness: return 100
+    case .brightness(let ordinal): return 101 + ordinal
+    case .builtinContrast: return 200
+    case .contrast(let ordinal): return 201 + ordinal
+    case .nightShift: return 300
+    case .builtinKeyboard: return 400
+    case .externalKeyboard: return 401
     }
 }
 
@@ -597,17 +681,49 @@ struct Calibrator {
 }
 
 // A skipped knob keeps its old input unless this run found that input on another knob.
-func calibrated(_ knobs: [Knob], found: [Int?]) -> [Knob] {
+func calibrated(_ columns: [Int?], found: [Int?]) -> [Int?] {
     let claimed = Set(found.compactMap { $0 })
-    return knobs.enumerated().map { index, knob in
-        var knob = knob
-        if index < found.count, let column = found[index] {
-            knob.column = column
-        } else if let column = knob.column, claimed.contains(column) {
-            knob.column = nil
-        }
-        return knob
+    return columns.enumerated().map { index, column in
+        if index < found.count, let column = found[index] { return column }
+        return column.flatMap { claimed.contains($0) ? nil : $0 }
     }
+}
+
+// MARK: - Shortcuts
+
+// Carbon hot keys are the global shortcuts that need no Accessibility or Input Monitoring
+// permission. Each id is its profile's index, so every save registers them all again.
+var hotKeys: [EventHotKeyRef] = []  // main thread only, where Carbon calls the handler
+
+func carbonModifiers(_ flags: NSEvent.ModifierFlags) -> UInt32 {
+    [(NSEvent.ModifierFlags.command, cmdKey), (.shift, shiftKey), (.option, optionKey), (.control, controlKey)]
+        .reduce(0) { flags.contains($1.0) ? $0 | UInt32($1.1) : $0 }
+}
+
+func registerHotKey(_ shortcut: Shortcut, id: Int) -> EventHotKeyRef? {
+    var ref: EventHotKeyRef?
+    let status = RegisterEventHotKey(UInt32(shortcut.keyCode), carbonModifiers(shortcut.flags),
+                                     EventHotKeyID(signature: 0x5468654A, id: UInt32(id)),
+                                     GetEventDispatcherTarget(), 0, &ref)
+    return status == noErr ? ref : nil
+}
+
+func registerHotKeys(_ profiles: [Profile]) {
+    hotKeys.forEach { UnregisterEventHotKey($0) }
+    hotKeys = profiles.enumerated().compactMap { index, profile in
+        profile.shortcut.flatMap { registerHotKey($0, id: index) }
+    }
+}
+
+func installHotKeyHandler() {
+    var pressed = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+    InstallEventHandler(GetEventDispatcherTarget(), { _, event, _ in
+        var id = EventHotKeyID()
+        GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
+                          nil, MemoryLayout<EventHotKeyID>.size, nil, &id)
+        menuBar?.switchProfile(Int(id.id))
+        return noErr
+    }, 1, &pressed, nil, nil)
 }
 
 // MARK: - Menu bar
@@ -622,8 +738,7 @@ final class Shared {
     // Preformatted, one per knob in menu order: the same strings the terminal prints.
     private var lines: [String] = []
     private var reconnectFlag = false
-    private var knobs = prefs.string(forKey: "knobs")
-        .flatMap { try? JSONDecoder().decode([Knob].self, from: Data($0.utf8)) } ?? []
+    private var setup = Setup.load()
     private var calibrating = false
 
     func snapshot() -> (connected: Bool, port: String?, lines: [String]) {
@@ -631,17 +746,14 @@ final class Shared {
         return (connected, port, lines)
     }
 
-    func config() -> (knobs: [Knob], calibrating: Bool) {
+    func config() -> (setup: Setup, calibrating: Bool) {
         lock.lock(); defer { lock.unlock() }
-        return (knobs, calibrating)
+        return (setup, calibrating)
     }
 
-    // Stored as a JSON string rather than data so `defaults read com.zolfer.theej` is readable.
-    func setKnobs(_ value: [Knob]) {
-        lock.lock(); knobs = value; lock.unlock()
-        if let json = try? JSONEncoder().encode(value) {
-            prefs.set(String(decoding: json, as: UTF8.self), forKey: "knobs")
-        }
+    func setSetup(_ value: Setup) {
+        lock.lock(); setup = value; lock.unlock()
+        value.save()
     }
 
     func setCalibrating(_ value: Bool) {
@@ -770,16 +882,25 @@ func makeAppIcon(side: CGFloat) -> NSImage {
     }
 }
 
-final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
+final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate, NSTextFieldDelegate {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let connectedIcon = makeIcon(parked: false)
     private let disconnectedIcon = makeIcon(parked: true)
     private let busyIcon = makeIcon(parked: false, alpha: 0.38)
     private var aboutWindow: NSWindow?
     private var settingsWindow: NSWindow?
-    private var draft: [Knob] = []
+    private var draft = Setup()
+    private let profilePicker = NSPopUpButton()
+    private let profileEdit = NSSegmentedControl()
+    private let profileName = NSTextField(string: "")
+    private let shortcutButton = NSButton(title: "", target: nil, action: nil)
+    private var recorder: Any?  // the key monitor while a shortcut is being recorded
+    private let profileRows = NSStackView()
     private let knobRows = NSStackView()
     private let knobEdit = NSSegmentedControl()
+    private let invertKnobs = NSButton(checkboxWithTitle: "Invert knobs", target: nil, action: nil)
+    private let showName = NSButton(checkboxWithTitle: "Show profile name in menu bar", target: nil, action: nil)
+    private let hideIcon = NSButton(checkboxWithTitle: "Hide menu bar icon", target: nil, action: nil)
     private let calibrateOnSave = NSButton(checkboxWithTitle: "Calibrate on save", target: nil, action: nil)
     private var calibrationWindow: NSWindow?
     private var calibrator: Calibrator?
@@ -795,6 +916,7 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
         menu.autoenablesItems = false
         menuNeedsUpdate(menu)
         item.menu = menu  // assigned permanently, so left and right click both open it
+        item.button?.imagePosition = .imageLeading
         refresh()
     }
 
@@ -808,12 +930,22 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
     // Rebuilt as the menu opens, so the status lines are never stale.
     func menuNeedsUpdate(_ menu: NSMenu) {
         let state = shared.snapshot()
+        let setup = shared.config().setup
         let status = state.connected ? ["Connected: \(state.port ?? "?")"] + state.lines : ["Not connected"]
         menu.removeAllItems()
+        menu.addItem(.sectionHeader(title: "Profiles"))
+        for (index, profile) in setup.profiles.enumerated() {
+            let mi = entry(profile.name, #selector(pickProfile), profile.shortcut?.key ?? "")
+            mi.keyEquivalentModifierMask = profile.shortcut?.flags ?? []
+            mi.tag = index
+            mi.state = index == setup.active ? .on : .off
+            menu.addItem(mi)
+        }
+        menu.addItem(.separator())
         menu.addItem(entry("About \(appName)", #selector(about), ""))
         menu.addItem(entry("Settings", #selector(openSettings), ","))
         let calibrateItem = entry("Calibrate", #selector(calibrate), "")
-        calibrateItem.isEnabled = state.connected && !shared.config().knobs.isEmpty
+        calibrateItem.isEnabled = state.connected && !setup.columns.isEmpty
         menu.addItem(calibrateItem)
         menu.addItem(.separator())
         for line in status {
@@ -827,10 +959,13 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
         menu.addItem(entry("Quit", #selector(quit), "q"))
     }
 
-    // No knob values here: this only runs when the connection changes, so they would be stale.
+    // No knob values here: nothing calls this as they change, so they would be stale.
     func refresh() {
         let state = shared.snapshot()
+        let setup = shared.config().setup
+        item.isVisible = !setup.hideIcon
         item.button?.image = state.connected ? connectedIcon : disconnectedIcon
+        item.button?.title = setup.showName ? setup.profile.name : ""
         item.button?.toolTip = "\(appName): \(state.connected ? state.port ?? "connected" : "not connected")"
     }
 
@@ -902,153 +1037,299 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
     // MARK: Settings
 
     // A second click keeps unsaved edits in an open window.
-    @objc private func openSettings() {
+    @objc func openSettings() {
         if settingsWindow?.isVisible != true {
-            draft = shared.config().knobs
+            draft = shared.config().setup
             calibrateOnSave.state = prefs.object(forKey: "calibrateOnSave") as? Bool == false ? .off : .on
         }
         showSettings()
+        settingsWindow?.makeFirstResponder(nil)  // else the name field opens with its text selected
     }
 
-    // Laid out as a System Settings group. Built once; after that only the knob rows change.
+    // Laid out as System Settings groups. Built once; after that only the rows and values change.
     private func showSettings() {
         if let window = settingsWindow {
-            reloadKnobs()
+            reloadDraft()
             fit(window)
         } else {
-            let heading = NSTextField(labelWithString: "Knobs")
-            heading.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
-            knobEdit.segmentCount = 2
-            knobEdit.trackingMode = .momentary
-            knobEdit.setImage(NSImage(systemSymbolName: "plus", accessibilityDescription: "Add a knob"),
-                              forSegment: 0)
-            knobEdit.setImage(NSImage(systemSymbolName: "minus", accessibilityDescription: "Remove the last knob"),
-                              forSegment: 1)
-            knobEdit.setToolTip("Add a knob", forSegment: 0)
-            knobEdit.setToolTip("Remove the last knob", forSegment: 1)
-            knobEdit.target = self
-            knobEdit.action = #selector(editKnobs)
-            let header = NSStackView()
-            header.addView(heading, in: .leading)
-            header.addView(knobEdit, in: .trailing)
+            setUpEdit(profileEdit, "Add a profile", "Remove this profile", #selector(editProfiles))
+            setUpEdit(knobEdit, "Add a knob", "Remove the last knob", #selector(editKnobs))
+            profilePicker.target = self
+            profilePicker.action = #selector(pickDraftProfile)
+            profileName.delegate = self
+            profileName.widthAnchor.constraint(equalToConstant: 180).isActive = true
+            shortcutButton.target = self
+            shortcutButton.action = #selector(recordShortcut)
+            shortcutButton.toolTip = "Use ⌘ or ⌃ with a key. Delete clears it, Escape cancels."
+            shortcutButton.widthAnchor.constraint(equalToConstant: 180).isActive = true
+            let profileGroup = group(profileRows)
+            setRows(profileRows, [row([NSTextField(labelWithString: "Name")], profileName),
+                                  row([NSTextField(labelWithString: "Shortcut")], shortcutButton)])
+            let knobGroup = group(knobRows)
 
-            knobRows.orientation = .vertical
-            knobRows.spacing = 0
-            knobRows.alignment = .trailing  // separators are narrower than the rows, which insets them on the left
-            let group = NSBox()
-            group.boxType = .custom
-            group.cornerRadius = 10
-            group.borderColor = .separatorColor
-            group.fillColor = .quaternarySystemFill
-            group.addSubview(knobRows)
-            knobRows.translatesAutoresizingMaskIntoConstraints = false
-            NSLayoutConstraint.activate([
-                knobRows.topAnchor.constraint(equalTo: group.topAnchor),
-                knobRows.bottomAnchor.constraint(equalTo: group.bottomAnchor),
-                knobRows.leadingAnchor.constraint(equalTo: group.leadingAnchor),
-                knobRows.trailingAnchor.constraint(equalTo: group.trailingAnchor),
-                group.widthAnchor.constraint(equalToConstant: 420),
-            ])
-
-            let caption = NSTextField(labelWithString: "Choose what each knob does.")
+            let caption = NSTextField(labelWithString: "Choose what each knob does in this profile.")
             caption.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
             caption.textColor = .secondaryLabelColor
+            for box in [invertKnobs, showName, hideIcon] {
+                box.target = self
+                box.action = #selector(toggleOption)
+            }
+            let hint = NSTextField(labelWithString: "Open \(appName) again to get back here.")
+            hint.font = caption.font
+            hint.textColor = .secondaryLabelColor
+            let hintRow = NSStackView(views: [hint])
+            hintRow.edgeInsets = NSEdgeInsets(top: 0, left: 20, bottom: 0, right: 0)  // under the checkbox title
             let save = NSButton(title: "Save", target: self, action: #selector(saveSettings))
             save.keyEquivalent = "\r"
             let footer = NSStackView()
             footer.addView(calibrateOnSave, in: .leading)
             footer.addView(save, in: .trailing)
 
-            let content = NSStackView(views: [header, group, caption, footer])
+            let profileHeader = header("Profile", [profilePicker], profileEdit)
+            let knobHeader = header("Knobs", [], knobEdit)
+            let content = NSStackView(views: [profileHeader, profileGroup, knobHeader, knobGroup, caption,
+                                              invertKnobs, showName, hideIcon, hintRow, footer])
             content.orientation = .vertical
             content.alignment = .leading
             content.spacing = 8
-            content.setCustomSpacing(20, after: caption)
+            for view in [profileGroup, caption, hintRow] { content.setCustomSpacing(20, after: view) }
             content.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
             content.setHuggingPriority(.defaultHigh, for: .horizontal)  // else fittingSize drops the right inset
-            header.widthAnchor.constraint(equalTo: group.widthAnchor).isActive = true
-            footer.widthAnchor.constraint(equalTo: group.widthAnchor).isActive = true
-            reloadKnobs()
-            settingsWindow = makeWindow("\(appName) Settings", content)
+            for view in [profileHeader, knobHeader, footer] {
+                view.widthAnchor.constraint(equalTo: knobGroup.widthAnchor).isActive = true
+            }
+            reloadDraft()
+            let window = makeWindow("\(appName) Settings", content)
+            // Else closing the window mid-recording would leave every shortcut off.
+            NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: window,
+                                                   queue: .main) { [weak self] _ in self?.stopRecording() }
+            settingsWindow = window
         }
         present(settingsWindow!)
     }
 
+    private func setUpEdit(_ control: NSSegmentedControl, _ add: String, _ remove: String, _ action: Selector) {
+        control.segmentCount = 2
+        control.trackingMode = .momentary
+        control.setImage(NSImage(systemSymbolName: "plus", accessibilityDescription: add), forSegment: 0)
+        control.setImage(NSImage(systemSymbolName: "minus", accessibilityDescription: remove), forSegment: 1)
+        control.setToolTip(add, forSegment: 0)
+        control.setToolTip(remove, forSegment: 1)
+        control.target = self
+        control.action = action
+    }
+
+    private func header(_ title: String, _ controls: [NSView], _ edit: NSSegmentedControl) -> NSStackView {
+        let heading = NSTextField(labelWithString: title)
+        heading.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
+        let header = NSStackView()
+        for view in [heading] + controls { header.addView(view, in: .leading) }
+        header.addView(edit, in: .trailing)
+        return header
+    }
+
+    private func group(_ rows: NSStackView) -> NSBox {
+        rows.orientation = .vertical
+        rows.spacing = 0
+        rows.alignment = .trailing  // separators are narrower than the rows, which insets them on the left
+        let box = NSBox()
+        box.boxType = .custom
+        box.cornerRadius = 10
+        box.borderColor = .separatorColor
+        box.fillColor = .quaternarySystemFill
+        box.addSubview(rows)
+        rows.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            rows.topAnchor.constraint(equalTo: box.topAnchor),
+            rows.bottomAnchor.constraint(equalTo: box.bottomAnchor),
+            rows.leadingAnchor.constraint(equalTo: box.leadingAnchor),
+            rows.trailingAnchor.constraint(equalTo: box.trailingAnchor),
+            box.widthAnchor.constraint(equalToConstant: 420),
+        ])
+        return box
+    }
+
+    private func row(_ leading: [NSView], _ trailing: NSView) -> NSStackView {
+        let row = NSStackView()
+        row.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
+        for view in leading { row.addView(view, in: .leading) }
+        row.addView(trailing, in: .trailing)
+        return row
+    }
+
+    private func setRows(_ stack: NSStackView, _ rows: [NSStackView]) {
+        for view in stack.arrangedSubviews { view.removeFromSuperview() }
+        for (index, row) in rows.enumerated() {
+            if index > 0 {
+                let line = NSBox()
+                line.boxType = .separator
+                stack.addArrangedSubview(line)
+                line.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -12).isActive = true
+            }
+            stack.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        }
+    }
+
     // Rebuilt on every change, which keeps each popup's tag equal to its knob index.
-    private func reloadKnobs() {
-        let assigned = draft.compactMap { knob -> Int? in
-            switch knob.target {
+    private func reloadDraft() {
+        stopRecording()
+        profilePicker.removeAllItems()
+        for profile in draft.profiles {
+            // Not addItem(withTitle:), which drops a second profile with the same name.
+            profilePicker.menu?.addItem(withTitle: profile.name, action: nil, keyEquivalent: "")
+        }
+        profilePicker.selectItem(at: draft.active)
+        profileName.stringValue = draft.profile.name
+        profileEdit.setEnabled(draft.profiles.count > 1, forSegment: 1)
+        invertKnobs.state = draft.invert ? .on : .off
+        showName.state = draft.showName ? .on : .off
+        hideIcon.state = draft.hideIcon ? .on : .off
+        showName.isEnabled = !draft.hideIcon
+
+        let assigned = draft.profile.targets.compactMap { target -> Int? in
+            switch target {
             case .brightness(let ordinal)?, .contrast(let ordinal)?: return ordinal + 1
             default: return nil
             }
         }.max() ?? 0
         // Includes an assigned monitor that is unplugged right now, so Save cannot drop it.
-        let monitors: [Target?] = (0..<max(2, externalDisplays().count, assigned))
+        let monitors: [Target] = (0..<max(2, externalDisplays().count, assigned))
             .flatMap { [.brightness($0), .contrast($0)] }
-        let choices: [Target?] = [nil, .master, .microphone, .builtinBrightness, .builtinContrast, .nightShift]
-            + monitors + [.builtinKeyboard, .externalKeyboard]
+        let choices = ([Target.master, .microphone, .builtinBrightness, .builtinContrast, .nightShift,
+                        .builtinKeyboard, .externalKeyboard] + monitors).sorted { rank($0) < rank($1) }
 
-        for view in knobRows.arrangedSubviews { view.removeFromSuperview() }
-        for (index, knob) in draft.enumerated() {
-            if index > 0 {
-                let line = NSBox()
-                line.boxType = .separator
-                knobRows.addArrangedSubview(line)
-                line.widthAnchor.constraint(equalTo: knobRows.widthAnchor, constant: -12).isActive = true
-            }
+        var rows = draft.columns.indices.map { index -> NSStackView in
             let popup = NSPopUpButton()
             popup.isBordered = false
-            for choice in choices {
+            popup.addItem(withTitle: title(nil))
+            for (i, choice) in choices.enumerated() {
+                if i == 0 || rank(choice) / 100 != rank(choices[i - 1]) / 100 { popup.menu?.addItem(.separator()) }
                 popup.addItem(withTitle: title(choice))
                 popup.lastItem?.representedObject = choice
+                if choice == draft.profile.target(index) { popup.select(popup.lastItem) }
             }
-            popup.selectItem(at: choices.firstIndex(of: knob.target) ?? 0)
             popup.tag = index
             popup.target = self
             popup.action = #selector(pick)
             popup.setAccessibilityLabel("Knob \(letter(index))")
-            let row = NSStackView()
-            row.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
-            row.addView(NSTextField(labelWithString: "Knob \(letter(index))"), in: .leading)
-            if knob.column == nil {
+            var leading: [NSView] = [NSTextField(labelWithString: "Knob \(letter(index))")]
+            if draft.columns[index] == nil {
                 let warning = NSTextField(labelWithString: "Needs calibration")
                 warning.textColor = .systemRed
-                row.addView(warning, in: .leading)
+                leading.append(warning)
             }
-            row.addView(popup, in: .trailing)
-            knobRows.addArrangedSubview(row)
-            row.widthAnchor.constraint(equalTo: knobRows.widthAnchor).isActive = true
+            return row(leading, popup)
         }
-        if draft.isEmpty {
+        if rows.isEmpty {
             let empty = NSTextField(labelWithString: "No knobs. Press + to add one.")
             empty.textColor = .secondaryLabelColor
             let row = NSStackView()
             row.edgeInsets = NSEdgeInsets(top: 14, left: 12, bottom: 14, right: 12)
             row.addView(empty, in: .center)
-            knobRows.addArrangedSubview(row)
-            row.widthAnchor.constraint(equalTo: knobRows.widthAnchor).isActive = true
+            rows = [row]
         }
-        knobEdit.setEnabled(draft.count < 26, forSegment: 0)  // letters end at Z
-        knobEdit.setEnabled(!draft.isEmpty, forSegment: 1)
+        setRows(knobRows, rows)
+        knobEdit.setEnabled(draft.columns.count < 26, forSegment: 0)  // letters end at Z
+        knobEdit.setEnabled(!draft.columns.isEmpty, forSegment: 1)
+    }
+
+    @objc private func pickDraftProfile(_ sender: NSPopUpButton) {
+        draft.active = sender.indexOfSelectedItem
+        showSettings()
+    }
+
+    @objc private func editProfiles(_ sender: NSSegmentedControl) {
+        if sender.selectedSegment == 0 {
+            draft.profiles.append(Profile(name: "Profile \(draft.profiles.count + 1)"))
+            draft.active = draft.profiles.count - 1
+        } else if draft.profiles.count > 1 {
+            draft.profiles.remove(at: draft.active)
+            draft.active = min(draft.active, draft.profiles.count - 1)
+        }
+        showSettings()
+        if sender.selectedSegment == 0 { settingsWindow?.makeFirstResponder(profileName) }
+    }
+
+    func controlTextDidChange(_ obj: Notification) {
+        draft.profile.name = profileName.stringValue
+        profilePicker.selectedItem?.title = profileName.stringValue
     }
 
     @objc private func pick(_ sender: NSPopUpButton) {
-        draft[sender.tag].target = sender.selectedItem?.representedObject as? Target
+        var jobs = draft.profile.targets
+        jobs += Array(repeating: nil, count: max(0, sender.tag + 1 - jobs.count))
+        jobs[sender.tag] = sender.selectedItem?.representedObject as? Target
+        draft.profile.targets = jobs
     }
 
     @objc private func editKnobs(_ sender: NSSegmentedControl) {
         if sender.selectedSegment == 0 {
-            if draft.count < 26 { draft.append(Knob(column: nil, target: nil)) }
-        } else if !draft.isEmpty {
-            draft.removeLast()
+            if draft.columns.count < 26 { draft.columns.append(nil) }
+        } else if !draft.columns.isEmpty {
+            draft.columns.removeLast()
+            // Else a knob added back would take up the removed knob's jobs.
+            for index in draft.profiles.indices {
+                draft.profiles[index].targets = Array(draft.profiles[index].targets.prefix(draft.columns.count))
+            }
         }
         showSettings()
+    }
+
+    @objc private func toggleOption() {
+        draft.invert = invertKnobs.state == .on
+        draft.showName = showName.state == .on
+        draft.hideIcon = hideIcon.state == .on
+        showName.isEnabled = !draft.hideIcon
+    }
+
+    // The shortcuts are off while recording, so pressing one records it instead of switching.
+    @objc private func recordShortcut() {
+        guard recorder == nil else { return stopRecording() }
+        registerHotKeys([])
+        shortcutButton.title = "Press Shortcut"
+        recorder = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.record(event)
+            return nil
+        }
+    }
+
+    // Needing ⌘ or ⌃ keeps a shortcut from swallowing typing in every app.
+    private func record(_ event: NSEvent) {
+        let flags = event.modifierFlags.intersection([.control, .option, .shift, .command])
+        let shortcut = Shortcut(keyCode: event.keyCode, modifiers: flags.rawValue,
+                                key: event.characters(byApplyingModifiers: []) ?? "")
+        if Int(event.keyCode) == kVK_Delete && flags.isEmpty {
+            draft.profile.shortcut = nil
+        } else if Int(event.keyCode) != kVK_Escape {
+            let taken = draft.profiles.indices.contains { $0 != draft.active && draft.profiles[$0].shortcut == shortcut }
+            guard !shortcut.key.isEmpty, !flags.isDisjoint(with: [.command, .control]), !taken,
+                  let probe = registerHotKey(shortcut, id: 0) else { return NSSound.beep() }
+            UnregisterEventHotKey(probe)
+            draft.profile.shortcut = shortcut
+        }
+        stopRecording()
+    }
+
+    private func stopRecording() {
+        if let recorder {
+            NSEvent.removeMonitor(recorder)
+            registerHotKeys(shared.config().setup.profiles)
+        }
+        recorder = nil
+        shortcutButton.title = draft.profile.shortcut?.label ?? "Record Shortcut"
     }
 
     @objc private func saveSettings() {
         let calibrateNow = calibrateOnSave.state == .on
         prefs.set(calibrateNow, forKey: "calibrateOnSave")
-        shared.setKnobs(draft)
+        for index in draft.profiles.indices where draft.profiles[index].name.trimmingCharacters(in: .whitespaces).isEmpty {
+            draft.profiles[index].name = "Profile \(index + 1)"
+        }
+        shared.setSetup(draft)
+        registerHotKeys(draft.profiles)
+        refresh()
+        reloadDraft()
         if calibrateNow && shared.snapshot().connected { calibrate() }
     }
 
@@ -1061,7 +1342,7 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
             present(window)
             return
         }
-        let count = shared.config().knobs.count
+        let count = shared.config().setup.columns.count
         guard count > 0 else { return }
         let turns = Int(Calibrator.turnSeconds)
         let alert = NSAlert()
@@ -1164,9 +1445,11 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
     // Saves before closing: windowWillClose throws the run away.
     private func finish() {
         guard let run = calibrator else { return }
-        shared.setKnobs(calibrated(shared.config().knobs, found: run.found))
+        var setup = shared.config().setup
+        setup.columns = calibrated(setup.columns, found: run.found)
+        shared.setSetup(setup)
         calibrationWindow?.close()
-        draft = shared.config().knobs
+        draft = setup
         showSettings()
     }
 
@@ -1175,6 +1458,28 @@ final class MenuBar: NSObject, NSMenuDelegate, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         calibrator = nil
         shared.setCalibrating(false)
+    }
+
+    @objc private func pickProfile(_ sender: NSMenuItem) {
+        switchProfile(sender.tag)
+    }
+
+    func switchProfile(_ index: Int) {
+        var setup = shared.config().setup
+        guard setup.profiles.indices.contains(index) else { return }
+        setup.active = index
+        shared.setSetup(setup)
+        refresh()
+        // Save makes the profile Settings shows active, so it has to follow or Save would switch back.
+        if settingsWindow?.isVisible == true, index < draft.profiles.count {
+            draft.active = index
+            reloadDraft()
+        }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openSettings()
+        return false
     }
 
     @objc private func reconnect() {
@@ -1199,15 +1504,22 @@ func log(_ message: String) {
 }
 
 var lastApplied: [Int: Float32] = [:]
+var lastInvert = false  // serial thread only, like lastApplied
 var lastPrint = Date.distantPast
 let interactive = isatty(1) != 0
 
 func handle(_ values: [Int]) {
     let config = shared.config()
-    let mapping = targets(config.knobs)
+    let mapping = config.setup.mapping
+    // Flipped along with the knobs, or every knob would count as moved and jump to its mirror image.
+    if config.setup.invert != lastInvert {
+        lastApplied = lastApplied.mapValues { 1 - $0 }
+        lastInvert = config.setup.invert
+    }
     for (index, value) in values.enumerated() {
         let raw = Float32(value) / maxADC
-        let unsnapped = invertSliders ? 1 - raw : raw
+        // This board's pots read 1023 at the bottom, so 1 - raw is the default and Invert undoes it.
+        let unsnapped = config.setup.invert ? raw : 1 - raw
         // A pot often stops a count or two short of its rail, which would leave a light on at its
         // dimmest. Snapping also stops a knob resting by an end from flicking onto it as `extreme`.
         let scalar = unsnapped < deadzone ? 0 : unsnapped > 1 - deadzone ? 1 : unsnapped
@@ -1393,22 +1705,30 @@ if args.contains("--selftest") {
     precondition(orderExternals([fake("R", 2560, false), fake("BUILTIN", -1470, true),
                                  fake("L", 0, false)]).map(\.uuid) == ["L", "R"])
     precondition(orderExternals([fake("BUILTIN", 0, true)]).isEmpty)
-    // A knob with no job maps to nothing.
-    let sample = [Knob(column: 0, target: .master), Knob(column: 3, target: .brightness(0)),
-                  Knob(column: 2, target: .brightness(1)), Knob(column: 4, target: nil),
-                  Knob(column: 1, target: .builtinBrightness)]
-    precondition(targets(sample) == [0: .master, 1: .builtinBrightness, 3: .brightness(0), 2: .brightness(1)])
-    // Menu order is volume, then the built-in, then externals left to right, which is not the
-    // serial column order. The rank bands must stay distinct as target kinds are added.
-    precondition(ordered(targets(sample)).map(\.key) == [0, 1, 3, 2])
+    // A knob with no job maps to nothing, and so does one past the end of the profile's jobs.
+    let columns: [Int?] = [0, 3, 2, 4, 1]
+    let jobs: [Target?] = [.master, .brightness(0), .brightness(1), nil, .builtinBrightness]
+    precondition(targets(columns, jobs) == [0: .master, 1: .builtinBrightness, 3: .brightness(0), 2: .brightness(1)])
+    precondition(targets(columns, [.master]) == [0: .master])
+    // Menu order is volume, then brightness with the built-in first and externals left to right,
+    // which is not the serial column order. The rank bands must stay distinct as target kinds are added.
+    precondition(ordered(targets(columns, jobs)).map(\.key) == [0, 1, 3, 2])
     let every: [Target] = [.master, .microphone, .builtinBrightness, .builtinContrast, .nightShift]
         + (0..<16).flatMap { [.brightness($0), .contrast($0)] } + [.builtinKeyboard, .externalKeyboard]
     precondition(Set(every.map(rank)).count == every.count)
     precondition(try! JSONDecoder().decode([Target].self, from: JSONEncoder().encode(every)) == every)
-    // Knobs saved before the newer targets existed still load.
+    // Knobs saved before profiles still load, to become the first profile.
     let saved = #"[{"target":{"master":{}},"column":0},{"target":{"brightness":{"_0":0}},"column":3},"#
         + #"{"target":{"brightness":{"_0":1}},"column":2},{"column":4},{"target":{"builtinBrightness":{}},"column":1}]"#
-    precondition(try! JSONDecoder().decode([Knob].self, from: Data(saved.utf8)) == sample)
+    precondition(try! JSONDecoder().decode([Knob].self, from: Data(saved.utf8))
+                 == zip(columns, jobs).map { Knob(column: $0, target: $1) })
+    let games = [Profile(name: "Games", targets: jobs, shortcut: Shortcut(
+        keyCode: 18, modifiers: NSEvent.ModifierFlags([.control, .option]).rawValue, key: "1"))]
+    precondition(try! JSONDecoder().decode([Profile].self, from: JSONEncoder().encode(games)) == games)
+    precondition(games[0].shortcut?.label == "⌃⌥1")
+    let f1 = Shortcut(keyCode: 122, modifiers: NSEvent.ModifierFlags.command.rawValue, key: "\u{F704}")
+    precondition(f1.label == "⌘F1")
+    precondition(carbonModifiers([.command, .shift]) == UInt32(cmdKey | shiftKey))
     precondition(viaReports(1).map { Array($0.prefix(4)) } == [[7, 0x80, 255, 0], [7, 3, 1, 255]])
     precondition(viaReports(0.1).allSatisfy { $0.count == 32 })
     precondition(parse("7|1023|0\r") == [7, 1023, 0])
@@ -1434,9 +1754,7 @@ if args.contains("--selftest") {
     precondition(run.phase == 0)  // column 2 is taken, so knob B cannot claim it
     run.skip()
     precondition(run.done && run.found == [2, nil])
-    let before = [Knob(column: 0, target: .master), Knob(column: 2, target: nil),
-                  Knob(column: 4, target: nil)]
-    precondition(calibrated(before, found: [2, nil, nil]).map(\.column) == [2, nil, 4])
+    precondition(calibrated([0, 2, 4], found: [2, nil, nil]) == [2, nil, 4])
     // A burst of movement lands as one write carrying the last value.
     var landed: [Int] = []
     for v in 1...3 { debounce(.brightness(0), on: ddcQueue) { landed.append(v) } }
@@ -1448,9 +1766,25 @@ if args.contains("--selftest") {
 }
 
 setvbuf(stdout, nil, _IOLBF, 0)
-for (index, knob) in shared.config().knobs.enumerated() {
-    let input = knob.column.map { "input \($0)" } ?? "not calibrated"
-    print("\(appName): knob \(letter(index)), \(input): \(title(knob.target))")
+
+let app = NSApplication.shared
+// Opening the app again through Launch Services reaches applicationShouldHandleReopen instead. A copy
+// started directly, as ./run.sh does, hands over here, so two never fight over the serial port.
+// deliverImmediately, since TheeJ is never the active app and would otherwise not get it.
+let settingsRequest = Notification.Name("com.zolfer.theej.settings")
+if NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "")
+    .contains(where: { $0.processIdentifier != getpid() }) {
+    DistributedNotificationCenter.default().postNotificationName(settingsRequest, object: nil, userInfo: nil,
+                                                                 deliverImmediately: true)
+    print("\(appName) is already running, so its Settings opened instead. Quit it first to run this copy.")
+    exit(0)
+}
+
+let saved = shared.config().setup
+print("\(appName): profile \(saved.profile.name)")
+for (index, column) in saved.columns.enumerated() {
+    let input = column.map { "input \($0)" } ?? "not calibrated"
+    print("\(appName): knob \(letter(index)), \(input): \(title(saved.profile.target(index)))")
 }
 if m1ddcPath == nil {
     fputs("m1ddc not found, external brightness and contrast are disabled. brew install m1ddc\n", stderr)
@@ -1468,8 +1802,13 @@ if keyboardLight == nil {
     fputs("CoreBrightness unavailable, the built-in keyboard backlight is disabled.\n", stderr)
 }
 
-let app = NSApplication.shared
 app.setActivationPolicy(.accessory)  // menu bar only, no Dock icon
 menuBar = MenuBar()
+app.delegate = menuBar
+DistributedNotificationCenter.default().addObserver(forName: settingsRequest, object: nil, queue: .main) { _ in
+    menuBar?.openSettings()
+}
+installHotKeyHandler()
+registerHotKeys(saved.profiles)
 DispatchQueue.global(qos: .utility).async { serialLoop() }
 app.run()
