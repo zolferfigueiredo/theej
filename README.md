@@ -1,4 +1,4 @@
-# DeJota
+# TheeJ
 
 A macOS client for an existing [deej](https://github.com/omriharel/deej) Arduino: each knob turns a
 volume, a display's brightness or contrast, Night Shift, or a keyboard backlight, with the native
@@ -35,7 +35,7 @@ brew install m1ddc
 ./run.sh
 ```
 
-`build.sh` produces `.build/DeJota.app`, a real app bundle, so macOS has an icon to show in System
+`build.sh` produces `.build/TheeJ.app`, a real app bundle, so macOS has an icon to show in System
 Settings, Activity Monitor and Finder.
 
 **Quit MonitorControl, BetterDisplay or any similar app first.** Two processes writing the same
@@ -52,7 +52,7 @@ light and dark menu bars automatically.
 The app icon, also shown in the About window, is the same fader in colour. Both are drawn in code
 from one shape, `Fader` in [main.swift](Sources/deej-mac/main.swift), so they always match.
 
-Clicking it, with either button, opens a menu: About DeJota, Settings and Calibrate first, then
+Clicking it, with either button, opens a menu: About TheeJ, Settings and Calibrate first, then
 the current port and the live value of every knob, one per line, then Reconnect and Quit.
 
 There is no Dock icon. When run from a terminal it also prints live slider values, so you can see
@@ -71,7 +71,7 @@ you move it, so saving never jumps the volume or a panel to wherever that knob h
 "Calibrate on save" checked (the default, and remembered), Save also offers to calibrate.
 **Calibrate** in the menu runs it any time the board is connected. For each knob, in letter order:
 
-1. Move it from one end to the other, so DeJota can tell which knob it is.
+1. Move it from one end to the other, so TheeJ can tell which knob it is.
 2. Turn it slowly, back and forth, for 20 seconds.
 3. Turn it fast for 20 seconds.
 4. Turn it slowly again for 20 seconds.
@@ -140,9 +140,10 @@ knob settles, so a stray reading shorter than `brightnessSettle` never reaches a
 ./install.sh
 ```
 
-Installs a LaunchAgent that starts at login and restarts on crash. Logs to `/tmp/dejota.log`
-(quiet: the status line is only printed to a terminal). It also removes the agent from before the
-rename (`com.user.deej-mac`), so the two never run at once.
+Installs a LaunchAgent that starts at login and restarts on crash. Logs to `/tmp/theej.log`
+(quiet: the status line is only printed to a terminal). It also removes the agents from before the
+renames (`com.user.deej-mac`, `com.zolfer.dejota`), so they never run at once, and carries knobs
+saved under `com.zolfer.dejota` over to the new domain.
 
 Quit from the menu really does quit. The agent uses `KeepAlive` with `SuccessfulExit` set to false,
 so a clean exit is left alone while a crash is still restarted.
@@ -164,9 +165,9 @@ List available ports with `ls /dev/cu.*`.
 ## Tuning
 
 What each knob does and which input it is on live in Settings, not in source. A fresh install has
-no knobs: add yours in Settings and calibrate. They are stored as JSON in the `com.zolfer.dejota`
-defaults domain: `defaults read com.zolfer.dejota` shows them, and `defaults delete
-com.zolfer.dejota` followed by a restart clears them.
+no knobs: add yours in Settings and calibrate. They are stored as JSON in the `com.zolfer.theej`
+defaults domain: `defaults read com.zolfer.theej` shows them, and `defaults delete
+com.zolfer.theej` followed by a restart clears them.
 
 Constants at the top of [Sources/deej-mac/main.swift](Sources/deej-mac/main.swift), then rebuild:
 
