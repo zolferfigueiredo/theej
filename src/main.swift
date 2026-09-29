@@ -9,7 +9,7 @@ import Carbon.HIToolbox
 import ServiceManagement
 
 let appName = "TheeJ"
-let appVersion = "1.1.0"
+let appVersion = "1.1.1"
 
 let baud = speed_t(B9600)
 let maxADC: Float32 = 1023.0
@@ -883,18 +883,12 @@ enum IconStyle: String, CaseIterable {
     }
 }
 
-// Parked means disconnected: the mixer's knobs drop to the bottom, the dial's pointer to its minimum
-// and the app icon fades. Numbers are in a 24-unit design space, y down, tuned to stay crisp at 18pt
+// Parked means disconnected: the mixer's knobs drop to the bottom and the dial's pointer to its minimum.
+// The app icon never changes. Numbers are in a 24-unit design space, y down, tuned to stay crisp at 18pt
 // on a Retina menu bar. Mixer and dial are templates so macOS colours them for light and dark menu
 // bars, which is also why their gaps cannot use colour: a template image is an alpha mask.
-func makeIcon(_ style: IconStyle, parked: Bool, alpha: CGFloat = 1.0, side: CGFloat = 18) -> NSImage {
-    if style == .app {
-        let icon = makeAppIcon(side: side, scale: 2)
-        return NSImage(size: icon.size, flipped: false) { box in
-            icon.draw(in: box, from: .zero, operation: .sourceOver, fraction: alpha * (parked ? 0.4 : 1))
-            return true
-        }
-    }
+func makeIcon(_ style: IconStyle, parked: Bool, side: CGFloat = 18) -> NSImage {
+    if style == .app { return makeAppIcon(side: side, scale: 2) }
     let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { box in
         let s = box.width / 24
         func pt(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
@@ -915,7 +909,7 @@ func makeIcon(_ style: IconStyle, parked: Bool, alpha: CGFloat = 1.0, side: CGFl
             path.line(to: pt(x1, y1))
             stroke(path, width)
         }
-        let ink = NSColor.black.withAlphaComponent(alpha)
+        let ink = NSColor.black
         ink.setStroke()
         ink.setFill()
         let context = NSGraphicsContext.current
@@ -940,7 +934,7 @@ func makeIcon(_ style: IconStyle, parked: Bool, alpha: CGFloat = 1.0, side: CGFl
                 color.setStroke()
                 stroke(path, 1.33)
             }
-            arc(135, NSColor.black.withAlphaComponent(0.35 * alpha))
+            arc(135, NSColor.black.withAlphaComponent(0.35))
             if !parked { arc(pointer, ink) }
             NSBezierPath(ovalIn: rect(cx, cy, 12.66, 12.66)).fill()
             context?.compositingOperation = .clear
@@ -1341,7 +1335,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             let profileHeader = header("Profile", [profilePicker], profileEdit)
             let knobHeader = header("Knobs", [], knobEdit)
             let content = NSStackView(views: [profileHeader, profileGroup, knobHeader, knobGroup, caption,
-                                              invertKnobs, showName, hideIcon, hintRow, iconRow, footer])
+                                              invertKnobs, hideIcon, hintRow, showName, iconRow, footer])
             content.orientation = .vertical
             content.alignment = .leading
             content.spacing = 8
@@ -1771,8 +1765,6 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     }
 
     @objc private func reconnect() {
-        // Brief, so the click never looks like it did nothing.
-        item.button?.image = makeIcon(shared.config().setup.icon, parked: false, alpha: 0.38)
         shared.requestReconnect()
     }
 

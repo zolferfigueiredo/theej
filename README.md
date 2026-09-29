@@ -55,7 +55,7 @@ An icon in the menu bar shows whether the Arduino is connected. Settings offers 
   knobs drop to the bottom.
 - **Dial**: a knob in a track, lit up to its pointer. Disconnected, the pointer drops to the minimum
   and the track dims.
-- **App icon**: the app icon itself, faded while disconnected.
+- **App icon**: the app icon itself, the same whether connected or not.
 
 Mixer and Dial are template images, so they follow light and dark menu bars automatically.
 
@@ -99,9 +99,9 @@ any app. To set one, click Record Shortcut and press it; it needs ⌘ or ⌃, an
 Input Monitoring permission.
 
 **Invert knobs** flips every knob's direction, for a board whose pots are wired the other way round.
-**Show profile name in menu bar** puts the active profile's name beside the icon. **Hide menu bar
-icon** removes the icon, name and all, and greys out the name option and the icon picker while it is
-on. **Menu bar icon** picks Mixer, Dial or App icon.
+**Hide menu bar icon** removes the icon, name and all, and greys out the name option and the icon
+picker while it is on. **Show profile name in menu bar** puts the active profile's name beside the
+icon. **Menu bar icon** picks Mixer, Dial or App icon.
 
 Save applies at once, makes the profile shown the active one, and leaves the window open. A knob
 given a new job, by Save or by switching profiles, takes it over the next time you move it, so
