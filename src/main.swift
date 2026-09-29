@@ -6,6 +6,7 @@ import ColorSync
 import AppKit
 import IOKit.hid
 import Carbon.HIToolbox
+import ServiceManagement
 
 let appName = "TheeJ"
 let appVersion = "1.0.7"
@@ -78,6 +79,84 @@ struct Shortcut: Codable, Equatable {
 // The domain is the bundle identifier, com.zolfer.theej. A suite with that name is refused, since
 // it is the app's own domain.
 let prefs = UserDefaults.standard
+
+// MARK: - Updates
+
+// Launch argument `-updateSite http://localhost:8022/` tests against the website's run.sh.
+let site = URL(string: prefs.string(forKey: "updateSite") ?? "https://theej.zolfer.com/")!
+
+/// The site names the DMG after the version, the same rule its deploy.sh uses.
+func dmgURL(_ version: String) -> URL { site.appending(path: "\(appName)-\(version).dmg") }
+
+/// The version the site offers, or nil when it can't be reached.
+func latestVersion() async -> String? {
+    let request = URLRequest(url: site.appending(path: "latest.json"), cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
+    guard let (data, response) = try? await URLSession.shared.data(for: request),
+          (response as? HTTPURLResponse)?.statusCode == 200,
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+    return json["version"] as? String
+}
+
+func isNewer(_ remote: String, than local: String) -> Bool {
+    remote.compare(local, options: .numeric) == .orderedDescending
+}
+
+/// `every` 0 means never.
+func updateCheckIsDue(last: Date?, every: TimeInterval, now: Date) -> Bool {
+    every > 0 && now.timeIntervalSince(last ?? .distantPast) >= every
+}
+
+struct UpdateError: LocalizedError {
+    let errorDescription: String?
+}
+
+/// Replaces the running bundle with the one in the DMG for `version`. The caller relaunches.
+/// URLSession downloads carry no quarantine flag, so the new copy opens without the Gatekeeper prompt.
+func install(_ version: String) async throws {
+    let files = FileManager.default
+    let work = try files.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: Bundle.main.bundleURL, create: true)
+    defer { try? files.removeItem(at: work) }
+
+    let (download, response) = try await URLSession.shared.download(from: dmgURL(version))
+    let dmg = work.appending(path: "update.dmg")
+    try files.moveItem(at: download, to: dmg)
+    guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw UpdateError(errorDescription: "The download failed.") }
+
+    let mount = work.appending(path: "mount")
+    try files.createDirectory(at: mount, withIntermediateDirectories: true)
+    try await run("/usr/bin/hdiutil", "attach", dmg.path, "-nobrowse", "-readonly", "-noautoopen", "-mountpoint", mount.path)
+    let fresh = work.appending(path: "\(appName).app")
+    do {
+        try await run("/usr/bin/ditto", mount.appending(path: "\(appName).app").path, fresh.path)
+    } catch {
+        try? await run("/usr/bin/hdiutil", "detach", mount.path, "-force")
+        throw error
+    }
+    try? await run("/usr/bin/hdiutil", "detach", mount.path, "-force")
+
+    try await run("/usr/bin/codesign", "--verify", "--strict", fresh.path)
+    let info = Bundle(url: fresh)?.infoDictionary
+    guard info?["CFBundleIdentifier"] as? String == Bundle.main.bundleIdentifier,
+          info?["CFBundleShortVersionString"] as? String == version else {
+        throw UpdateError(errorDescription: "The download isn't \(appName) \(version).")
+    }
+    _ = try files.replaceItemAt(Bundle.main.bundleURL, withItemAt: fresh)
+}
+
+private func run(_ tool: String, _ arguments: String...) async throws {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: tool)
+    process.arguments = arguments
+    process.standardOutput = FileHandle.nullDevice
+    process.standardError = FileHandle.nullDevice
+    try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, Error>) in
+        process.terminationHandler = { process in
+            if process.terminationStatus == 0 { done.resume() }
+            else { done.resume(throwing: UpdateError(errorDescription: "\((tool as NSString).lastPathComponent) failed (\(process.terminationStatus)).")) }
+        }
+        do { try process.run() } catch { done.resume(throwing: error) }
+    }
+}
 
 // Everything Settings saves. columns[i] is the serial field knob i (A = 0) arrives on, which
 // calibration finds: nil until it has.
@@ -1006,6 +1085,7 @@ func makeAppIcon(side: CGFloat, scale: CGFloat = 1) -> NSImage {
 final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate, NSTextFieldDelegate {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private var aboutWindow: NSWindow?
+    private var checking = false  // an update check or install is running
     private var settingsWindow: NSWindow?
     private var draft = Setup()
     private let profilePicker = NSPopUpButton()
@@ -1041,12 +1121,19 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         item.menu = menu  // assigned permanently, so left and right click both open it
         item.button?.imagePosition = .imageLeading
         refresh()
+
+        prefs.register(defaults: ["updateEvery": 604800])
+        let updates = Timer(timeInterval: 3600, target: self, selector: #selector(autoCheck), userInfo: nil, repeats: true)
+        updates.tolerance = 600
+        RunLoop.main.add(updates, forMode: .common)
+        autoCheck()
     }
 
-    private func entry(_ title: String, _ action: Selector, _ key: String) -> NSMenuItem {
+    private func entry(_ title: String, _ action: Selector, _ key: String, symbol: String? = nil) -> NSMenuItem {
         let mi = NSMenuItem(title: title, action: action, keyEquivalent: key)
         mi.target = self
         mi.isEnabled = true
+        mi.image = symbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }
         return mi
     }
 
@@ -1077,8 +1164,33 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         }
         menu.addItem(entry("Reconnect", #selector(reconnect), ""))
         menu.addItem(.separator())
-        menu.addItem(entry("About \(appName)", #selector(about), ""))
-        menu.addItem(entry("Quit", #selector(quit), "q"))
+        // Registering from anywhere else (a build folder) would point the login item at a bundle that disappears.
+        let login = entry("Launch at login", #selector(toggleLogin), "")
+        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        login.isEnabled = Bundle.main.bundlePath.hasPrefix("/Applications/")
+        menu.addItem(login)
+        let dock = entry("Keep in Dock", #selector(toggleDock), "")
+        dock.state = prefs.bool(forKey: "keepInDock") ? .on : .off
+        menu.addItem(dock)
+        menu.addItem(.separator())
+        menu.addItem(entry("About \(appName)", #selector(about), "", symbol: "info.circle"))
+        menu.addItem(.separator())
+        let check = entry("Check for updates…", #selector(checkNow), "", symbol: "arrow.down.circle")
+        check.isEnabled = !checking
+        menu.addItem(check)
+        let every = NSMenu()
+        for (seconds, title) in [(86400, "Daily"), (604800, "Weekly"), (0, "Never")] {
+            let choice = entry(title, #selector(pickUpdateEvery), "")
+            choice.tag = seconds
+            choice.state = prefs.integer(forKey: "updateEvery") == seconds ? .on : .off
+            every.addItem(choice)
+        }
+        let auto = NSMenuItem(title: "Check automatically", action: nil, keyEquivalent: "")
+        auto.submenu = every
+        auto.image = NSImage(size: NSSize(width: 16, height: 16))  // lines the title up with the icon rows
+        menu.addItem(auto)
+        menu.addItem(.separator())
+        menu.addItem(entry("Quit \(appName)", #selector(quit), "q", symbol: "xmark.square"))
     }
 
     // No knob values here: nothing calls this as they change, so they would be stale.
@@ -1659,6 +1771,83 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     @objc private func quit() {
         NSApp.terminate(nil)
     }
+
+    @objc private func toggleLogin() {
+        let service = SMAppService.mainApp
+        do {
+            if service.status == .enabled { try service.unregister() } else { try service.register() }
+        } catch {
+            print("launch at login: \(error.localizedDescription)")
+        }
+        if service.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
+    }
+
+    @objc private func toggleDock() {
+        prefs.set(!prefs.bool(forKey: "keepInDock"), forKey: "keepInDock")
+        applyDock()
+    }
+
+    @objc private func pickUpdateEvery(_ sender: NSMenuItem) {
+        prefs.set(sender.tag, forKey: "updateEvery")
+    }
+
+    @objc private func autoCheck() {
+        let every = TimeInterval(prefs.integer(forKey: "updateEvery"))
+        guard updateCheckIsDue(last: prefs.object(forKey: "lastUpdateCheck") as? Date, every: every, now: .now) else { return }
+        checkForUpdates(quiet: true)
+    }
+
+    @objc private func checkNow() { checkForUpdates(quiet: false) }
+
+    /// Quiet checks only speak up when there is a new version.
+    private func checkForUpdates(quiet: Bool) {
+        guard !checking else { return }
+        checking = true
+        Task { @MainActor in
+            defer { checking = false }
+            guard let latest = await latestVersion() else {
+                print("update check failed")
+                if !quiet { alert("Couldn't check for updates", "Check your connection and try again.") }
+                return
+            }
+            prefs.set(Date.now, forKey: "lastUpdateCheck")
+            guard isNewer(latest, than: appVersion) else {
+                if !quiet { alert("You're up to date", "\(appName) \(appVersion) is the latest version.") }
+                return
+            }
+            guard alert("\(appName) \(latest) is available", "You have \(appVersion). Update now?", "Update Now", "Later") else { return }
+            do {
+                guard Bundle.main.bundlePath.hasPrefix("/Applications/") else {
+                    throw UpdateError(errorDescription: "\(appName) updates itself only when it runs from the Applications folder.")
+                }
+                try await install(latest)
+                let relaunch = NSWorkspace.OpenConfiguration()
+                relaunch.createsNewApplicationInstance = true
+                try await NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: relaunch)
+                NSApp.terminate(nil)
+            } catch {
+                print("update: \(error.localizedDescription)")
+                if alert("Couldn't install the update", error.localizedDescription, "Download", "Cancel") {
+                    NSWorkspace.shared.open(dmgURL(latest))
+                }
+            }
+        }
+    }
+
+    /// True when the first button was clicked.
+    @discardableResult
+    private func alert(_ title: String, _ text: String, _ buttons: String...) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = text
+        buttons.forEach { alert.addButton(withTitle: $0) }
+        NSApp.activate()
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+}
+
+func applyDock() {
+    NSApp.setActivationPolicy(prefs.bool(forKey: "keepInDock") ? .regular : .accessory)
 }
 
 // MARK: - Dispatch
@@ -1930,6 +2119,13 @@ if args.contains("--selftest") {
     Thread.sleep(forTimeInterval: brightnessSettle * 2)
     ddcQueue.sync {}
     precondition(landed == [3])
+    precondition(isNewer("0.1.10", than: "0.1.9") && isNewer("1.0.0", than: "0.9.9"))
+    precondition(!isNewer("0.1.2", than: "0.1.2") && !isNewer("0.1.1", than: "0.1.2"))
+    let now = Date.now
+    precondition(updateCheckIsDue(last: nil, every: 86400, now: now))
+    precondition(!updateCheckIsDue(last: now.addingTimeInterval(-3600), every: 86400, now: now))
+    precondition(updateCheckIsDue(last: now.addingTimeInterval(-86400), every: 86400, now: now))
+    precondition(!updateCheckIsDue(last: nil, every: 0, now: now))
     print("selftest ok")
     exit(0)
 }
@@ -1971,7 +2167,7 @@ if keyboardLight == nil {
     fputs("CoreBrightness unavailable, the built-in keyboard backlight is disabled.\n", stderr)
 }
 
-app.setActivationPolicy(.accessory)  // menu bar only, no Dock icon
+applyDock()  // menu bar only unless Keep in Dock is on
 menuBar = MenuBar()
 app.delegate = menuBar
 DistributedNotificationCenter.default().addObserver(forName: settingsRequest, object: nil, queue: .main) { _ in
