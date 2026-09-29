@@ -32,10 +32,10 @@ an Intel Mac external monitors are not available. Everything else works without 
 
 ```bash
 brew install m1ddc
-./build.sh
 ./run.sh
 ```
 
+`run.sh` quits any running TheeJ, builds with `build.sh` and runs the new build in the terminal.
 `build.sh` produces `.build/TheeJ.app`, a real app bundle, so macOS has an icon to show in System
 Settings, Activity Monitor and Finder. It is a universal app for Apple Silicon and Intel, macOS 14
 or later, and signed with your Apple Development certificate when you have one, so Login Items
@@ -76,8 +76,8 @@ Applications and relaunches.
 
 Settings can show the active profile's name beside the icon, or hide the icon altogether. Opening
 TheeJ again while it runs, from Finder, Spotlight or `open`, brings up Settings, which is the way
-back with the icon hidden. A second copy started directly, as `./run.sh` does, asks the running one
-to show Settings and quits, so two copies never share the serial port.
+back with the icon hidden. A second copy started directly asks the running one to show Settings and
+quits, so two copies never share the serial port. `./run.sh` quits the running one first instead.
 
 There is no Dock icon unless Keep in Dock is on. When run from a terminal it also prints live slider values, so you can see
 which physical slider is which index.
