@@ -194,6 +194,7 @@ Builds `dist/TheeJ-<version>.dmg`, taking the version from `appVersion` in
 notarized and stapled, and the DMG opens on a dark window with an arrow from TheeJ to Applications.
 Notarization needs a one-time `xcrun notarytool store-credentials bihan` with an App Store Connect
 API key, as the top of `release.sh` shows. BiHan Brightness uses the same profile.
+`./release.sh --url` also makes the permanent url.zolfer.com download link.
 
 ## Options
 

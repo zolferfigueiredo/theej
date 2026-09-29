@@ -68,3 +68,7 @@ xcrun notarytool submit "$DMG" --keychain-profile bihan --wait
 xcrun stapler staple "$DMG"
 spctl --assess --type open --context context:primary-signature -vv "$DMG"
 echo "Release ready: $DMG"
+[ "${1:-}" != --url ] || {
+  loc=$(curl -fsS -o /dev/null -w '%{redirect_url}' --data-urlencode "url=https://theej.zolfer.com/$NAME-$VERSION.dmg" https://url.zolfer.com/dmg)
+  echo "Download link: https://url.zolfer.com/${loc##*c=}"
+}
