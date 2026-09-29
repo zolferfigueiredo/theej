@@ -8,7 +8,7 @@ import IOKit.hid
 import Carbon.HIToolbox
 
 let appName = "TheeJ"
-let appVersion = "1.0.4"
+let appVersion = "1.0.5"
 
 let baud = speed_t(B9600)
 let maxADC: Float32 = 1023.0
@@ -88,6 +88,7 @@ struct Setup: Equatable {
     var invert = false
     var showName = false
     var hideIcon = false
+    var icon = IconStyle.mixer
 
     var profile: Profile {
         get { profiles[active] }
@@ -113,6 +114,7 @@ struct Setup: Equatable {
         setup.invert = prefs.bool(forKey: "invertKnobs")
         setup.showName = prefs.bool(forKey: "showProfileName")
         setup.hideIcon = prefs.bool(forKey: "hideMenuBarIcon")
+        setup.icon = IconStyle(rawValue: prefs.string(forKey: "menuBarIcon") ?? "") ?? .mixer
         return setup
     }
 
@@ -127,6 +129,7 @@ struct Setup: Equatable {
         prefs.set(invert, forKey: "invertKnobs")
         prefs.set(showName, forKey: "showProfileName")
         prefs.set(hideIcon, forKey: "hideMenuBarIcon")
+        prefs.set(icon.rawValue, forKey: "menuBarIcon")
     }
 }
 
@@ -788,62 +791,83 @@ final class Shared {
 
 let shared = Shared()
 
-// The menu bar's fader. Numbers are in a 24-unit design space, y down; `box` is where that square
-// lands. Four marks either side, and the knob sits on one and hides it: mark 2 when connected, just
-// above the middle, and the last mark when parked at the bottom. The sizes are tuned to stay crisp at
-// 18pt on a Retina menu bar.
-struct Fader {
-    let rail: NSBezierPath, marks: [NSBezierPath], groove: NSBezierPath
-    let knob: NSBezierPath, railGap: NSBezierPath
+// The menu bar icon's looks, picked in Settings. The raw values are saved, so renaming one resets it.
+enum IconStyle: String, CaseIterable {
+    case mixer, dial, app
 
-    init(parked: Bool, in box: NSRect) {
+    var title: String {
+        switch self {
+        case .mixer: return "Mixer"
+        case .dial: return "Dial"
+        case .app: return "App icon"
+        }
+    }
+}
+
+// Parked means disconnected: the mixer's knobs drop to the bottom, the dial's pointer to its minimum
+// and the app icon fades. Numbers are in a 24-unit design space, y down, tuned to stay crisp at 18pt
+// on a Retina menu bar. Mixer and dial are templates so macOS colours them for light and dark menu
+// bars, which is also why their gaps cannot use colour: a template image is an alpha mask.
+func makeIcon(_ style: IconStyle, parked: Bool, alpha: CGFloat = 1.0, side: CGFloat = 18) -> NSImage {
+    if style == .app {
+        let icon = makeAppIcon(side: side, scale: 2)
+        return NSImage(size: icon.size, flipped: false) { box in
+            icon.draw(in: box, from: .zero, operation: .sourceOver, fraction: alpha * (parked ? 0.4 : 1))
+            return true
+        }
+    }
+    let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { box in
         let s = box.width / 24
         func pt(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
-            NSPoint(x: box.minX + x * s, y: box.maxY - y * s)
+            NSPoint(x: box.minX + x * s, y: box.minY + (24 - y) * s)
         }
         func rect(_ cx: CGFloat, _ cy: CGFloat, _ w: CGFloat, _ h: CGFloat) -> NSRect {
             let c = pt(cx, cy)
             return NSRect(x: c.x - w * s / 2, y: c.y - h * s / 2, width: w * s, height: h * s)
         }
-        func line(_ x0: CGFloat, _ y0: CGFloat, _ x1: CGFloat, _ y1: CGFloat, _ width: CGFloat) -> NSBezierPath {
+        func stroke(_ path: NSBezierPath, _ width: CGFloat) {
+            path.lineWidth = width * s
+            path.lineCapStyle = .round
+            path.stroke()
+        }
+        func line(_ x0: CGFloat, _ y0: CGFloat, _ x1: CGFloat, _ y1: CGFloat, _ width: CGFloat) {
             let path = NSBezierPath()
             path.move(to: pt(x0, y0))
             path.line(to: pt(x1, y1))
-            path.lineWidth = width * s
-            path.lineCapStyle = .round
-            return path
+            stroke(path, width)
         }
-
-        let rows: [CGFloat] = [4, 9.33, 14.67, 20]
-        let knobY = parked ? rows[3] : rows[1]
-        rail = line(12, 3.33, 12, 20.67, 2.67)
-        // One path per mark: AppKit rasterises a thin many-part path differently on a 1x screen and
-        // each mark comes out about a pixel short.
-        marks = rows.filter { $0 != knobY }.flatMap { y in [line(6, y, 8, y, 1.33), line(16, y, 18, y, 1.33)] }
-        groove = line(9.33, knobY, 14.67, knobY, 1.33)
-        knob = NSBezierPath(roundedRect: rect(12, knobY, 10.67, 5.33), xRadius: 1.33 * s, yRadius: 1.33 * s)
-        railGap = NSBezierPath(rect: rect(12, knobY, 3, 8))
-    }
-}
-
-// Drawn in code rather than shipped as an asset. isTemplate lets macOS handle light and dark menu
-// bars, which is also why the gaps around the knob cannot use colour: a template image is an alpha
-// mask, so they have to be real transparency.
-func makeIcon(parked: Bool, alpha: CGFloat = 1.0, side: CGFloat = 18) -> NSImage {
-    let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { box in
-        let fader = Fader(parked: parked, in: box)
         let ink = NSColor.black.withAlphaComponent(alpha)
         ink.setStroke()
         ink.setFill()
-        fader.rail.stroke()
-        fader.marks.forEach { $0.stroke() }
         let context = NSGraphicsContext.current
-        context?.compositingOperation = .clear
-        fader.railGap.fill()
-        context?.compositingOperation = .sourceOver
-        fader.knob.fill()
-        context?.compositingOperation = .clear
-        fader.groove.stroke()
+
+        if style == .mixer {
+            // The app icon's three faders cut out of its tile, the knobs at its heights.
+            NSBezierPath(roundedRect: rect(12, 12, 20, 20), xRadius: 4.67 * s, yRadius: 4.67 * s).fill()
+            context?.compositingOperation = .clear
+            for (x, y) in zip([6.67, 12, 17.33], parked ? [16.67, 16.67, 16.67] : [8, 14, 10.67]) {
+                line(x, 6, x, 18, 1.33)
+                NSBezierPath(roundedRect: rect(x, y, 4, 2.67), xRadius: 0.8 * s, yRadius: 0.8 * s).fill()
+            }
+        } else {
+            // A knob in a 270 degree track, lit from 7:30 up to the pointer: 1:30 when connected, two
+            // thirds up. Degrees run clockwise from 12 o'clock; AppKit's arcs run the other way.
+            let cx: CGFloat = 12, cy: CGFloat = 13.17
+            let pointer: CGFloat = parked ? -135 : 45
+            func arc(_ to: CGFloat, _ color: NSColor) {
+                let path = NSBezierPath()
+                path.appendArc(withCenter: pt(cx, cy), radius: 9.67 * s, startAngle: 225, endAngle: 90 - to,
+                               clockwise: true)
+                color.setStroke()
+                stroke(path, 1.33)
+            }
+            arc(135, NSColor.black.withAlphaComponent(0.35 * alpha))
+            if !parked { arc(pointer, ink) }
+            NSBezierPath(ovalIn: rect(cx, cy, 12.66, 12.66)).fill()
+            context?.compositingOperation = .clear
+            let angle = pointer * .pi / 180
+            line(cx + sin(angle) * 1.67, cy - cos(angle) * 1.67, cx + sin(angle) * 4.33, cy - cos(angle) * 4.33, 1.6)
+        }
         context?.compositingOperation = .sourceOver
         return true
     }
@@ -981,9 +1005,6 @@ func makeAppIcon(side: CGFloat, scale: CGFloat = 1) -> NSImage {
 
 final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate, NSTextFieldDelegate {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    private let connectedIcon = makeIcon(parked: false)
-    private let disconnectedIcon = makeIcon(parked: true)
-    private let busyIcon = makeIcon(parked: false, alpha: 0.38)
     private var aboutWindow: NSWindow?
     private var settingsWindow: NSWindow?
     private var draft = Setup()
@@ -1001,6 +1022,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     private let invertKnobs = NSButton(checkboxWithTitle: "Invert knobs", target: nil, action: nil)
     private let showName = NSButton(checkboxWithTitle: "Show profile name in menu bar", target: nil, action: nil)
     private let hideIcon = NSButton(checkboxWithTitle: "Hide menu bar icon", target: nil, action: nil)
+    private let iconPicker = NSPopUpButton()
     private let calibrateOnSave = NSButton(checkboxWithTitle: "Calibrate on save", target: nil, action: nil)
     private var calibrationWindow: NSWindow?
     private var calibrator: Calibrator?
@@ -1063,7 +1085,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         let state = shared.snapshot()
         let setup = shared.config().setup
         item.isVisible = !setup.hideIcon
-        item.button?.image = state.connected ? connectedIcon : disconnectedIcon
+        item.button?.image = makeIcon(setup.icon, parked: !state.connected)
         item.button?.title = setup.showName ? setup.profile.name : ""
         item.button?.toolTip = "\(appName): \(state.connected ? state.port ?? "connected" : "not connected")"
     }
@@ -1179,10 +1201,15 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             let caption = NSTextField(labelWithString: "Choose what each knob does in this profile.")
             caption.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
             caption.textColor = .secondaryLabelColor
-            for box in [invertKnobs, showName, hideIcon] {
+            for box in [invertKnobs, showName, hideIcon, iconPicker] {
                 box.target = self
                 box.action = #selector(toggleOption)
             }
+            for style in IconStyle.allCases {
+                iconPicker.addItem(withTitle: style.title)
+                iconPicker.lastItem?.image = makeIcon(style, parked: false, side: 16)
+            }
+            let iconRow = NSStackView(views: [NSTextField(labelWithString: "Menu bar icon"), iconPicker])
             let hint = NSTextField(labelWithString: "Open \(appName) again to get back here.")
             hint.font = caption.font
             hint.textColor = .secondaryLabelColor
@@ -1197,7 +1224,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             let profileHeader = header("Profile", [profilePicker], profileEdit)
             let knobHeader = header("Knobs", [], knobEdit)
             let content = NSStackView(views: [profileHeader, profileGroup, knobHeader, knobGroup, caption,
-                                              invertKnobs, showName, hideIcon, hintRow, footer])
+                                              invertKnobs, iconRow, showName, hideIcon, hintRow, footer])
             content.orientation = .vertical
             content.alignment = .leading
             content.spacing = 8
@@ -1294,7 +1321,9 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         invertKnobs.state = draft.invert ? .on : .off
         showName.state = draft.showName ? .on : .off
         hideIcon.state = draft.hideIcon ? .on : .off
+        iconPicker.selectItem(at: IconStyle.allCases.firstIndex(of: draft.icon) ?? 0)
         showName.isEnabled = !draft.hideIcon
+        iconPicker.isEnabled = !draft.hideIcon
 
         let assigned = draft.profile.targets.compactMap { target -> Int? in
             switch target {
@@ -1408,7 +1437,9 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         draft.invert = invertKnobs.state == .on
         draft.showName = showName.state == .on
         draft.hideIcon = hideIcon.state == .on
+        draft.icon = IconStyle.allCases[iconPicker.indexOfSelectedItem]
         showName.isEnabled = !draft.hideIcon
+        iconPicker.isEnabled = !draft.hideIcon
     }
 
     // The shortcuts are off while recording, so pressing one records it instead of switching.
@@ -1617,7 +1648,8 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     }
 
     @objc private func reconnect() {
-        item.button?.image = busyIcon  // brief, so the click never looks like it did nothing
+        // Brief, so the click never looks like it did nothing.
+        item.button?.image = makeIcon(shared.config().setup.icon, parked: false, alpha: 0.38)
         shared.requestReconnect()
     }
 
