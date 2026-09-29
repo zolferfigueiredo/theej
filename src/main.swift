@@ -1352,8 +1352,11 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             // Else closing the window mid-recording would leave every shortcut off.
             NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: window,
                                                    queue: .main) { [weak self] _ in self?.stopRecording() }
+            NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window,
+                                                   queue: .main) { _ in applyDock() }
             settingsWindow = window
         }
+        applyDock(settingsOpen: true)
         present(settingsWindow!)
     }
 
@@ -1784,7 +1787,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
 
     @objc private func toggleDock() {
         prefs.set(!prefs.bool(forKey: "keepInDock"), forKey: "keepInDock")
-        applyDock()
+        applyDock(settingsOpen: settingsWindow?.isVisible == true)
     }
 
     @objc private func pickUpdateEvery(_ sender: NSMenuItem) {
@@ -1846,8 +1849,9 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     }
 }
 
-func applyDock() {
-    NSApp.setActivationPolicy(prefs.bool(forKey: "keepInDock") ? .regular : .accessory)
+// Also in the Dock and Cmd+Tab while Settings is open, so it can be switched back to.
+func applyDock(settingsOpen: Bool = false) {
+    NSApp.setActivationPolicy(prefs.bool(forKey: "keepInDock") || settingsOpen ? .regular : .accessory)
 }
 
 // MARK: - Dispatch
