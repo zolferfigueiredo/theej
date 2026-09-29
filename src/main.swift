@@ -1023,6 +1023,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     private let showName = NSButton(checkboxWithTitle: "Show profile name in menu bar", target: nil, action: nil)
     private let hideIcon = NSButton(checkboxWithTitle: "Hide menu bar icon", target: nil, action: nil)
     private let iconPicker = NSPopUpButton()
+    private let iconLabel = NSTextField(labelWithString: "Menu bar icon")
     private let calibrateOnSave = NSButton(checkboxWithTitle: "Calibrate on save", target: nil, action: nil)
     private var calibrationWindow: NSWindow?
     private var calibrator: Calibrator?
@@ -1209,7 +1210,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
                 iconPicker.addItem(withTitle: style.title)
                 iconPicker.lastItem?.image = makeIcon(style, parked: false, side: 16)
             }
-            let iconRow = NSStackView(views: [NSTextField(labelWithString: "Menu bar icon"), iconPicker])
+            let iconRow = NSStackView(views: [iconLabel, iconPicker])
             let hint = NSTextField(labelWithString: "Open \(appName) again to get back here.")
             hint.font = caption.font
             hint.textColor = .secondaryLabelColor
@@ -1224,11 +1225,11 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             let profileHeader = header("Profile", [profilePicker], profileEdit)
             let knobHeader = header("Knobs", [], knobEdit)
             let content = NSStackView(views: [profileHeader, profileGroup, knobHeader, knobGroup, caption,
-                                              invertKnobs, iconRow, showName, hideIcon, hintRow, footer])
+                                              invertKnobs, showName, hideIcon, hintRow, iconRow, footer])
             content.orientation = .vertical
             content.alignment = .leading
             content.spacing = 8
-            for view in [profileGroup, caption, hintRow] { content.setCustomSpacing(20, after: view) }
+            for view in [profileGroup, caption, iconRow] { content.setCustomSpacing(20, after: view) }
             content.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
             content.setHuggingPriority(.defaultHigh, for: .horizontal)  // else fittingSize drops the right inset
             for view in [profileHeader, knobHeader, footer] {
@@ -1324,6 +1325,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         iconPicker.selectItem(at: IconStyle.allCases.firstIndex(of: draft.icon) ?? 0)
         showName.isEnabled = !draft.hideIcon
         iconPicker.isEnabled = !draft.hideIcon
+        iconLabel.textColor = draft.hideIcon ? .disabledControlTextColor : .labelColor
 
         let assigned = draft.profile.targets.compactMap { target -> Int? in
             switch target {
@@ -1440,6 +1442,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         draft.icon = IconStyle.allCases[iconPicker.indexOfSelectedItem]
         showName.isEnabled = !draft.hideIcon
         iconPicker.isEnabled = !draft.hideIcon
+        iconLabel.textColor = draft.hideIcon ? .disabledControlTextColor : .labelColor
     }
 
     // The shortcuts are off while recording, so pressing one records it instead of switching.
