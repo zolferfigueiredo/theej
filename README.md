@@ -65,8 +65,8 @@ icons are drawn in code in [main.swift](src/main.swift), the menu bar one by `ma
 and the app icon by `makeAppIcon`.
 
 Clicking it, with either button, opens a menu: the profiles first, with a check by the active one
-and each one's shortcut, then Settings and Calibrate, then the current port and the
-live value of every knob, one per line, and Reconnect under them, then Launch at login and Keep in
+and each one's shortcut, then Settings and Calibrate, then the current port with Reconnect under
+it, then the live value of every knob, one per line, then Launch at login and Keep in
 Dock, About TheeJ, Check for updates… with Check automatically (daily, weekly by default, or never),
 and Quit TheeJ.
 

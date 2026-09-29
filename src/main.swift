@@ -9,7 +9,7 @@ import Carbon.HIToolbox
 import ServiceManagement
 
 let appName = "TheeJ"
-let appVersion = "1.0.8"
+let appVersion = "1.1.0"
 
 let baud = speed_t(B9600)
 let maxADC: Float32 = 1023.0
@@ -1141,7 +1141,6 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     func menuNeedsUpdate(_ menu: NSMenu) {
         let state = shared.snapshot()
         let setup = shared.config().setup
-        let status = state.connected ? ["Connected: \(state.port ?? "?")"] + state.lines : ["Not connected"]
         menu.removeAllItems()
         menu.addItem(.sectionHeader(title: "Profiles"))
         for (index, profile) in setup.profiles.enumerated() {
@@ -1156,14 +1155,19 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         let calibrateItem = entry("Calibrate", #selector(calibrate), "")
         calibrateItem.isEnabled = state.connected && !setup.columns.isEmpty
         menu.addItem(calibrateItem)
-        menu.addItem(.separator())
-        for line in status {
-            let mi = NSMenuItem(title: line, action: nil, keyEquivalent: "")
+        func label(_ text: String) -> NSMenuItem {
+            let mi = NSMenuItem(title: text, action: nil, keyEquivalent: "")
             mi.isEnabled = false
-            menu.addItem(mi)
+            return mi
         }
+        menu.addItem(.separator())
+        menu.addItem(label(state.connected ? "Connected: \(state.port ?? "?")" : "Not connected"))
         menu.addItem(entry("Reconnect", #selector(reconnect), ""))
         menu.addItem(.separator())
+        if state.connected, !state.lines.isEmpty {
+            state.lines.forEach { menu.addItem(label($0)) }
+            menu.addItem(.separator())
+        }
         // Registering from anywhere else (a build folder) would point the login item at a bundle that disappears.
         let login = entry("Launch at login", #selector(toggleLogin), "")
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
