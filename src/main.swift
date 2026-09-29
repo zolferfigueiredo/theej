@@ -2026,12 +2026,13 @@ func serialLoop() {
 
 // MARK: - Start
 
-// build.sh runs this to render the app icon at every size an .iconset needs, then iconutil packs it.
+// build.sh runs this to render the app icon into an .iconset, then iconutil packs it.
 if let flag = args.firstIndex(of: "--iconset"), flag + 1 < args.count {
     let dir = URL(fileURLWithPath: args[flag + 1])
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    for points in [16, 32, 128, 256, 512] {
-        for scale in [1, 2] {
+    // Nothing under 64 px: macOS 26 puts small drawn sizes on a grey plate, and scales the 64 px one down cleanly.
+    for points in [32, 128, 256, 512] {
+        for scale in [1, 2] where points * scale >= 64 {
             let px = points * scale
             let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: px, pixelsHigh: px,
                                        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
