@@ -79,7 +79,7 @@ TheeJ again while it runs, from Finder, Spotlight or `open`, brings up Settings,
 back with the icon hidden. A second copy started directly asks the running one to show Settings and
 quits, so two copies never share the serial port. `./run.sh` quits the running one first instead.
 
-There is no Dock icon unless Keep in Dock is on, and TheeJ stays out of Cmd+Tab except while Settings is open. When run from a terminal it also prints live slider values, so you can see
+TheeJ lives in the menu bar and stays out of the Dock and Cmd+Tab, except while Settings is open. **Keep in Dock** pins a shortcut to it in the Dock, as the Dock's own Keep in Dock does; clicking it opens Settings. When run from a terminal it also prints live slider values, so you can see
 which physical slider is which index.
 
 ## Settings and calibration

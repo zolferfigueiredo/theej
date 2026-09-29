@@ -1170,7 +1170,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         login.isEnabled = Bundle.main.bundlePath.hasPrefix("/Applications/")
         menu.addItem(login)
         let dock = entry("Keep in Dock", #selector(toggleDock), "")
-        dock.state = prefs.bool(forKey: "keepInDock") ? .on : .off
+        dock.state = inDock() ? .on : .off
         menu.addItem(dock)
         menu.addItem(.separator())
         menu.addItem(entry("About \(appName)", #selector(about), "", symbol: "info.circle"))
@@ -1353,10 +1353,11 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: window,
                                                    queue: .main) { [weak self] _ in self?.stopRecording() }
             NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window,
-                                                   queue: .main) { _ in applyDock() }
+                                                   queue: .main) { _ in NSApp.setActivationPolicy(.accessory) }
             settingsWindow = window
         }
-        applyDock(settingsOpen: true)
+        // A regular app while Settings is open, so Cmd+Tab can switch back to it.
+        NSApp.setActivationPolicy(.regular)
         present(settingsWindow!)
     }
 
@@ -1786,8 +1787,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     }
 
     @objc private func toggleDock() {
-        prefs.set(!prefs.bool(forKey: "keepInDock"), forKey: "keepInDock")
-        applyDock(settingsOpen: settingsWindow?.isVisible == true)
+        toggleDockTile()
     }
 
     @objc private func pickUpdateEvery(_ sender: NSMenuItem) {
@@ -1849,9 +1849,31 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     }
 }
 
-// Also in the Dock and Cmd+Tab while Settings is open, so it can be switched back to.
-func applyDock(settingsOpen: Bool = false) {
-    NSApp.setActivationPolicy(prefs.bool(forKey: "keepInDock") || settingsOpen ? .regular : .accessory)
+// Keep in Dock pins this copy of the app like the Dock's own menu does. There is no API for it, so this
+// edits the Dock's list of pinned apps and restarts the Dock, which reads the list as it starts.
+let dockPrefs = UserDefaults(suiteName: "com.apple.dock")!
+
+func isThisApp(_ tile: Any) -> Bool {
+    let data = (tile as? [String: Any])?["tile-data"] as? [String: Any]
+    let url = (data?["file-data"] as? [String: Any])?["_CFURLString"] as? String
+    return url.flatMap(URL.init(string:))?.resolvingSymlinksInPath().path == Bundle.main.bundleURL.resolvingSymlinksInPath().path
+}
+
+func inDock() -> Bool { (dockPrefs.array(forKey: "persistent-apps") ?? []).contains(where: isThisApp) }
+
+func toggleDockTile() {
+    var tiles = dockPrefs.array(forKey: "persistent-apps") ?? []
+    if tiles.contains(where: isThisApp) {
+        tiles.removeAll(where: isThisApp)
+    } else {
+        tiles.append(["GUID": Int.random(in: 1..<Int(Int32.max)), "tile-type": "file-tile",
+                      "tile-data": ["file-data": ["_CFURLString": Bundle.main.bundleURL.absoluteString, "_CFURLStringType": 15],
+                                    "file-label": Bundle.main.bundleURL.deletingPathExtension().lastPathComponent,
+                                    "file-type": 41]])
+    }
+    dockPrefs.set(tiles, forKey: "persistent-apps")
+    dockPrefs.synchronize()  // written through before the Dock restarts and reads it
+    _ = try? Process.run(URL(fileURLWithPath: "/usr/bin/killall"), arguments: ["Dock"])
 }
 
 // MARK: - Dispatch
@@ -2172,7 +2194,7 @@ if keyboardLight == nil {
     fputs("CoreBrightness unavailable, the built-in keyboard backlight is disabled.\n", stderr)
 }
 
-applyDock()  // menu bar only unless Keep in Dock is on
+app.setActivationPolicy(.accessory)  // menu bar only; a regular app only while Settings is open
 menuBar = MenuBar()
 app.delegate = menuBar
 DistributedNotificationCenter.default().addObserver(forName: settingsRequest, object: nil, queue: .main) { _ in
