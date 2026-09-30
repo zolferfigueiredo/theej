@@ -112,7 +112,8 @@ needs calibration, as after +, Save opens Calibration.
 
 **Calibration** finds your knobs by itself. It opens on its own the first time the board connects
 while a knob needs it, as on a fresh install, and **Calibrate** in the menu runs it any time the
-board is connected. It asks for knob A, then B, and so on. For each one:
+board is connected, as does the Calibrate button beside Knobs in Settings. It asks for knob A, then
+B, and so on. For each one:
 
 1. Move it from one end to the other, so TheeJ can tell which knob it is.
 2. Turn it slowly, back and forth, for 20 seconds.

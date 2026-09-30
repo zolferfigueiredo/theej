@@ -128,7 +128,8 @@ extension MenuBar {
         setup.columns = run.found
         shared.setSetup(setup)
         calibrationWindow?.close()
-        draft = setup
+        // Started from an open Settings, which may hold unsaved edits: only the inputs change there.
+        if settingsWindow?.isVisible == true { draft.columns = setup.columns } else { draft = setup }
         showSettings()
     }
 

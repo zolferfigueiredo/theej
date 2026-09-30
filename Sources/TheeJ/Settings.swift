@@ -60,9 +60,10 @@ extension MenuBar {
             footer.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
             footer.addView(save, in: .trailing)
 
-            let profileHeader = header("Profile", [profilePicker], profileEdit)
-            let knobHeader = header("Knobs", [], knobEdit)
-            let menuBarHeader = header("Menu bar", [])
+            let calibrateButton = NSButton(title: "Calibrate", target: self, action: #selector(calibrate))
+            let profileHeader = header("Profile", leading: [profilePicker], trailing: [profileEdit])
+            let knobHeader = header("Knobs", trailing: [calibrateButton, knobEdit])
+            let menuBarHeader = header("Menu bar")
             let caption = footnote("Choose what each knob does in this profile.")
             let content = NSStackView(views: [profileHeader, profileGroup, knobHeader, knobGroup, caption, optionGroup,
                                               menuBarHeader, menuBarGroup, footer])
@@ -103,13 +104,13 @@ extension MenuBar {
     }
 
     // Headings, footnotes and the footer sit on the same text edge as the rows' labels.
-    func header(_ title: String, _ controls: [NSView], _ edit: NSSegmentedControl? = nil) -> NSStackView {
+    func header(_ title: String, leading: [NSView] = [], trailing: [NSView] = []) -> NSStackView {
         let heading = NSTextField(labelWithString: title)
         heading.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
         let header = NSStackView()
         header.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
-        for view in [heading] + controls { header.addView(view, in: .leading) }
-        if let edit { header.addView(edit, in: .trailing) }
+        for view in [heading] + leading { header.addView(view, in: .leading) }
+        for view in trailing { header.addView(view, in: .trailing) }
         return header
     }
 
