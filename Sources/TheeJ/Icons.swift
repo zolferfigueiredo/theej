@@ -13,8 +13,8 @@ enum IconStyle: String, CaseIterable {
 #if canImport(AppKit)
 // Parked means disconnected: the mixer's knobs drop to the bottom and the dial's pointer to its minimum.
 // The app icon never changes. Numbers are in a 24-unit design space, y down, tuned to stay crisp at 18pt
-// on a Retina menu bar. Mixer and dial are templates so macOS colours them for light and dark menu
-// bars, which is also why their gaps cannot use colour: a template image is an alpha mask.
+// on a Retina menu bar. Mixer and dial are templates, coloured for light and dark by Settings' menu and
+// by menuBarIcon, which is also why their gaps cannot use colour: a template image is an alpha mask.
 func makeIcon(_ style: IconStyle, parked: Bool, side: CGFloat = 18) -> NSImage {
     if style == .app { return makeAppIcon(side: side, scale: 2) }
     let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { box in
@@ -74,6 +74,20 @@ func makeIcon(_ style: IconStyle, parked: Bool, side: CGFloat = 18) -> NSImage {
     }
     image.isTemplate = true
     return image
+}
+
+// The menu bar's icon, a template painted in labelColor as it is drawn: white on a dark menu bar, black
+// on a light one. Not a template: on the menu bars of the displays not in use macOS shows a template's
+// copy at about 15% opacity, and anything else at about 60%, like its own icons.
+func menuBarIcon(_ style: IconStyle, parked: Bool) -> NSImage {
+    let mask = makeIcon(style, parked: parked)
+    guard mask.isTemplate else { return mask }
+    return NSImage(size: mask.size, flipped: false) { rect in
+        mask.draw(in: rect)
+        NSColor.labelColor.set()
+        rect.fill(using: .sourceIn)
+        return true
+    }
 }
 
 // The mixer from theej.zolfer.com, three faders and an orange LED on a cream plate, laid out on

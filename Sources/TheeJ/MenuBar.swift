@@ -174,7 +174,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         let state = shared.snapshot()
         let setup = shared.config().setup
         item.isVisible = !setup.hideIcon
-        item.button?.image = makeIcon(setup.icon, parked: !state.connected)
+        item.button?.image = menuBarIcon(setup.icon, parked: !state.connected)
         item.button?.title = setup.showName ? clipped(setup.profile.name, to: 20) : ""
         item.button?.toolTip = "\(appName): \(state.connected ? state.port ?? "?" : tr("not_connected"))"
     }

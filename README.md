@@ -62,7 +62,8 @@ An icon in the menu bar shows whether the Arduino is connected. Settings offers 
   and the track dims.
 - **App icon**: the app icon itself, the same whether connected or not.
 
-Mixer and Dial are template images, so they follow light and dark menu bars automatically.
+Mixer and Dial follow light and dark menu bars, and on the menu bars of the displays you are not
+using they stay as bright as macOS's own icons.
 
 The app icon, also shown in the About window, is the mixer from
 [theej.zolfer.com](https://theej.zolfer.com/): three faders and an orange LED on a cream plate. Both
