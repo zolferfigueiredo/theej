@@ -69,10 +69,11 @@ extension MenuBar {
     func showStep() {
         guard let run = calibrator, let window = calibrationWindow else { return }
         let name = letter(run.knob)
+        let turns = Int(Calibrator.turnSeconds)
         var move = "Move knob \(name) from one end to the other"
         if run.knob == run.first {
-            move += ", so \(appName) can tell which knob is which. Each knob then takes a minute or two of turning, "
-                + "which also cleans a jumpy one"
+            move += ", so \(appName) can tell which knob is which. Each knob then gets \(turns) seconds of turning, "
+                + "which cleans a jumpy one"
         }
         move += "."
         if run.canSkip {
@@ -85,10 +86,8 @@ extension MenuBar {
         if run.knob == run.first { move += " Your knobs hold still until you finish." }
         let steps = [
             move,
-            "Found it. Now turn it slowly, back and forth. The timer only runs while it turns.",
-            "Now turn it fast.",
-            "Slowly again.",
-            "Sweep it from one end to the other, \(Calibrator.sweepsNeeded) times.",
+            "Found it. Now turn it back and forth, from one end to the other, for \(turns) seconds. "
+                + "The timer only runs while it turns. Skip if it doesn't need cleaning.",
         ]
         stepTitle.stringValue = run.full ? "All knobs found" : "Knob \(name)"
         stepBody.stringValue = run.full
@@ -108,14 +107,12 @@ extension MenuBar {
     func progress(_ run: Calibrator) -> String {
         if run.full { return run.found.count == 1 ? "1 knob found" : "\(run.found.count) knobs found" }
         if let wrong = run.wrongKnob { return "That's knob \(letter(wrong)). Move knob \(letter(run.knob)) instead." }
-        switch run.phase {
-        case 0: return shared.snapshot().connected ? "Waiting for knob \(letter(run.knob)) to move" : "Waiting for the board to connect"
-        case 4: return "Sweep \(run.sweeps) of \(Calibrator.sweepsNeeded)"
-        default:
-            let seconds = Int(run.left.rounded(.up))
-            let left = seconds == 1 ? "1 second left" : "\(seconds) seconds left"
-            return run.paused ? "Paused with \(left). Keep turning knob \(letter(run.knob))." : left
+        if run.phase == 0 {
+            return shared.snapshot().connected ? "Waiting for knob \(letter(run.knob)) to move" : "Waiting for the board to connect"
         }
+        let seconds = Int(run.left.rounded(.up))
+        let left = seconds == 1 ? "1 second left" : "\(seconds) seconds left"
+        return run.paused ? "Paused with \(left). Keep turning knob \(letter(run.knob))." : left
     }
 
     @objc func skipKnob() {

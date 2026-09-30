@@ -124,22 +124,19 @@ fresh install, and on Save after +. Then it asks only for the knobs that need it
 others as they are. For each knob it asks for:
 
 1. Move it from one end to the other, so TheeJ can tell which knob it is.
-2. Turn it slowly, back and forth, for 20 seconds.
-3. Turn it fast for 20 seconds.
-4. Turn it slowly again for 20 seconds.
-5. Sweep it from one end to the other, 10 times.
+2. Turn it back and forth, from one end to the other, for 20 seconds.
 
-Steps 2 to 5 are the cure for jumpy knobs (below). The timers only run while the knob turns, and
-when one stops, the window says so in orange and asks you to keep turning. A short sound marks each
-new step, so you can watch the knob rather than the screen. Allow a minute or two per knob. While it
-waits for a knob, moving one it already found gets an orange reminder of which knob that is. Only a
-knob that was calibrated before can be skipped: Skip keeps its input and moves on. A knob that needs
-calibrating has Finish instead, even once it is found, and Finish ends the run. The knobs it got all
-the way through keep their new inputs and the others stay as they were, so a knob left part way
-through still needs calibration. When TheeJ asks for a knob you don't have, click Finish. Once every
-value the sketch sends has a knob, it says so, and Finish is all that's left. Every knob holds still
-for the whole run, Cancel leaves everything as it was, and Settings comes to the front at the end to
-choose what each knob does. Calibration never removes a knob; - beside Knobs in Settings does.
+Step 2 is the cure for jumpy knobs (below). Its timer only runs while the knob turns, and when it
+stops, the window says so in orange and asks you to keep turning. A short sound marks each new step,
+so you can watch the knob rather than the screen. Allow about half a minute per knob. While it waits
+for a knob, moving one it already found gets an orange reminder of which knob that is. Skip is there
+for any knob TheeJ has found: one it found just now skips its turning, and one that was set up
+before keeps its input. While the knob it asks for isn't found, the button is Finish, which ends the
+run: the knobs found keep their inputs and the others stay as they were. When TheeJ asks for a knob
+you don't have, click Finish. Once every value the sketch sends has a knob, it says so, and Finish
+is all that's left. Every knob holds still for the whole run, Cancel leaves everything as it was,
+and Settings comes to the front at the end to choose what each knob does. Calibration never removes
+a knob; - beside Knobs in Settings does.
 
 A knob only shows up once the Arduino sketch sends its value. A knob the sketch does not send is
 never found, so click Finish when TheeJ asks for it.
@@ -255,8 +252,8 @@ Constants in [Dispatch.swift](Sources/TheeJ/Dispatch.swift) and [HUD.swift](Sour
   partway. The volumes are not affected.
 - `osdChiclets`: `100`, the HUD bar resolution. Drop it to `16` for the classic segmented look.
 - `osdFadeMsec`: how long the HUD stays up.
-- `Calibrator.turnSeconds` and `Calibrator.sweepsNeeded`, further down with the calibration code:
-  `20` seconds per turning step and `10` sweeps per knob.
+- `Calibrator.turnSeconds`, in [Calibrator.swift](Sources/TheeJ/Calibrator.swift): `20` seconds of
+  turning per knob.
 
 Turning a brightness knob fully down sets the backlight to 0 and the panel goes black, and a monitor
 contrast knob at 0 leaves it close to black too. The knob is the way back.
