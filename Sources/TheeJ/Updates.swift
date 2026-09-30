@@ -68,12 +68,16 @@ final class UpdateProgress: NSObject {
     private let status = NSTextField(labelWithString: "")
     private let bar = NSProgressIndicator()
     private let reopen = NSButton(title: "Reopen", target: nil, action: nil)
+    /// The window outlives the code that started the update, and its Reopen button needs this object
+    /// alive: held only by a local variable, it was gone by the time Reopen was clicked.
+    private static var open: UpdateProgress?
 
     init(_ title: String) {
         super.init()
         let heading = NSTextField(labelWithString: title)
         heading.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
         status.textColor = .secondaryLabelColor
+        status.lineBreakMode = .byTruncatingTail  // one line, never wider than the bar
         bar.style = .bar
         bar.isIndeterminate = true
         bar.widthAnchor.constraint(equalToConstant: 300).isActive = true
@@ -88,6 +92,7 @@ final class UpdateProgress: NSObject {
         text.alignment = .leading
         text.setCustomSpacing(16, after: bar)
         buttons.widthAnchor.constraint(equalTo: bar.widthAnchor).isActive = true
+        status.widthAnchor.constraint(equalTo: bar.widthAnchor).isActive = true
         let icon = NSImageView(image: NSApp.applicationIconImage)
         icon.widthAnchor.constraint(equalToConstant: 64).isActive = true
         icon.heightAnchor.constraint(equalToConstant: 64).isActive = true
@@ -103,6 +108,7 @@ final class UpdateProgress: NSObject {
     }
 
     func show() {
+        Self.open = self
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
     }
@@ -118,7 +124,10 @@ final class UpdateProgress: NSObject {
         reopen.isEnabled = true
     }
 
-    func close() { window.close() }
+    func close() {
+        window.close()
+        Self.open = nil
+    }
 
     @objc private func relaunch() {
         do {
@@ -247,7 +256,7 @@ extension MenuBar {
                 progress.show()
                 try await install(latest) { progress.step($0) }
                 prefs.set(latest, forKey: "updatedTo")
-                progress.done("Version \(latest) is installed. Reopen \(appName) to start using it.")
+                progress.done("Version \(latest) is installed.")
             } catch {
                 progress.close()
                 print("update: \(error.localizedDescription)")
