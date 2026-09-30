@@ -15,11 +15,10 @@ mkdir -p dist/dmg
 cp -R ".build/$NAME.app" dist/dmg/
 
 # The DMG window's arrow from the app to Applications. It lives inside the app, before codesign so the signature
-# covers it, and the DMG shows nothing but the app and Applications. The cream enamel gradient is the website's.
+# covers it, and the DMG shows nothing but the app and Applications. The cream is the website's plate color.
 cat > dist/background.svg <<EOF
 <svg xmlns="http://www.w3.org/2000/svg" width="600" height="440">
-<defs><linearGradient id="enamel" x2="0" y2="1"><stop offset="0" stop-color="#f3eee5"/><stop offset="1" stop-color="#ddd5c6"/></linearGradient></defs>
-<rect width="600" height="440" fill="url(#enamel)"/>
+<rect width="600" height="440" fill="#ddd5c6"/>
 <g fill="none" stroke="#86868b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
 <path d="M236 166C266 124 330 120 362 152"/><path d="M349 151.5h13.5v-13.5"/>
 </g>
