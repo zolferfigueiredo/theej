@@ -35,6 +35,11 @@ private let every: [Target] = [.master, .microphone, .builtinBrightness, .builti
     #expect(Set(every.map(rank)).count == every.count)
 }
 
+// Two jobs in one section must not read the same, and every rank band needs a header.
+@Test func shortTitlesAreDistinctWithinASection() {
+    #expect(Set(every.map { section($0) + shortTitle($0) }).count == every.count)
+}
+
 @Test func targetsSurviveSaving() throws {
     #expect(try JSONDecoder().decode([Target].self, from: JSONEncoder().encode(every)) == every)
 }
