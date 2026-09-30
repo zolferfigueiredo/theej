@@ -21,10 +21,10 @@ private let jobs: [Target?] = [.master, .brightness(0), .brightness(1), nil, .bu
     #expect(targets(columns, [.master]) == [0: .master])
 }
 
-// Menu order is volume, then brightness with the built-in first and externals left to right,
-// which is not the serial column order.
+// Menu order is knob order, A to E, which is not the serial column order.
 @Test func menuOrder() {
-    #expect(ordered(targets(columns, jobs)).map(\.key) == [0, 1, 3, 2])
+    #expect(ordered(targets(columns, jobs), by: columns).map(\.key) == [0, 3, 2, 1])
+    #expect(ordered(targets(columns, jobs), by: columns).map(\.value) == [.master, .brightness(0), .brightness(1), .builtinBrightness])
 }
 
 // The rank bands must stay distinct as target kinds are added.

@@ -111,7 +111,7 @@ func handle(_ values: [Int]) {
         return
     }
 
-    let lines = ordered(mapping).map { "\(title($0.value)) \(percent(lastApplied[$0.key] ?? 0))%" }
+    let lines = ordered(mapping, by: config.setup.columns).map { "\(title($0.value)) \(percent(lastApplied[$0.key] ?? 0))%" }
     shared.setLines(lines)  // every line, so a job changed in Settings shows before the knob moves
 
     // Silent under launchd (no tty), so the log file doesn't grow forever.
