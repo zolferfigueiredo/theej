@@ -89,7 +89,7 @@ which physical slider is which index.
 ## Settings and calibration
 
 **Settings** has three tabs, laid out in groups as System Settings is: **General** for the profile
-and its knobs, **App settings** for shortcuts and the menu bar, and **About**. A tab too tall for
+and its knobs, **App settings** for shortcuts, the menu bar and sensitivity, and **About**. A tab too tall for
 the screen scrolls. General lists every knob by the letter on the box with a menu for what it does:
 nothing, or one of the jobs under [What a knob can do](#what-a-knob-can-do), grouped as volumes,
 brightness, contrast, Night Shift and keyboard backlights. Monitors count left to right by their
@@ -101,7 +101,8 @@ Those jobs belong to a **profile**: a name, a job for every knob, and an optiona
 The menu at the top picks the profile you are editing, + adds one with every knob doing nothing,
 and - removes the one shown. Switch profiles from the menu bar, or with a profile's shortcut from any
 app. In App settings, under **Shortcuts**, **Next profile** and **Previous profile** step through
-them in order from any app, wrapping round at either end. To set a shortcut, click Record Shortcut
+them in order from any app, wrapping round at either end, and every profile is listed below them
+with its own shortcut, so you can set them all in one place. To set a shortcut, click Record Shortcut
 and press it; it needs ⌘ or ⌃, can't be one already in use, and Escape cancels. The ✕ after a
 shortcut removes it, as does Delete while recording. Shortcuts need no Accessibility or Input
 Monitoring permission.
@@ -110,7 +111,9 @@ Monitoring permission.
 In App settings, under **Menu bar**, **Hide menu bar icon** removes the icon, name and all, and
 greys out the rest while it is on. **Show profile name** puts the active profile's name beside the
 icon, cut short when it is long, **Icon** picks Mixer, Dial or App icon, and **Profile list**, on by
-default, puts the profiles in the menu.
+default, puts the profiles in the menu. Under **Sensitivity**, **Speed** sets how long a knob has to
+be still before its change lands: Slow (0.3 seconds, recommended), Medium (0.22), Fast (0.18) or
+Super fast (0.15). The volumes are not affected; they always follow the knob.
 
 **About** shows the version, with Check for updates…, and links to the website and to zolfer.com.
 
@@ -190,7 +193,8 @@ Sweep the knob slowly from end to end a dozen or so times. **Calibrate** in the 
 through it, one knob at a time. Recordings of this board showed a dirty
 knob reading clean within about 15 seconds of sweeping. A drop of potentiometer contact cleaner
 makes it last. The panel is protected meanwhile: everything but the volumes only applies once the
-knob settles, so a stray reading shorter than `brightnessSettle` never reaches a display or a light.
+knob settles, so a stray reading shorter than the Speed setting's wait never reaches a display or a
+light. If a panel flashes on a faster Speed, go back to Slow.
 
 ## Run at login
 
@@ -242,16 +246,16 @@ defaults domain: `defaults read com.zolfer.theej` shows them, and `defaults dele
 com.zolfer.theej` followed by a restart clears them. Knobs saved by 1.0.2 or earlier become the
 Default profile the first time a newer TheeJ starts, and the old `knobs` key is left as it was.
 
-Constants in [Dispatch.swift](Sources/TheeJ/Dispatch.swift) and [HUD.swift](Sources/TheeJ/HUD.swift), then rebuild:
+Constants in [Dispatch.swift](Sources/TheeJ/Dispatch.swift), [Setup.swift](Sources/TheeJ/Setup.swift) and [HUD.swift](Sources/TheeJ/HUD.swift), then rebuild:
 
 - `deadzone`: `0.01` (1%, about 10 ADC counts). Raise it if a value drifts while you aren't
   touching the slider, lower it if the steps feel coarse. It is also how close to an end counts as
   the end, so a knob turned all the way down always reaches 0.
-- `brightnessSettle`: `0.3` seconds. Every knob but the volumes applies only once it has been
-  still this long, and every movement restarts the wait. This is also what hides wiper contact
-  bounce, where a moving pot briefly reports its neighbour's value for up to about 0.11s, so keep it
-  well above that. Lower it if letting go feels laggy, raise it if a slow turn still applies
-  partway. The volumes are not affected.
+- `Speed.settle`: `0.3`, `0.22`, `0.18` and `0.15` seconds, the waits behind the Speed setting.
+  Every knob but the volumes applies only once it has been still this long, and every movement
+  restarts the wait. This is also what hides wiper contact bounce, where a moving pot briefly
+  reports its neighbour's value for up to about 0.11s, so keep every one above that. The volumes
+  are not affected.
 - `osdChiclets`: `100`, the HUD bar resolution. Drop it to `16` for the classic segmented look.
 - `osdFadeMsec`: how long the HUD stays up.
 - `Calibrator.turnSeconds`, in [Calibrator.swift](Sources/TheeJ/Calibrator.swift): `20` seconds of

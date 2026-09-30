@@ -10,16 +10,18 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     let profilePicker = NSPopUpButton()
     let profileEdit = NSSegmentedControl()
     let profileName = NSTextField(string: "")
-    // The profile's own shortcut, then Next and Previous profile: each a button that records it and a ✕.
-    let shortcutPaths: [WritableKeyPath<Setup, Shortcut?>] = [\.profile.shortcut, \.next, \.previous]
-    let shortcutButtons = (0..<3).map { _ in NSButton(title: "", target: nil, action: nil) }
-    let removeShortcutButtons = (0..<3).map { _ in
-        NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Remove shortcut")!,
-                 target: nil, action: nil)
+    // The shortcut of the profile shown in General, Next and Previous profile, then every profile's in
+    // App settings. Each has a button that records it and a ✕, which shortcutRow makes in this order.
+    var shortcutPaths: [WritableKeyPath<Setup, Shortcut?>] {
+        [\Setup.profiles[draft.active].shortcut, \Setup.next, \Setup.previous]
+            + draft.profiles.indices.map { \Setup.profiles[$0].shortcut }
     }
+    var shortcutButtons: [NSButton] = []
+    var removeShortcutButtons: [NSButton] = []
     var recorder: Any?  // the key monitor while a shortcut is being recorded
     var recording = 0  // which of shortcutPaths it records
     let profileRows = NSStackView()
+    let profileShortcutRows = NSStackView()
     let knobRows = NSStackView()
     let knobEdit = NSSegmentedControl()
     let invertKnobs = NSSwitch()
@@ -30,6 +32,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     let profileListLabel = NSTextField(labelWithString: "Profile list")
     let iconPicker = NSPopUpButton()
     let iconLabel = NSTextField(labelWithString: "Icon")
+    let speedPicker = NSPopUpButton()
     var calibrationWindow: NSWindow?
     var calibrator: Calibrator?
     var calibrationOffered = false

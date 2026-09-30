@@ -41,29 +41,16 @@ extension MenuBar: NSToolbarDelegate {
             profilePicker.widthAnchor.constraint(lessThanOrEqualToConstant: 240).isActive = true
             profileName.delegate = self
             profileName.widthAnchor.constraint(equalToConstant: 180).isActive = true
-            for (index, (button, remove)) in zip(shortcutButtons, removeShortcutButtons).enumerated() {
-                button.tag = index
-                button.target = self
-                button.action = #selector(recordShortcut)
-                button.toolTip = "Use ⌘ or ⌃ with a key. Delete clears it, Escape cancels."
-                // With the ✕ after it, as wide as the name field: 156 + 8 + 16 = 180.
-                button.widthAnchor.constraint(equalToConstant: 156).isActive = true
-                remove.tag = index
-                remove.target = self
-                remove.action = #selector(removeShortcut)
-                remove.toolTip = "Remove shortcut"
-                remove.isBordered = false
-                remove.widthAnchor.constraint(equalToConstant: 16).isActive = true
-            }
             profileName.bezelStyle = .roundedBezel
             let profileGroup = group(profileRows)
-            setRows(profileRows, [row([NSTextField(labelWithString: "Name")], profileName), shortcutRow("Shortcut", 0)])
+            setRows(profileRows, [row([NSTextField(labelWithString: "Name")], profileName), shortcutRow("Shortcut")])
             let knobGroup = group(knobRows)
             let stepRows = NSStackView()
             let stepGroup = group(stepRows)
-            setRows(stepRows, [shortcutRow("Next profile", 1), shortcutRow("Previous profile", 2)])
+            setRows(stepRows, [shortcutRow("Next profile"), shortcutRow("Previous profile")])
+            let profileShortcutGroup = group(profileShortcutRows)
 
-            for control: NSControl in [invertKnobs, showName, hideIcon, iconPicker, showProfiles] {
+            for control: NSControl in [invertKnobs, showName, hideIcon, iconPicker, showProfiles, speedPicker] {
                 control.target = self
                 control.action = #selector(toggleOption)
             }
@@ -73,6 +60,11 @@ extension MenuBar: NSToolbarDelegate {
                 iconPicker.addItem(withTitle: style.title)
                 iconPicker.lastItem?.image = makeIcon(style, parked: false, side: 16)
             }
+            speedPicker.isBordered = false
+            for speed in Speed.allCases { speedPicker.addItem(withTitle: speed.title) }
+            let speedRows = NSStackView()
+            let speedGroup = group(speedRows)
+            setRows(speedRows, [row([label("Speed", note: "How soon a change lands after a turn.")], speedPicker)])
             let optionRows = NSStackView()
             let optionGroup = group(optionRows)
             setRows(optionRows, [row([label("Invert knobs", note: "For pots wired the other way round.")], invertKnobs)])
@@ -89,8 +81,9 @@ extension MenuBar: NSToolbarDelegate {
             general.setCustomSpacing(24, after: profileGroup)
             general.setCustomSpacing(16, after: caption)
             general.setCustomSpacing(24, after: optionGroup)
-            let app = page([header("Shortcuts"), stepGroup, header("Menu bar"), menuBarGroup, saveFooter()])
-            for view in [stepGroup, menuBarGroup] { app.setCustomSpacing(24, after: view) }
+            let app = page([header("Shortcuts"), stepGroup, profileShortcutGroup, header("Menu bar"), menuBarGroup,
+                            header("Sensitivity"), speedGroup, saveFooter()])
+            for view in [profileShortcutGroup, menuBarGroup, speedGroup] { app.setCustomSpacing(24, after: view) }
             tabs = [.general: general, .app: app, .about: aboutPage()]
             reloadDraft()
             // Each page scrolls when the screen is too short for it.
@@ -137,6 +130,7 @@ extension MenuBar: NSToolbarDelegate {
 
     func showTab(_ id: NSToolbarItem.Identifier) {
         guard let window = settingsWindow, let page = tabs[id] else { return }
+        reloadDraft()  // a profile renamed in General has a row in App settings too
         window.toolbar?.selectedItemIdentifier = id
         window.title = settingsTabs.first { $0.id == id }?.label ?? ""
         (window.contentView as? NSScrollView)?.documentView = page
@@ -267,9 +261,26 @@ extension MenuBar: NSToolbarDelegate {
         return box
     }
 
-    // The ✕ keeps its place while hidden, so the field doesn't move when a shortcut comes or goes.
-    func shortcutRow(_ title: String, _ index: Int) -> NSStackView {
-        let row = row([NSTextField(labelWithString: title)], shortcutButtons[index], removeShortcutButtons[index])
+    // Makes the next of shortcutPaths its field and ✕, so rows have to be made in that order. The ✕
+    // keeps its place while hidden, so the field doesn't move when a shortcut comes or goes.
+    func shortcutRow(_ title: String) -> NSStackView {
+        let button = NSButton(title: "", target: self, action: #selector(recordShortcut))
+        button.tag = shortcutButtons.count
+        button.toolTip = "Use ⌘ or ⌃ with a key. Delete clears it, Escape cancels."
+        // With the ✕ after it, as wide as the name field: 156 + 8 + 16 = 180.
+        button.widthAnchor.constraint(equalToConstant: 156).isActive = true
+        let remove = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Remove shortcut")!,
+                              target: self, action: #selector(removeShortcut))
+        remove.tag = button.tag
+        remove.toolTip = "Remove shortcut"
+        remove.isBordered = false
+        remove.widthAnchor.constraint(equalToConstant: 16).isActive = true
+        shortcutButtons.append(button)
+        removeShortcutButtons.append(remove)
+        let label = NSTextField(labelWithString: title)
+        label.lineBreakMode = .byTruncatingTail  // a profile's name can be longer than the row has room for
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let row = row([label], button, remove)
         row.detachesHiddenViews = false
         return row
     }
@@ -299,6 +310,13 @@ extension MenuBar: NSToolbarDelegate {
 
     // Rebuilt on every change, which keeps each popup's tag equal to its knob index.
     func reloadDraft() {
+        // Before stopRecording, which titles every field.
+        shortcutButtons.removeSubrange(3...)
+        removeShortcutButtons.removeSubrange(3...)
+        setRows(profileShortcutRows, draft.profiles.enumerated().map { index, profile in
+            let name = profile.name.trimmingCharacters(in: .whitespaces)
+            return shortcutRow(name.isEmpty ? "Profile \(index + 1)" : name)
+        })
         stopRecording()
         profilePicker.removeAllItems()
         for profile in draft.profiles {
@@ -313,6 +331,7 @@ extension MenuBar: NSToolbarDelegate {
         showProfiles.state = draft.showProfiles ? .on : .off
         hideIcon.state = draft.hideIcon ? .on : .off
         iconPicker.selectItem(at: IconStyle.allCases.firstIndex(of: draft.icon) ?? 0)
+        speedPicker.selectItem(at: Speed.allCases.firstIndex(of: draft.speed) ?? 0)
         dimMenuBarOptions()
 
         let assigned = draft.profile.targets.compactMap { target -> Int? in
@@ -424,6 +443,7 @@ extension MenuBar: NSToolbarDelegate {
         draft.showProfiles = showProfiles.state == .on
         draft.hideIcon = hideIcon.state == .on
         draft.icon = IconStyle.allCases[iconPicker.indexOfSelectedItem]
+        draft.speed = Speed.allCases[speedPicker.indexOfSelectedItem]
         dimMenuBarOptions()
     }
 
@@ -455,16 +475,17 @@ extension MenuBar: NSToolbarDelegate {
         let flags = event.modifierFlags.intersection([.control, .option, .shift, .command])
         let shortcut = Shortcut(keyCode: event.keyCode, modifiers: flags.rawValue,
                                 key: event.characters(byApplyingModifiers: []) ?? "")
+        let path = shortcutPaths[recording]
         if Int(event.keyCode) == kVK_Delete && flags.isEmpty {
-            draft[keyPath: shortcutPaths[recording]] = nil
+            draft[keyPath: path] = nil
         } else if Int(event.keyCode) != kVK_Escape {
-            // Not another profile's, nor one of this window's other fields (this profile's, Next, Previous).
-            let taken = draft.profiles.indices.contains { $0 != draft.active && draft.profiles[$0].shortcut == shortcut }
-                || shortcutPaths.indices.contains { $0 != recording && draft[keyPath: shortcutPaths[$0]] == shortcut }
+            // Not another field's. By path, not index: the profile shown in General has a second field
+            // in App settings, and would otherwise clash with itself.
+            let taken = shortcutPaths.contains { $0 != path && draft[keyPath: $0] == shortcut }
             guard !shortcut.key.isEmpty, !flags.isDisjoint(with: [.command, .control]), !taken,
                   let probe = registerHotKey(shortcut, id: 0) else { return NSSound.beep() }
             UnregisterEventHotKey(probe)
-            draft[keyPath: shortcutPaths[recording]] = shortcut
+            draft[keyPath: path] = shortcut
         }
         stopRecording()
     }
@@ -475,14 +496,15 @@ extension MenuBar: NSToolbarDelegate {
             registerHotKeys(shared.config().setup)
         }
         recorder = nil
-        for (index, path) in shortcutPaths.enumerated() {
-            shortcutButtons[index].title = draft[keyPath: path]?.label ?? "Record Shortcut"
-            removeShortcutButtons[index].isHidden = draft[keyPath: path] == nil
+        for (path, (button, remove)) in zip(shortcutPaths, zip(shortcutButtons, removeShortcutButtons)) {
+            button.title = draft[keyPath: path]?.label ?? "Record Shortcut"
+            remove.isHidden = draft[keyPath: path] == nil
         }
     }
 
     @objc func removeShortcut(_ sender: NSButton) {
-        draft[keyPath: shortcutPaths[sender.tag]] = nil
+        let path = shortcutPaths[sender.tag]
+        draft[keyPath: path] = nil
         stopRecording()
     }
 
