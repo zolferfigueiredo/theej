@@ -4,10 +4,7 @@ import Carbon.HIToolbox
 extension MenuBar {
     // A second click keeps unsaved edits in an open window.
     @objc func openSettings() {
-        if settingsWindow?.isVisible != true {
-            draft = shared.config().setup
-            calibrateOnSave.state = prefs.object(forKey: "calibrateOnSave") as? Bool == false ? .off : .on
-        }
+        if settingsWindow?.isVisible != true { draft = shared.config().setup }
         showSettings()
         settingsWindow?.makeFirstResponder(nil)  // else the name field opens with its text selected
     }
@@ -27,51 +24,60 @@ extension MenuBar {
             shortcutButton.target = self
             shortcutButton.action = #selector(recordShortcut)
             shortcutButton.toolTip = "Use ⌘ or ⌃ with a key. Delete clears it, Escape cancels."
-            shortcutButton.widthAnchor.constraint(equalToConstant: 180).isActive = true
+            // With the ✕ after it, as wide as the name field: 156 + 8 + 16 = 180.
+            shortcutButton.widthAnchor.constraint(equalToConstant: 156).isActive = true
+            removeShortcutButton.widthAnchor.constraint(equalToConstant: 16).isActive = true
             removeShortcutButton.isBordered = false
-            removeShortcutButton.contentTintColor = .secondaryLabelColor
             removeShortcutButton.toolTip = "Remove shortcut"
             removeShortcutButton.target = self
             removeShortcutButton.action = #selector(removeShortcut)
+            profileName.bezelStyle = .roundedBezel
             let profileGroup = group(profileRows)
-            setRows(profileRows, [row([NSTextField(labelWithString: "Name")], profileName),
-                                  row([NSTextField(labelWithString: "Shortcut")], removeShortcutButton, shortcutButton)])
+            let shortcutRow = row([NSTextField(labelWithString: "Shortcut")], shortcutButton, removeShortcutButton)
+            shortcutRow.detachesHiddenViews = false  // the ✕ keeps its place when hidden, so the field stays put
+            setRows(profileRows, [row([NSTextField(labelWithString: "Name")], profileName), shortcutRow])
             let knobGroup = group(knobRows)
 
-            let caption = NSTextField(labelWithString: "Choose what each knob does in this profile.")
-            caption.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-            caption.textColor = .secondaryLabelColor
-            for box in [invertKnobs, showName, hideIcon, iconPicker] {
-                box.target = self
-                box.action = #selector(toggleOption)
+            for control: NSControl in [invertKnobs, showName, hideIcon, iconPicker] {
+                control.target = self
+                control.action = #selector(toggleOption)
             }
+            for toggle in [invertKnobs, showName, hideIcon] { toggle.controlSize = .mini }
+            iconPicker.isBordered = false
             for style in IconStyle.allCases {
                 iconPicker.addItem(withTitle: style.title)
                 iconPicker.lastItem?.image = makeIcon(style, parked: false, side: 16)
             }
-            let iconRow = NSStackView(views: [iconLabel, iconPicker])
-            let hint = NSTextField(labelWithString: "Open \(appName) again to get back here.")
-            hint.font = caption.font
-            hint.textColor = .secondaryLabelColor
-            let hintRow = NSStackView(views: [hint])
-            hintRow.edgeInsets = NSEdgeInsets(top: 0, left: 20, bottom: 0, right: 0)  // under the checkbox title
+            let optionRows = NSStackView()
+            let optionGroup = group(optionRows)
+            setRows(optionRows, [row([label("Invert knobs", note: "For pots wired the other way round.")], invertKnobs)])
+            let menuBarRows = NSStackView()
+            let menuBarGroup = group(menuBarRows)
+            setRows(menuBarRows, [row([label("Hide menu bar icon", note: "Open \(appName) again to get back here.")], hideIcon),
+                                  row([showNameLabel], showName),
+                                  row([iconLabel], iconPicker)])
             let save = NSButton(title: "Save", target: self, action: #selector(saveSettings))
             save.keyEquivalent = "\r"
             let footer = NSStackView()
-            footer.addView(calibrateOnSave, in: .leading)
+            footer.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
             footer.addView(save, in: .trailing)
 
-            let profileHeader = header("Profile", [profilePicker], profileEdit)
-            let knobHeader = header("Knobs", [], knobEdit)
-            let content = NSStackView(views: [profileHeader, profileGroup, knobHeader, knobGroup, caption,
-                                              invertKnobs, hideIcon, hintRow, showName, iconRow, footer])
+            let calibrateButton = NSButton(title: "Calibrate", target: self, action: #selector(calibrate))
+            let profileHeader = header("Profile", leading: [profilePicker], trailing: [profileEdit])
+            let knobHeader = header("Knobs", trailing: [calibrateButton, knobEdit])
+            let menuBarHeader = header("Menu bar")
+            let caption = footnote("Choose what each knob does in this profile.")
+            let content = NSStackView(views: [profileHeader, profileGroup, knobHeader, knobGroup, caption, optionGroup,
+                                              menuBarHeader, menuBarGroup, footer])
             content.orientation = .vertical
             content.alignment = .leading
-            content.spacing = 8
-            for view in [profileGroup, caption, iconRow] { content.setCustomSpacing(20, after: view) }
+            content.spacing = 8  // a heading to its group; sections sit further apart
+            for view in [profileGroup, optionGroup, menuBarGroup] { content.setCustomSpacing(24, after: view) }
+            content.setCustomSpacing(6, after: knobGroup)
+            content.setCustomSpacing(16, after: caption)
             content.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
             content.setHuggingPriority(.defaultHigh, for: .horizontal)  // else fittingSize drops the right inset
-            for view in [profileHeader, knobHeader, footer] {
+            for view in [profileHeader, knobHeader, menuBarHeader, caption, footer] {
                 view.widthAnchor.constraint(equalTo: knobGroup.widthAnchor).isActive = true
             }
             reloadDraft()
@@ -99,13 +105,39 @@ extension MenuBar {
         control.action = action
     }
 
-    func header(_ title: String, _ controls: [NSView], _ edit: NSSegmentedControl) -> NSStackView {
+    // Headings, footnotes and the footer sit on the same text edge as the rows' labels.
+    func header(_ title: String, leading: [NSView] = [], trailing: [NSView] = []) -> NSStackView {
         let heading = NSTextField(labelWithString: title)
         heading.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
         let header = NSStackView()
-        for view in [heading] + controls { header.addView(view, in: .leading) }
-        header.addView(edit, in: .trailing)
+        header.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
+        for view in [heading] + leading { header.addView(view, in: .leading) }
+        for view in trailing { header.addView(view, in: .trailing) }
         return header
+    }
+
+    func small(_ text: String, _ color: NSColor = .secondaryLabelColor) -> NSTextField {
+        let small = NSTextField(labelWithString: text)
+        small.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        small.textColor = color
+        return small
+    }
+
+    func footnote(_ text: String) -> NSStackView {
+        let note = NSStackView(views: [small(text)])
+        note.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
+        return note
+    }
+
+    // A row's title, with an optional line of small type under it, as System Settings does.
+    func label(_ title: String, note: String? = nil, noteColor: NSColor = .secondaryLabelColor) -> NSView {
+        let label = NSTextField(labelWithString: title)
+        guard let note else { return label }
+        let stack = NSStackView(views: [label, small(note, noteColor)])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 2
+        return stack
     }
 
     func group(_ rows: NSStackView) -> NSBox {
@@ -132,6 +164,7 @@ extension MenuBar {
     func row(_ leading: [NSView], _ trailing: NSView...) -> NSStackView {
         let row = NSStackView()
         row.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
+        row.heightAnchor.constraint(greaterThanOrEqualToConstant: 38).isActive = true  // one height whatever the control
         for view in leading { row.addView(view, in: .leading) }
         for view in trailing { row.addView(view, in: .trailing) }
         return row
@@ -166,9 +199,7 @@ extension MenuBar {
         showName.state = draft.showName ? .on : .off
         hideIcon.state = draft.hideIcon ? .on : .off
         iconPicker.selectItem(at: IconStyle.allCases.firstIndex(of: draft.icon) ?? 0)
-        showName.isEnabled = !draft.hideIcon
-        iconPicker.isEnabled = !draft.hideIcon
-        iconLabel.textColor = draft.hideIcon ? .disabledControlTextColor : .labelColor
+        dimMenuBarOptions()
 
         let assigned = draft.profile.targets.compactMap { target -> Int? in
             switch target {
@@ -196,16 +227,11 @@ extension MenuBar {
             popup.target = self
             popup.action = #selector(pick)
             popup.setAccessibilityLabel("Knob \(letter(index))")
-            var leading: [NSView] = [NSTextField(labelWithString: "Knob \(letter(index))")]
-            if draft.columns[index] == nil {
-                let warning = NSTextField(labelWithString: "Needs calibration")
-                warning.textColor = .systemRed
-                leading.append(warning)
-            }
-            return row(leading, popup)
+            let note = draft.columns[index] == nil ? "Needs calibration" : nil
+            return row([label("Knob \(letter(index))", note: note, noteColor: .systemRed)], popup)
         }
         if rows.isEmpty {
-            let empty = NSTextField(labelWithString: "No knobs. Press + to add one.")
+            let empty = NSTextField(labelWithString: "No knobs. Calibrate finds them, or press + to add one.")
             empty.textColor = .secondaryLabelColor
             let row = NSStackView()
             row.edgeInsets = NSEdgeInsets(top: 14, left: 12, bottom: 14, right: 12)
@@ -283,9 +309,14 @@ extension MenuBar {
         draft.showName = showName.state == .on
         draft.hideIcon = hideIcon.state == .on
         draft.icon = IconStyle.allCases[iconPicker.indexOfSelectedItem]
+        dimMenuBarOptions()
+    }
+
+    // With the icon hidden there is nothing in the menu bar to name or draw.
+    func dimMenuBarOptions() {
         showName.isEnabled = !draft.hideIcon
         iconPicker.isEnabled = !draft.hideIcon
-        iconLabel.textColor = draft.hideIcon ? .disabledControlTextColor : .labelColor
+        for label in [showNameLabel, iconLabel] { label.textColor = draft.hideIcon ? .disabledControlTextColor : .labelColor }
     }
 
     // The shortcuts are off while recording, so pressing one records it instead of switching.
@@ -332,8 +363,6 @@ extension MenuBar {
     }
 
     @objc func saveSettings() {
-        let calibrateNow = calibrateOnSave.state == .on
-        prefs.set(calibrateNow, forKey: "calibrateOnSave")
         for index in draft.profiles.indices where draft.profiles[index].name.trimmingCharacters(in: .whitespaces).isEmpty {
             draft.profiles[index].name = "Profile \(index + 1)"
         }
@@ -341,6 +370,6 @@ extension MenuBar {
         registerHotKeys(draft.profiles)
         refresh()
         reloadDraft()
-        if calibrateNow && shared.snapshot().connected { calibrate() }
+        if draft.columns.contains(nil) { calibrate() }  // a knob added with + has no input yet
     }
 }

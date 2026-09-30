@@ -13,7 +13,7 @@ backlight** over USB. Arduino firmware is unchanged.
 - Reads the deej serial protocol at 9600 baud, however many sliders the sketch sends
 - Settings picks what each knob does: a volume, a display, Night Shift or a keyboard backlight
 - Profiles switch every knob's job at once, from the menu bar or a global keyboard shortcut
-- Calibrate finds which input each knob is wired to and sweeps its pot clean
+- Calibrate finds your knobs and which input each is wired to, and sweeps each pot clean
 - Shows the real macOS HUD on the display each knob controls
 - Menu bar icon showing connected or disconnected at a glance
 - Sets volume in-process via CoreAudio, with no `osascript`
@@ -65,11 +65,11 @@ The app icon, also shown in the About window, is the mixer from
 icons are drawn in code in [Icons.swift](Sources/TheeJ/Icons.swift), the menu bar one by `makeIcon`
 and the app icon by `makeAppIcon`.
 
-Clicking it, with either button, opens a menu: the profiles first, with a check by the active one
-and each one's shortcut, then Settings and Calibrate, then the current port with Reconnect under
-it, then the live value of every knob, one per line, then Launch at login and Keep in
-Dock, About TheeJ, Check for updates… with Check automatically (daily, weekly by default, or never),
-and Quit TheeJ.
+Clicking it, with either button, opens a menu: Show data below first, on by default, with the live
+value of every knob under it, one per line, then the profiles, with a check by the active one and
+each one's shortcut, then Settings and Calibrate, then the current port with Reconnect under it,
+then Launch at login and Keep in Dock, About TheeJ, Check for updates… with Check automatically
+(daily, weekly by default, or never), and Quit TheeJ.
 
 **Check for updates…** asks theej.zolfer.com for `latest.json`, a plain download that sends nothing
 about you. When there is a newer version, **Update Now** downloads it, replaces the copy in
@@ -85,12 +85,12 @@ which physical slider is which index.
 
 ## Settings and calibration
 
-**Settings** lists every knob by the letter on the box with a menu for what it does: nothing, or
-one of the jobs under [What a knob can do](#what-a-knob-can-do), grouped as volumes, brightness,
-contrast, Night Shift and keyboard backlights. Monitors count left to right by their position in
-System Settings. The + and - buttons beside Knobs add or remove the last knob, down to none at all.
-A knob that has not been calibrated yet shows "Needs calibration" in red and does nothing until it
-is.
+**Settings** is laid out in groups, as System Settings is. It lists every knob by the letter on the
+box with a menu for what it does: nothing, or one of the jobs under
+[What a knob can do](#what-a-knob-can-do), grouped as volumes, brightness, contrast, Night Shift and
+keyboard backlights. Monitors count left to right by their position in System Settings. The + and -
+buttons beside Knobs add or remove the last knob, down to none at all. A knob that has not been
+calibrated yet shows "Needs calibration" in red under its name, and does nothing until it is.
 
 Those jobs belong to a **profile**: a name, a job for every knob, and an optional keyboard shortcut.
 The menu at the top picks the profile you are editing, + adds one with every knob doing nothing,
@@ -100,15 +100,19 @@ any app. To set one, click Record Shortcut and press it; it needs ⌘ or ⌃, an
 Input Monitoring permission.
 
 **Invert knobs** flips every knob's direction, for a board whose pots are wired the other way round.
-**Hide menu bar icon** removes the icon, name and all, and greys out the name option and the icon
-picker while it is on. **Show profile name in menu bar** puts the active profile's name beside the
-icon. **Menu bar icon** picks Mixer, Dial or App icon.
+Under **Menu bar**, **Hide menu bar icon** removes the icon, name and all, and greys out the other
+two while it is on. **Show profile name** puts the active profile's name beside the icon, and
+**Icon** picks Mixer, Dial or App icon.
 
 Save applies at once, makes the profile shown the active one, and leaves the window open. A knob
 given a new job, by Save or by switching profiles, takes it over the next time you move it, so
-neither ever jumps the volume or a panel to wherever that knob happens to sit. With "Calibrate on
-save" checked (the default, and remembered), Save also offers to calibrate.
-**Calibrate** in the menu runs it any time the board is connected. For each knob, in letter order:
+neither ever jumps the volume or a panel to wherever that knob happens to sit. When a knob still
+needs calibration, as after +, Save opens Calibration.
+
+**Calibration** finds your knobs by itself. It opens on its own the first time the board connects
+while a knob needs it, as on a fresh install, and **Calibrate** in the menu runs it any time the
+board is connected, as does the Calibrate button beside Knobs in Settings. It asks for knob A, then
+B, and so on. For each one:
 
 1. Move it from one end to the other, so TheeJ can tell which knob it is.
 2. Turn it slowly, back and forth, for 20 seconds.
@@ -116,14 +120,20 @@ save" checked (the default, and remembered), Save also offers to calibrate.
 4. Turn it slowly again for 20 seconds.
 5. Sweep it from one end to the other, 10 times.
 
-Steps 2 to 5 are the cure for jumpy knobs (below). The timers only run while the knob turns, and a
-short sound marks each new step, so you can watch the knob rather than the screen. Allow a minute or
-two per knob. Any knob can be skipped: it keeps the input it had, unless the run found that input on
-another knob. Every knob holds still for the whole run, Cancel leaves everything as it was, and
-Settings comes to the front at the end to choose what each knob does.
+Steps 2 to 5 are the cure for jumpy knobs (below). The timers only run while the knob turns, and
+when one stops, the window says so in orange and asks you to keep turning. A short sound marks each
+new step, so you can watch the knob rather than the screen. Allow a minute or two per knob. While it
+waits for a knob, moving one it already found gets an orange reminder of which knob that is. Skip
+moves on to the next knob. A knob found in this run skips its turns and sweeps, and one that was
+already set up keeps its input, so after + you can skip straight to the new knob. When TheeJ asks
+for a knob with no input that you don't have, click Finish, and the knobs so far become your knobs.
+Once every value the sketch sends has a knob, it says so, and Finish is all that's left. Every knob
+holds still for the whole run, Cancel leaves everything as it was, and Settings comes to the front
+at the end to choose what each knob does. A knob that stops being found keeps its jobs, for when a
+later calibration finds it again.
 
-A new knob only shows up once the Arduino sketch sends one more value. A knob the sketch does not
-send is never found, so skip it.
+A knob only shows up once the Arduino sketch sends its value. A knob the sketch does not send is
+never found, so click Finish when TheeJ asks for it.
 
 ## What a knob can do
 
@@ -219,7 +229,7 @@ List available ports with `ls /dev/cu.*`.
 ## Tuning
 
 What each knob does and which input it is on live in Settings, not in source. A fresh install has
-no knobs: add yours in Settings and calibrate. They are stored as JSON in the `com.zolfer.theej`
+no knobs, and calibration finds them. They are stored as JSON in the `com.zolfer.theej`
 defaults domain: `defaults read com.zolfer.theej` shows them, and `defaults delete
 com.zolfer.theej` followed by a restart clears them. Knobs saved by 1.0.2 or earlier become the
 Default profile the first time a newer TheeJ starts, and the old `knobs` key is left as it was.

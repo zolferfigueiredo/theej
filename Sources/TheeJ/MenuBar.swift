@@ -12,20 +12,21 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     let profileName = NSTextField(string: "")
     let shortcutButton = NSButton(title: "", target: nil, action: nil)
     let removeShortcutButton = NSButton(
-        image: NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Remove shortcut")!,
+        image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Remove shortcut")!,
         target: nil, action: nil)
     var recorder: Any?  // the key monitor while a shortcut is being recorded
     let profileRows = NSStackView()
     let knobRows = NSStackView()
     let knobEdit = NSSegmentedControl()
-    let invertKnobs = NSButton(checkboxWithTitle: "Invert knobs", target: nil, action: nil)
-    let showName = NSButton(checkboxWithTitle: "Show profile name in menu bar", target: nil, action: nil)
-    let hideIcon = NSButton(checkboxWithTitle: "Hide menu bar icon", target: nil, action: nil)
+    let invertKnobs = NSSwitch()
+    let showName = NSSwitch()
+    let hideIcon = NSSwitch()
+    let showNameLabel = NSTextField(labelWithString: "Show profile name")
     let iconPicker = NSPopUpButton()
-    let iconLabel = NSTextField(labelWithString: "Menu bar icon")
-    let calibrateOnSave = NSButton(checkboxWithTitle: "Calibrate on save", target: nil, action: nil)
+    let iconLabel = NSTextField(labelWithString: "Icon")
     var calibrationWindow: NSWindow?
     var calibrator: Calibrator?
+    var calibrationOffered = false
     let stepTitle = NSTextField(labelWithString: "")
     let stepBody = NSTextField(wrappingLabelWithString: "")
     let stepProgress = NSTextField(labelWithString: "")
@@ -33,6 +34,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
 
     override init() {
         super.init()
+        prefs.register(defaults: ["updateEvery": 604800, "showDataInMenu": true])
         let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false
@@ -41,7 +43,6 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         item.button?.imagePosition = .imageLeading
         refresh()
 
-        prefs.register(defaults: ["updateEvery": 604800])
         let updates = Timer(timeInterval: 3600, target: self, selector: #selector(autoCheck), userInfo: nil, repeats: true)
         updates.tolerance = 600
         RunLoop.main.add(updates, forMode: .common)
@@ -61,6 +62,19 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         let state = shared.snapshot()
         let setup = shared.config().setup
         menu.removeAllItems()
+        func label(_ text: String) -> NSMenuItem {
+            let mi = NSMenuItem(title: text, action: nil, keyEquivalent: "")
+            mi.isEnabled = false
+            return mi
+        }
+        let showData = prefs.bool(forKey: "showDataInMenu")
+        let data = entry("Show data below", #selector(toggleData), "")
+        data.state = showData ? .on : .off
+        menu.addItem(data)
+        if showData, state.connected {
+            state.lines.forEach { menu.addItem(label($0)) }
+        }
+        menu.addItem(.separator())
         menu.addItem(.sectionHeader(title: "Profiles"))
         for (index, profile) in setup.profiles.enumerated() {
             let mi = entry(profile.name, #selector(pickProfile), profile.shortcut?.key ?? "")
@@ -72,21 +86,12 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         menu.addItem(.separator())
         menu.addItem(entry("Settings", #selector(openSettings), ","))
         let calibrateItem = entry("Calibrate", #selector(calibrate), "")
-        calibrateItem.isEnabled = state.connected && !setup.columns.isEmpty
+        calibrateItem.isEnabled = state.connected
         menu.addItem(calibrateItem)
-        func label(_ text: String) -> NSMenuItem {
-            let mi = NSMenuItem(title: text, action: nil, keyEquivalent: "")
-            mi.isEnabled = false
-            return mi
-        }
         menu.addItem(.separator())
         menu.addItem(label(state.connected ? "Connected: \(state.port ?? "?")" : "Not connected"))
         menu.addItem(entry("Reconnect", #selector(reconnect), ""))
         menu.addItem(.separator())
-        if state.connected, !state.lines.isEmpty {
-            state.lines.forEach { menu.addItem(label($0)) }
-            menu.addItem(.separator())
-        }
         // Registering from anywhere else (a build folder) would point the login item at a bundle that disappears.
         let login = entry("Launch at login", #selector(toggleLogin), "")
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
@@ -243,6 +248,10 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
 
     @objc func toggleDock() {
         toggleDockTile()
+    }
+
+    @objc func toggleData() {
+        prefs.set(!prefs.bool(forKey: "showDataInMenu"), forKey: "showDataInMenu")
     }
 
     @objc func pickUpdateEvery(_ sender: NSMenuItem) {

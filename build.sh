@@ -11,6 +11,9 @@ swift test
 UNIVERSAL=(-c release --arch arm64 --arch x86_64)
 swift build "${UNIVERSAL[@]}"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+# A new file rather than cp over the old one: macOS remembers the old binary's signature for that
+# file, and kills the new one the moment it runs (Killed: 9, when making the icons just below).
+rm -f "$APP/Contents/MacOS/TheeJ"
 cp "$(swift build "${UNIVERSAL[@]}" --show-bin-path)/TheeJ" "$APP/Contents/MacOS/"
 # iconutil packs every file in the folder, so sizes left over from older builds would ride along.
 rm -rf .build/AppIcon.iconset

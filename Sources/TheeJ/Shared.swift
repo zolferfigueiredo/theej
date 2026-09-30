@@ -39,7 +39,10 @@ final class Shared {
         port = newPort
         lock.unlock()
         guard changed else { return }
-        DispatchQueue.main.async { menuBar?.refresh() }
+        DispatchQueue.main.async {
+            menuBar?.refresh()
+            if value { menuBar?.calibrateIfNeeded() }
+        }
     }
 
     func setLines(_ value: [String]) {
