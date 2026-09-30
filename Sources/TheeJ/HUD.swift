@@ -107,8 +107,14 @@ func makeHUD() -> (window: NSWindow, view: HUDView) {
     return (window, view)
 }
 
-// Called from the serial thread, like showOSD.
 func showHUD(_ symbol: String, on displayID: CGDirectDisplayID, _ scalar: Float32) {
+    showHUD(on: displayID, scalar) {
+        NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?.withSymbolConfiguration(hudSymbolStyle)
+    }
+}
+
+// Called from the serial thread, like showOSD. The image is made on the main thread.
+func showHUD(on displayID: CGDirectDisplayID, _ scalar: Float32, image: @escaping () -> NSImage?) {
     DispatchQueue.main.async {
         guard let screen = NSScreen.screens.first(where: {
             $0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID == displayID
@@ -117,8 +123,7 @@ func showHUD(_ symbol: String, on displayID: CGDirectDisplayID, _ scalar: Float3
         hud = (window, view)
         hudShown += 1
         let shown = hudShown
-        view.symbol = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
-            .withSymbolConfiguration(hudSymbolStyle)
+        view.symbol = image()
         view.scalar = scalar
         view.needsDisplay = true
         window.setFrameOrigin(NSPoint(x: screen.frame.midX - 100, y: screen.frame.minY + 140))

@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import UniformTypeIdentifiers
 
 extension NSToolbarItem.Identifier {
     static let general = Self("general")
@@ -13,6 +14,7 @@ let settingsTabs: [(id: NSToolbarItem.Identifier, label: String, symbol: String)
 ]
 
 let formWidth: CGFloat = 420  // every group, heading and footnote
+private let otherApp = "other"  // what the Other… item of a knob's menu carries in place of a job
 
 // Flipped, so a page taller than the window starts at its top rather than its bottom.
 final class TopClipView: NSClipView {
@@ -343,8 +345,17 @@ extension MenuBar: NSToolbarDelegate {
         // Includes an assigned monitor that is unplugged right now, so Save cannot drop it.
         let monitors: [Target] = (0..<max(2, externalDisplays().count, assigned))
             .flatMap { [.brightness($0), .contrast($0)] }
+        // Apps that make sound: the ones playing now, the well-known ones that are installed, and any a
+        // profile already uses, so Save cannot drop one. Other… in each menu picks any app.
+        let appsAvailable = if #available(macOS 14.2, *) { true } else { false }
+        var apps: [Target] = []
+        if appsAvailable {
+            let known = knownAudioApps.filter { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
+            apps = draft.apps.union(known).union(appsPlayingSound()).subtracting([Bundle.main.bundleIdentifier ?? ""])
+                .map(Target.app).sorted { title($0).localizedStandardCompare(title($1)) == .orderedAscending }
+        }
         let choices = ([Target.master, .microphone, .builtinBrightness, .builtinContrast, .nightShift,
-                        .builtinKeyboard, .externalKeyboard] + monitors).sorted { rank($0) < rank($1) }
+                        .builtinKeyboard, .externalKeyboard] + monitors).sorted { rank($0) < rank($1) } + apps
 
         var rows = draft.columns.indices.map { index -> NSStackView in
             let popup = NSPopUpButton()
@@ -358,7 +369,12 @@ extension MenuBar: NSToolbarDelegate {
                 // Not addItem(withTitle:), which drops the Monitor 1 under Brightness for the one under Contrast.
                 let item = popup.menu?.addItem(withTitle: shortTitle(choice), action: nil, keyEquivalent: "")
                 item?.representedObject = choice
+                item?.image = menuIcon(choice)
                 if choice == draft.profile.target(index) { popup.select(item) }
+            }
+            if appsAvailable {
+                popup.menu?.addItem(apps.isEmpty ? .sectionHeader(title: "Apps") : .separator())
+                popup.menu?.addItem(withTitle: "Other…", action: nil, keyEquivalent: "").representedObject = otherApp
             }
             showJob(popup)
             popup.tag = index
@@ -419,19 +435,44 @@ extension MenuBar: NSToolbarDelegate {
     }
 
     @objc func pick(_ sender: NSPopUpButton) {
-        var jobs = draft.profile.targets
-        jobs += Array(repeating: nil, count: max(0, sender.tag + 1 - jobs.count))
-        jobs[sender.tag] = sender.selectedItem?.representedObject as? Target
-        draft.profile.targets = jobs
+        guard sender.selectedItem?.representedObject as? String != otherApp else {
+            chooseApp(forKnob: sender.tag)
+            return
+        }
+        setJob(sender.selectedItem?.representedObject as? Target, knob: sender.tag)
         showJob(sender)
+    }
+
+    func setJob(_ job: Target?, knob: Int) {
+        var jobs = draft.profile.targets
+        jobs += Array(repeating: nil, count: max(0, knob + 1 - jobs.count))
+        jobs[knob] = job
+        draft.profile.targets = jobs
+    }
+
+    // Other… in a knob's menu: any app on disk. The menus are rebuilt either way, to list the choice or to
+    // put this one back on the job it had.
+    func chooseApp(forKnob knob: Int) {
+        guard let window = settingsWindow else { return }
+        let panel = NSOpenPanel()
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.allowedContentTypes = [.application]
+        panel.prompt = "Choose"
+        panel.beginSheetModal(for: window) { [self] response in
+            let id = panel.url.flatMap { Bundle(url: $0)?.bundleIdentifier }
+            if response == .OK, let id, id != Bundle.main.bundleIdentifier { setJob(.app(id), knob: knob) }
+            reloadDraft()
+        }
     }
 
     // The closed popup shows the job's full title: the list's short one leans on its section header.
     func showJob(_ popup: NSPopUpButton) {
         let cell = popup.cell as? NSPopUpButtonCell
         cell?.usesItemFromMenu = false
-        cell?.menuItem = NSMenuItem(title: title(popup.selectedItem?.representedObject as? Target),
-                                    action: nil, keyEquivalent: "")
+        let job = popup.selectedItem?.representedObject as? Target
+        let shown = NSMenuItem(title: title(job), action: nil, keyEquivalent: "")
+        shown.image = menuIcon(job)
+        cell?.menuItem = shown
     }
 
     @objc func editKnobs(_ sender: NSSegmentedControl) {
@@ -522,6 +563,19 @@ extension MenuBar: NSToolbarDelegate {
         stopRecording()
     }
 
+    // An app's volume is set by capturing its audio, which macOS has to allow. It asks the first time,
+    // and the answer only reaches a TheeJ started after it.
+    func askForAudioCapture() {
+        guard !audioCaptureAllowed() else { return }
+        requestAudioCapture { [self] granted in
+            let text = "To set an app's volume, \(appName) plays that app's sound back at the knob's level, which macOS "
+                + "counts as recording it. Allow \(appName) under Screen & System Audio Recording in Privacy & Security, "
+                + "then quit \(appName) and open it again."
+            guard !granted, alert("\(appName) can't set app volumes yet", text, "Open System Settings", "Later") else { return }
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture")!)
+        }
+    }
+
     @objc func saveSettings() {
         for index in draft.profiles.indices where draft.profiles[index].name.trimmingCharacters(in: .whitespaces).isEmpty {
             draft.profiles[index].name = "Profile \(index + 1)"
@@ -530,6 +584,8 @@ extension MenuBar: NSToolbarDelegate {
         registerHotKeys(draft)
         refresh()
         reloadDraft()
+        keepAppVolumes(for: draft.apps)
+        if !draft.apps.isEmpty { askForAudioCapture() }
         if draft.columns.contains(nil) { startCalibration(onlyNew: true) }  // a knob added with + has no input yet
     }
 }

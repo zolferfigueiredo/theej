@@ -34,6 +34,7 @@ cat > "$APP/Contents/Info.plist" <<EOF
     <key>CFBundleVersion</key><string>$VERSION</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
+    <key>NSAudioCaptureUsageDescription</key><string>TheeJ sets the volume of the apps you give a knob. macOS counts that as recording their audio.</string>
 </dict>
 </plist>
 EOF
