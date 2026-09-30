@@ -1811,7 +1811,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             }
             prefs.set(Date.now, forKey: "lastUpdateCheck")
             guard isNewer(latest, than: appVersion) else {
-                if !quiet { alert("You're up to date", "\(appName) \(appVersion) is the latest version.") }
+                if !quiet { alert("You're up to date!", "\(appName) \(appVersion) is currently the newest version available.", "OK") }
                 return
             }
             guard alert("\(appName) \(latest) is available", "You have \(appVersion). Update now?", "Update Now", "Later") else { return }
