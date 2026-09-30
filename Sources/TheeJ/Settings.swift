@@ -14,6 +14,11 @@ let settingsTabs: [(id: NSToolbarItem.Identifier, label: String, symbol: String)
 
 let formWidth: CGFloat = 420  // every group, heading and footnote
 
+// Flipped, so a page taller than the window starts at its top rather than its bottom.
+final class TopClipView: NSClipView {
+    override var isFlipped: Bool { true }
+}
+
 extension MenuBar: NSToolbarDelegate {
     // A second click keeps unsaved edits in an open window.
     @objc func openSettings() {
@@ -24,9 +29,9 @@ extension MenuBar: NSToolbarDelegate {
 
     // Three tabs of System Settings groups. Built once; after that only the rows and values change.
     func showSettings() {
-        if let window = settingsWindow {
+        if settingsWindow != nil {
             reloadDraft()
-            fit(window)
+            fitSettings()
         } else {
             setUpEdit(profileEdit, "Add a profile", "Remove this profile", #selector(editProfiles))
             setUpEdit(knobEdit, "Add a knob", "Remove the last knob", #selector(editKnobs))
@@ -86,7 +91,13 @@ extension MenuBar: NSToolbarDelegate {
             for view in [stepGroup, menuBarGroup] { app.setCustomSpacing(24, after: view) }
             tabs = [.general: general, .app: app, .about: aboutPage()]
             reloadDraft()
-            let window = makeWindow("", general)
+            // Each page scrolls when the screen is too short for it.
+            let scroll = NSScrollView()
+            scroll.contentView = TopClipView()
+            scroll.hasVerticalScroller = true
+            scroll.autohidesScrollers = true
+            scroll.drawsBackground = false
+            let window = makeWindow("", scroll)
             let toolbar = NSToolbar(identifier: "settings")
             toolbar.delegate = self
             window.toolbar = toolbar
@@ -122,13 +133,25 @@ extension MenuBar: NSToolbarDelegate {
 
     @objc func pickTab(_ sender: NSToolbarItem) { showTab(sender.itemIdentifier) }
 
-    // The window takes each page's own height, growing or shrinking from its top edge.
     func showTab(_ id: NSToolbarItem.Identifier) {
         guard let window = settingsWindow, let page = tabs[id] else { return }
         window.toolbar?.selectedItemIdentifier = id
         window.title = settingsTabs.first { $0.id == id }?.label ?? ""
-        window.contentView = page
-        fit(window, animate: window.isVisible)
+        (window.contentView as? NSScrollView)?.documentView = page
+        fitSettings(animate: window.isVisible)
+    }
+
+    // The window takes the page's own height, or the screen's where that is less and the page scrolls.
+    // It grows and shrinks from its top edge, which it moves down only as far as needed to stay on screen.
+    func fitSettings(animate: Bool = false) {
+        guard let window = settingsWindow, let page = (window.contentView as? NSScrollView)?.documentView,
+              let screen = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
+        page.setFrameSize(page.fittingSize)
+        var frame = window.frameRect(forContentRect: NSRect(origin: .zero, size: page.frame.size))
+        frame.size.height = min(frame.height, screen.height)
+        frame.origin.x = window.frame.minX
+        frame.origin.y = max(min(window.frame.maxY, screen.maxY) - frame.height, screen.minY)
+        window.setFrame(frame, display: true, animate: animate)
     }
 
     // Headings sit 8 above their group. Groups sit further apart, as the caller sets.

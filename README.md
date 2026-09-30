@@ -87,12 +87,13 @@ which physical slider is which index.
 ## Settings and calibration
 
 **Settings** has three tabs, laid out in groups as System Settings is: **General** for the profile
-and its knobs, **App settings** for shortcuts and the menu bar, and **About**. General lists every
-knob by the letter on the box with a menu for what it does: nothing, or one of the jobs under [What
-a knob can do](#what-a-knob-can-do), grouped as volumes, brightness, contrast, Night Shift and
-keyboard backlights. Monitors count left to right by their position in System Settings. The + and -
-buttons beside Knobs add or remove the last knob, down to none at all. A knob that has not been
-calibrated yet shows "Needs calibration" in red under its name, and does nothing until it is.
+and its knobs, **App settings** for shortcuts and the menu bar, and **About**. A tab too tall for
+the screen scrolls. General lists every knob by the letter on the box with a menu for what it does:
+nothing, or one of the jobs under [What a knob can do](#what-a-knob-can-do), grouped as volumes,
+brightness, contrast, Night Shift and keyboard backlights. Monitors count left to right by their
+position in System Settings. The + and - buttons beside Knobs add or remove the last knob, down to
+none at all. A knob that has not been calibrated yet shows "Needs calibration" in red under its
+name, and does nothing until it is.
 
 Those jobs belong to a **profile**: a name, a job for every knob, and an optional keyboard shortcut.
 The menu at the top picks the profile you are editing, + adds one with every knob doing nothing,
@@ -131,14 +132,14 @@ others as they are. For each knob it asks for:
 Steps 2 to 5 are the cure for jumpy knobs (below). The timers only run while the knob turns, and
 when one stops, the window says so in orange and asks you to keep turning. A short sound marks each
 new step, so you can watch the knob rather than the screen. Allow a minute or two per knob. While it
-waits for a knob, moving one it already found gets an orange reminder of which knob that is. Skip
-moves on to the next knob. A knob found in this run skips its turns and sweeps, and one that was
-already set up keeps its input, so after + you can skip straight to the new knob. When TheeJ asks
-for a knob with no input that you don't have, click Finish, and the knobs so far become your knobs.
-Once every value the sketch sends has a knob, it says so, and Finish is all that's left. Every knob
-holds still for the whole run, Cancel leaves everything as it was, and Settings comes to the front
-at the end to choose what each knob does. A knob that stops being found keeps its jobs, for when a
-later calibration finds it again.
+waits for a knob, moving one it already found gets an orange reminder of which knob that is. Only a
+knob that was calibrated before can be skipped: Skip keeps its input and moves on. A knob that needs
+calibrating has Finish instead, even once it is found, and Finish ends the run. The knobs it got all
+the way through keep their new inputs and the others stay as they were, so a knob left part way
+through still needs calibration. When TheeJ asks for a knob you don't have, click Finish. Once every
+value the sketch sends has a knob, it says so, and Finish is all that's left. Every knob holds still
+for the whole run, Cancel leaves everything as it was, and Settings comes to the front at the end to
+choose what each knob does. Calibration never removes a knob; - beside Knobs in Settings does.
 
 A knob only shows up once the Arduino sketch sends its value. A knob the sketch does not send is
 never found, so click Finish when TheeJ asks for it.
