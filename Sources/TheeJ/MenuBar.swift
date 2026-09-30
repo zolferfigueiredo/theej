@@ -12,7 +12,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     let profileName = NSTextField(string: "")
     let shortcutButton = NSButton(title: "", target: nil, action: nil)
     let removeShortcutButton = NSButton(
-        image: NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Remove shortcut")!,
+        image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Remove shortcut")!,
         target: nil, action: nil)
     var recorder: Any?  // the key monitor while a shortcut is being recorded
     let profileRows = NSStackView()

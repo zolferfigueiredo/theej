@@ -24,16 +24,18 @@ extension MenuBar {
             shortcutButton.target = self
             shortcutButton.action = #selector(recordShortcut)
             shortcutButton.toolTip = "Use ⌘ or ⌃ with a key. Delete clears it, Escape cancels."
-            shortcutButton.widthAnchor.constraint(equalToConstant: 180).isActive = true
+            // With the ✕ after it, as wide as the name field: 156 + 8 + 16 = 180.
+            shortcutButton.widthAnchor.constraint(equalToConstant: 156).isActive = true
+            removeShortcutButton.widthAnchor.constraint(equalToConstant: 16).isActive = true
             removeShortcutButton.isBordered = false
-            removeShortcutButton.contentTintColor = .secondaryLabelColor
             removeShortcutButton.toolTip = "Remove shortcut"
             removeShortcutButton.target = self
             removeShortcutButton.action = #selector(removeShortcut)
             profileName.bezelStyle = .roundedBezel
             let profileGroup = group(profileRows)
-            setRows(profileRows, [row([NSTextField(labelWithString: "Name")], profileName),
-                                  row([NSTextField(labelWithString: "Shortcut")], removeShortcutButton, shortcutButton)])
+            let shortcutRow = row([NSTextField(labelWithString: "Shortcut")], shortcutButton, removeShortcutButton)
+            shortcutRow.detachesHiddenViews = false  // the ✕ keeps its place when hidden, so the field stays put
+            setRows(profileRows, [row([NSTextField(labelWithString: "Name")], profileName), shortcutRow])
             let knobGroup = group(knobRows)
 
             for control: NSControl in [invertKnobs, showName, hideIcon, iconPicker] {
@@ -138,23 +140,6 @@ extension MenuBar {
         return stack
     }
 
-    // The knob's letter, like the ones on the box: lit in the app icon's LED orange once the knob is
-    // calibrated, grey until then.
-    func knobChip(_ index: Int, lit: Bool) -> NSImageView {
-        let image = NSImage(size: NSSize(width: 20, height: 20), flipped: false) { box in
-            (lit ? NSColor(srgbRed: 1, green: 0x5a / 255, blue: 0x1f / 255, alpha: 1) : .systemGray).setFill()
-            NSBezierPath(roundedRect: box, xRadius: 5, yRadius: 5).fill()
-            let font = NSFont.systemFont(ofSize: 12, weight: .bold)
-            let text = NSAttributedString(string: letter(index), attributes: [.font: font, .foregroundColor: NSColor.white])
-            // Centred on the capitals, not the line box, which counts the descender too.
-            text.draw(at: NSPoint(x: box.midX - text.size().width / 2, y: box.midY - font.capHeight / 2 + font.descender))
-            return true
-        }
-        let chip = NSImageView(image: image)
-        chip.setAccessibilityElement(false)  // the row's label and popup already say which knob
-        return chip
-    }
-
     func group(_ rows: NSStackView) -> NSBox {
         rows.orientation = .vertical
         rows.spacing = 0
@@ -185,15 +170,14 @@ extension MenuBar {
         return row
     }
 
-    // inset is where each separator starts: the rows' text, after any chip.
-    func setRows(_ stack: NSStackView, _ rows: [NSStackView], inset: CGFloat = 12) {
+    func setRows(_ stack: NSStackView, _ rows: [NSStackView]) {
         for view in stack.arrangedSubviews { view.removeFromSuperview() }
         for (index, row) in rows.enumerated() {
             if index > 0 {
                 let line = NSBox()
                 line.boxType = .separator
                 stack.addArrangedSubview(line)
-                line.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -inset).isActive = true
+                line.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -12).isActive = true
             }
             stack.addArrangedSubview(row)
             row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -243,10 +227,8 @@ extension MenuBar {
             popup.target = self
             popup.action = #selector(pick)
             popup.setAccessibilityLabel("Knob \(letter(index))")
-            let calibrated = draft.columns[index] != nil
-            return row([knobChip(index, lit: calibrated),
-                        label("Knob \(letter(index))", note: calibrated ? nil : "Needs calibration", noteColor: .systemRed)],
-                       popup)
+            let note = draft.columns[index] == nil ? "Needs calibration" : nil
+            return row([label("Knob \(letter(index))", note: note, noteColor: .systemRed)], popup)
         }
         if rows.isEmpty {
             let empty = NSTextField(labelWithString: "No knobs. Calibrate finds them, or press + to add one.")
@@ -256,7 +238,7 @@ extension MenuBar {
             row.addView(empty, in: .center)
             rows = [row]
         }
-        setRows(knobRows, rows, inset: 40)  // 12 to the chip, 20 of chip, 8 to the label
+        setRows(knobRows, rows)
         knobEdit.setEnabled(draft.columns.count < 26, forSegment: 0)  // letters end at Z
         knobEdit.setEnabled(!draft.columns.isEmpty, forSegment: 1)
     }

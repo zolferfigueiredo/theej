@@ -89,9 +89,8 @@ which physical slider is which index.
 box with a menu for what it does: nothing, or one of the jobs under
 [What a knob can do](#what-a-knob-can-do), grouped as volumes, brightness, contrast, Night Shift and
 keyboard backlights. Monitors count left to right by their position in System Settings. The + and -
-buttons beside Knobs add or remove the last knob, down to none at all. A calibrated knob's letter
-is lit in the orange of the app icon's LED. One that has not been calibrated yet has a grey letter
-and "Needs calibration" in red, and does nothing until it is.
+buttons beside Knobs add or remove the last knob, down to none at all. A knob that has not been
+calibrated yet shows "Needs calibration" in red under its name, and does nothing until it is.
 
 Those jobs belong to a **profile**: a name, a job for every knob, and an optional keyboard shortcut.
 The menu at the top picks the profile you are editing, + adds one with every knob doing nothing,
