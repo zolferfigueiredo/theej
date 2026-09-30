@@ -33,6 +33,7 @@ extension Strings {
         "choose": "Elegir",
         "choose_language": "Elige tu idioma",
         "click_to_update": "Tienes la {version}. Haz clic para actualizar.",
+        "close": "Cerrar",
         "connected": "Conectado: {port}",
         "continue": "Continuar",
         "daily": "Cada día",
