@@ -21,44 +21,54 @@ struct Knob: Decodable, Equatable {
     var target: Target?
 }
 
-// Indexed like Setup.columns. A knob past the end of targets does nothing.
+// Indexed like Setup.columns: each knob's jobs, which all take its position as it turns. A knob past
+// the end has none.
 struct Profile: Codable, Equatable {
     var name: String
-    var targets: [Target?] = []
+    var jobs: [[Target]] = []
     var shortcut: Shortcut?
 
-    func target(_ knob: Int) -> Target? { knob < targets.count ? targets[knob] : nil }
+    func jobs(of knob: Int) -> [Target] { knob < jobs.count ? jobs[knob] : [] }
 
-    init(name: String, targets: [Target?] = [], shortcut: Shortcut? = nil) {
-        (self.name, self.targets, self.shortcut) = (name, targets, shortcut)
+    init(name: String, jobs: [[Target]] = [], shortcut: Shortcut? = nil) {
+        (self.name, self.jobs, self.shortcut) = (name, jobs, shortcut)
     }
 
-    // App jobs are saved apart, under "apps", with nothing in their place in "targets". A TheeJ from
-    // before 1.5.0 can't read a job it doesn't know: it would fail on the whole profile list, fall back to
-    // none, and overwrite them all at its next save. This way it reads every profile, less the app jobs.
-    enum CodingKeys: String, CodingKey { case name, targets, shortcut, apps }
+    // Saved so that every older TheeJ still reads the profiles, as one job per knob: the knob's first.
+    // "targets" holds that job, or nothing when it is an app, since a version before 1.5.0 fails on the
+    // whole profile list at a job it doesn't know, falls back to none, and overwrites them all at its next
+    // save. "apps" holds it when it is an app, which is where 1.5.0 looks. "jobs" holds every job, and is
+    // only written once a knob has more than one.
+    enum CodingKeys: String, CodingKey { case name, targets, shortcut, apps, jobs }
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         name = try values.decode(String.self, forKey: .name)
-        targets = try values.decode([Target?].self, forKey: .targets)
         shortcut = try values.decodeIfPresent(Shortcut.self, forKey: .shortcut)
-        let apps = try values.decodeIfPresent([String?].self, forKey: .apps) ?? []
-        for (knob, app) in apps.enumerated() where knob < targets.count {
-            if let app { targets[knob] = .app(app) }
+        if let every = try values.decodeIfPresent([[Target]].self, forKey: .jobs) {
+            jobs = every
+            return
         }
+        var first = try values.decode([Target?].self, forKey: .targets)
+        let apps = try values.decodeIfPresent([String?].self, forKey: .apps) ?? []
+        for (knob, app) in apps.enumerated() where knob < first.count {
+            if let app { first[knob] = .app(app) }
+        }
+        jobs = first.map { $0.map { [$0] } ?? [] }
     }
 
     func encode(to encoder: Encoder) throws {
-        let apps = targets.map { target -> String? in
-            if case .app(let id)? = target { return id }
+        let first = jobs.map(\.first)
+        let apps = first.map { job -> String? in
+            if case .app(let id)? = job { return id }
             return nil
         }
         var values = encoder.container(keyedBy: CodingKeys.self)
         try values.encode(name, forKey: .name)
-        try values.encode(zip(targets, apps).map { $1 == nil ? $0 : nil }, forKey: .targets)
+        try values.encode(zip(first, apps).map { $1 == nil ? $0 : nil }, forKey: .targets)
         try values.encodeIfPresent(shortcut, forKey: .shortcut)
         if apps.contains(where: { $0 != nil }) { try values.encode(apps, forKey: .apps) }
+        if jobs.contains(where: { $0.count > 1 }) { try values.encode(jobs, forKey: .jobs) }
     }
 }
 
@@ -139,12 +149,12 @@ struct Setup: Equatable {
         set { profiles[active] = newValue }
     }
 
-    var mapping: [Int: Target] { targets(columns, profile.targets) }
+    var mapping: [Int: [Target]] { targets(columns, profile.jobs) }
 
     // Every app a knob sets the volume of, in any profile.
     var apps: Set<String> {
-        Set(profiles.flatMap(\.targets).compactMap { target in
-            if case .app(let id)? = target { return id }
+        Set(profiles.flatMap(\.jobs).joined().compactMap { job in
+            if case .app(let id) = job { return id }
             return nil
         })
     }
@@ -163,7 +173,7 @@ struct Setup: Equatable {
             setup.columns = decode("columns") ?? []
         } else if let knobs: [Knob] = decode("knobs") {
             setup.columns = knobs.map(\.column)
-            setup.profile.targets = knobs.map(\.target)
+            setup.profile.jobs = knobs.map { $0.target.map { [$0] } ?? [] }
         }
         setup.active = min(max(prefs.integer(forKey: "profile"), 0), setup.profiles.count - 1)
         setup.next = decode("nextProfile")
@@ -197,10 +207,10 @@ struct Setup: Equatable {
 }
 
 // A loop, not Dictionary(uniqueKeysWithValues:), which traps on a duplicate column.
-func targets(_ columns: [Int?], _ jobs: [Target?]) -> [Int: Target] {
-    var result: [Int: Target] = [:]
-    for (column, target) in zip(columns, jobs) {
-        if let column, let target { result[column] = target }
+func targets(_ columns: [Int?], _ jobs: [[Target]]) -> [Int: [Target]] {
+    var result: [Int: [Target]] = [:]
+    for (column, jobs) in zip(columns, jobs) {
+        if let column, !jobs.isEmpty { result[column] = jobs }
     }
     return result
 }
@@ -225,8 +235,13 @@ func rank(_ target: Target) -> Int {
 
 // The status lines follow the knobs, A first, which is not the order of the serial columns driving
 // them. lastIndex, since the last knob on a column is the one targets() keeps.
-func ordered(_ mapping: [Int: Target], by columns: [Int?]) -> [(key: Int, value: Target)] {
+func ordered(_ mapping: [Int: [Target]], by columns: [Int?]) -> [(key: Int, value: [Target])] {
     mapping.sorted { (columns.lastIndex(of: $0.key) ?? 0) < (columns.lastIndex(of: $1.key) ?? 0) }
+}
+
+// A knob's jobs on one line, for Settings and the startup log.
+func title(_ jobs: [Target]) -> String {
+    jobs.isEmpty ? title(nil) : jobs.map { title($0) }.joined(separator: ", ")
 }
 
 func title(_ target: Target?) -> String {

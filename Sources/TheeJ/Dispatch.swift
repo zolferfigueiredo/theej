@@ -51,7 +51,7 @@ func handle(_ values: [Int]) {
         let scalar = unsnapped < deadzone ? 0 : unsnapped > 1 - deadzone ? 1 : unsnapped
         // Tracked, not applied: a knob that gains a job (on Save, or as a calibration ends with every
         // knob parked at an end) waits to be moved instead of jumping there.
-        guard !config.calibrating, let target = mapping[index] else {
+        guard !config.calibrating, let jobs = mapping[index] else {
             lastApplied[index] = scalar
             continue
         }
@@ -60,51 +60,62 @@ func handle(_ values: [Int]) {
         guard scalar != previous, extreme || abs(scalar - previous) >= deadzone else { continue }
         lastApplied[index] = scalar
 
+        // Every job of the knob takes its position. A display shows one HUD, the first job's that wants
+        // it there: two would sit on top of each other.
+        var shown: Set<CGDirectDisplayID> = []
+        func once(on display: CGDirectDisplayID, _ show: () -> Void) {
+            if shown.insert(display).inserted { show() }
+        }
         // The volumes follow the knob. Everything else waits for Speed.settle, and the HUD tracks
         // the knob live, so the HUD is the only feedback during a turn. Do not debounce it.
-        switch target {
-        case .master:
-            setVolume(scalar)
-            showOSD(osdVolumeImage, on: CGMainDisplayID(), scalar)
-        case .microphone:
-            setVolume(scalar, input: true)
-            showHUD(hudMicrophone, on: CGMainDisplayID(), scalar)
-        case .builtinBrightness:
-            if let id = builtinDisplayID() {
-                // Main, not ddcQueue, so a stuck m1ddc can never hold the built-in up.
-                debounce(target, on: .main, after: settle) { setBuiltinBrightness(id, scalar) }
-                showOSD(osdBrightnessImage, on: id, scalar)
-            }
-        case .builtinContrast:
-            if let id = builtinDisplayID() {
-                debounce(target, on: .main, after: settle) { _ = setDisplayContrast?(Float(scalar)) }
-                showHUD(hudContrast, on: id, scalar)
-            }
-        case .nightShift:
-            debounce(target, on: .main, after: settle) { setNightShift(scalar) }
-            showHUD(hudNightShift, on: CGMainDisplayID(), scalar)
-        case .brightness(let ordinal), .contrast(let ordinal):
-            let externals = externalDisplays()
-            if ordinal < externals.count {
-                let display = externals[ordinal]
-                let brightness = target == .brightness(ordinal)
-                debounce(target, on: ddcQueue, after: settle) {
-                    if !writeDDC(display.uuid, brightness ? "luminance" : "contrast", percent(scalar)) {
-                        fputs("\n\(title(target)) write failed. Is m1ddc installed?\n", stderr)
+        for target in jobs {
+            switch target {
+            case .master:
+                setVolume(scalar)
+                once(on: CGMainDisplayID()) { showOSD(osdVolumeImage, on: CGMainDisplayID(), scalar) }
+            case .microphone:
+                setVolume(scalar, input: true)
+                once(on: CGMainDisplayID()) { showHUD(hudMicrophone, on: CGMainDisplayID(), scalar) }
+            case .builtinBrightness:
+                if let id = builtinDisplayID() {
+                    // Main, not ddcQueue, so a stuck m1ddc can never hold the built-in up.
+                    debounce(target, on: .main, after: settle) { setBuiltinBrightness(id, scalar) }
+                    once(on: id) { showOSD(osdBrightnessImage, on: id, scalar) }
+                }
+            case .builtinContrast:
+                if let id = builtinDisplayID() {
+                    debounce(target, on: .main, after: settle) { _ = setDisplayContrast?(Float(scalar)) }
+                    once(on: id) { showHUD(hudContrast, on: id, scalar) }
+                }
+            case .nightShift:
+                debounce(target, on: .main, after: settle) { setNightShift(scalar) }
+                once(on: CGMainDisplayID()) { showHUD(hudNightShift, on: CGMainDisplayID(), scalar) }
+            case .brightness(let ordinal), .contrast(let ordinal):
+                let externals = externalDisplays()
+                if ordinal < externals.count {
+                    let display = externals[ordinal]
+                    let brightness = target == .brightness(ordinal)
+                    debounce(target, on: ddcQueue, after: settle) {
+                        if !writeDDC(display.uuid, brightness ? "luminance" : "contrast", percent(scalar)) {
+                            fputs("\n\(title(target)) write failed. Is m1ddc installed?\n", stderr)
+                        }
+                    }
+                    once(on: display.id) {
+                        if brightness { showOSD(osdBrightnessImage, on: display.id, scalar) }
+                        else { showHUD(hudContrast, on: display.id, scalar) }
                     }
                 }
-                if brightness { showOSD(osdBrightnessImage, on: display.id, scalar) }
-                else { showHUD(hudContrast, on: display.id, scalar) }
+            case .builtinKeyboard:
+                debounce(target, on: .main, after: settle) { setBuiltinKeyboard(scalar) }
+                let display = builtinDisplayID() ?? CGMainDisplayID()
+                once(on: display) { showOSD(osdKeyboardImage, on: display, scalar) }
+            case .externalKeyboard:
+                debounce(target, on: .main, after: settle) { setExternalKeyboard(scalar) }
+                once(on: CGMainDisplayID()) { showOSD(osdKeyboardImage, on: CGMainDisplayID(), scalar) }
+            case .app(let id):
+                setAppVolume(id, scalar)
+                once(on: CGMainDisplayID()) { showHUD(on: CGMainDisplayID(), scalar) { appIcon(id) } }
             }
-        case .builtinKeyboard:
-            debounce(target, on: .main, after: settle) { setBuiltinKeyboard(scalar) }
-            showOSD(osdKeyboardImage, on: builtinDisplayID() ?? CGMainDisplayID(), scalar)
-        case .externalKeyboard:
-            debounce(target, on: .main, after: settle) { setExternalKeyboard(scalar) }
-            showOSD(osdKeyboardImage, on: CGMainDisplayID(), scalar)
-        case .app(let id):
-            setAppVolume(id, scalar)
-            showHUD(on: CGMainDisplayID(), scalar) { appIcon(id) }
         }
     }
 
@@ -114,8 +125,8 @@ func handle(_ values: [Int]) {
         return
     }
 
-    let lines = ordered(mapping, by: config.setup.columns).map {
-        (text: "\(title($0.value)) \(percent(lastApplied[$0.key] ?? 0))%", target: $0.value)
+    let lines = ordered(mapping, by: config.setup.columns).flatMap { knob in
+        knob.value.map { (text: "\(title($0)) \(percent(lastApplied[knob.key] ?? 0))%", target: $0) }
     }
     shared.setLines(lines)  // every line, so a job changed in Settings shows before the knob moves
 
