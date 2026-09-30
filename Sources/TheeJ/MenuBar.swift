@@ -18,11 +18,12 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     let profileRows = NSStackView()
     let knobRows = NSStackView()
     let knobEdit = NSSegmentedControl()
-    let invertKnobs = NSButton(checkboxWithTitle: "Invert knobs", target: nil, action: nil)
-    let showName = NSButton(checkboxWithTitle: "Show profile name in menu bar", target: nil, action: nil)
-    let hideIcon = NSButton(checkboxWithTitle: "Hide menu bar icon", target: nil, action: nil)
+    let invertKnobs = NSSwitch()
+    let showName = NSSwitch()
+    let hideIcon = NSSwitch()
+    let showNameLabel = NSTextField(labelWithString: "Show profile name")
     let iconPicker = NSPopUpButton()
-    let iconLabel = NSTextField(labelWithString: "Menu bar icon")
+    let iconLabel = NSTextField(labelWithString: "Icon")
     var calibrationWindow: NSWindow?
     var calibrator: Calibrator?
     var calibrationOffered = false

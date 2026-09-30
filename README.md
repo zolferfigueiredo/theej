@@ -85,12 +85,13 @@ which physical slider is which index.
 
 ## Settings and calibration
 
-**Settings** lists every knob by the letter on the box with a menu for what it does: nothing, or
-one of the jobs under [What a knob can do](#what-a-knob-can-do), grouped as volumes, brightness,
-contrast, Night Shift and keyboard backlights. Monitors count left to right by their position in
-System Settings. The + and - buttons beside Knobs add or remove the last knob, down to none at all.
-A knob that has not been calibrated yet shows "Needs calibration" in red and does nothing until it
-is.
+**Settings** is laid out in groups, as System Settings is. It lists every knob by the letter on the
+box with a menu for what it does: nothing, or one of the jobs under
+[What a knob can do](#what-a-knob-can-do), grouped as volumes, brightness, contrast, Night Shift and
+keyboard backlights. Monitors count left to right by their position in System Settings. The + and -
+buttons beside Knobs add or remove the last knob, down to none at all. A calibrated knob's letter
+is lit in the orange of the app icon's LED. One that has not been calibrated yet has a grey letter
+and "Needs calibration" in red, and does nothing until it is.
 
 Those jobs belong to a **profile**: a name, a job for every knob, and an optional keyboard shortcut.
 The menu at the top picks the profile you are editing, + adds one with every knob doing nothing,
@@ -100,9 +101,9 @@ any app. To set one, click Record Shortcut and press it; it needs ⌘ or ⌃, an
 Input Monitoring permission.
 
 **Invert knobs** flips every knob's direction, for a board whose pots are wired the other way round.
-**Hide menu bar icon** removes the icon, name and all, and greys out the name option and the icon
-picker while it is on. **Show profile name in menu bar** puts the active profile's name beside the
-icon. **Menu bar icon** picks Mixer, Dial or App icon.
+Under **Menu bar**, **Hide menu bar icon** removes the icon, name and all, and greys out the other
+two while it is on. **Show profile name** puts the active profile's name beside the icon, and
+**Icon** picks Mixer, Dial or App icon.
 
 Save applies at once, makes the profile shown the active one, and leaves the window open. A knob
 given a new job, by Save or by switching profiles, takes it over the next time you move it, so
