@@ -3,7 +3,12 @@ import ServiceManagement
 
 final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate, NSTextFieldDelegate {
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    var checking = false  // an update check or install is running
+    // An update check or install is running. About's Check for updates… goes off with it, and stays off
+    // while an installed update waits for Reopen.
+    var checking = false {
+        didSet { checkButton?.isEnabled = !checking && UpdateProgress.underway == nil }
+    }
+    weak var checkButton: NSButton?
     var settingsWindow: NSWindow?
     var tabs: [NSToolbarItem.Identifier: NSView] = [:]  // Settings' pages, kept while another is shown
     var draft = Setup()
@@ -139,9 +144,11 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         menu.addItem(.separator())
         menu.addItem(entry(tr("about"), #selector(about), "", symbol: "info.circle"))
         menu.addItem(.separator())
-        let check = entry(tr("check"), #selector(checkNow), "", symbol: "arrow.down.circle")
-        check.isEnabled = !checking
-        if let version = availableUpdate() {
+        // While an update installs, and until Reopen, its step stands in, in plain text that greys out:
+        // the bold "Update available!" still looked clickable.
+        let check = entry(UpdateProgress.underway ?? tr("check"), #selector(checkNow), "", symbol: "arrow.down.circle")
+        check.isEnabled = !checking && UpdateProgress.underway == nil
+        if let version = availableUpdate(), UpdateProgress.underway == nil {
             check.attributedTitle = updateAvailableTitle(version)
             check.image = updateAvailableIcon()
         }

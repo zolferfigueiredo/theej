@@ -259,6 +259,7 @@ API key, as the top of `release.sh` shows. BiHan Brightness uses the same profil
 
 ```bash
 ./run.sh /dev/cu.usbserial-1130     # force a specific port
+./run.sh -testNotifications YES     # show the update notification, offering the next version
 ./install.sh /dev/cu.usbserial-1130 # bake the port into the LaunchAgent
 swift test                          # run the tests
 ```

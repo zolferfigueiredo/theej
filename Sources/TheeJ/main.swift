@@ -69,6 +69,7 @@ menuBar = MenuBar()
 app.delegate = menuBar
 UNUserNotificationCenter.current().delegate = menuBar
 DispatchQueue.main.async { menuBar?.showUpdateComplete() }  // once the app is running
+if prefs.bool(forKey: "testNotifications") { Task { _ = await showUpdateNotification(nextPatch(appVersion)) } }
 DistributedNotificationCenter.default().addObserver(forName: settingsRequest, object: nil, queue: .main) { _ in
     menuBar?.openSettings()
 }
