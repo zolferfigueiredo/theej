@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 
 // There is no public API for the built-in panel on Apple Silicon. This is the same private symbol
@@ -30,3 +31,4 @@ let setDisplayContrast: SetContrastFn? = {
           let sym = dlsym(handle, "CGSSetDisplayContrast") else { return nil }
     return unsafeBitCast(sym, to: SetContrastFn.self)
 }()
+#endif

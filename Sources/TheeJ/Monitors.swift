@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 
 // Absolute path because launchd does not put homebrew on PATH. The PATH lookup is only a
@@ -80,3 +81,4 @@ func writeDDC(_ uuid: String, _ feature: String, _ value: Int) -> Bool {
     task.waitUntilExit()
     return task.terminationStatus == 0
 }
+#endif

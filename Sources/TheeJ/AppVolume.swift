@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import CoreAudio
 
@@ -335,3 +336,4 @@ func menuIcon(_ target: Target?) -> NSImage? {
     icon.size = NSSize(width: 16, height: 16)
     return icon
 }
+#endif

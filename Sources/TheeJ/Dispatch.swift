@@ -1,4 +1,7 @@
+import Foundation
+#if canImport(AppKit)
 import AppKit
+#endif
 
 let maxADC: Float32 = 1023.0
 
@@ -33,6 +36,7 @@ var lastInvert = false  // serial thread only, like lastApplied
 var lastPrint = Date.distantPast
 let interactive = isatty(1) != 0
 
+#if canImport(AppKit)
 func handle(_ values: [Int]) {
     let config = shared.config()
     let mapping = config.setup.mapping
@@ -207,3 +211,4 @@ func serialLoop() {
         Thread.sleep(forTimeInterval: 1)
     }
 }
+#endif

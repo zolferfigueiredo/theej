@@ -266,6 +266,11 @@ swift test                          # run the tests
 
 List available ports with `ls /dev/cu.*`.
 
+CI runs the tests on Linux for every pull request: everything that needs AppKit is behind
+`#if canImport(AppKit)`, so Linux builds and tests the rest (the knob model and its saving,
+calibration, the serial lines, translations and versions). It also runs shellcheck on the scripts, and fails
+a pull request that changes the app without raising `appVersion` in `Sources/TheeJ/Version.swift`.
+
 ## Tuning
 
 What each knob does and which input it is on live in Settings, not in source. A fresh install has

@@ -5,9 +5,10 @@ import Testing
 // A burst of movement lands as one write carrying the last value.
 @Test func debounceKeepsTheLastValue() {
     var landed: [Int] = []
-    for v in 1...3 { debounce(.brightness(0), on: ddcQueue, after: 0.05) { landed.append(v) } }
+    let queue = DispatchQueue(label: "debounce")
+    for v in 1...3 { debounce(.brightness(0), on: queue, after: 0.05) { landed.append(v) } }
     Thread.sleep(forTimeInterval: 0.1)
-    ddcQueue.sync {}
+    queue.sync {}
     #expect(landed == [3])
 }
 

@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 
 // No headers. Each protocol names the selectors, class_addProtocol lets a plain `as?` reach the
@@ -39,3 +40,4 @@ func setBuiltinKeyboard(_ scalar: Float32) {
     else { return }
     _ = keyboardLight?.setBrightness?(Float(scalar), fadeSpeed: 0, commit: true, forKeyboard: id)
 }
+#endif

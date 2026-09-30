@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 
 extension MenuBar {
@@ -138,3 +139,4 @@ extension MenuBar {
         shared.setCalibrating(false)
     }
 }
+#endif

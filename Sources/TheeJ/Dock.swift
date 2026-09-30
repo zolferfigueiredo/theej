@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import Foundation
 
 // Keep in Dock pins this copy of the app like the Dock's own menu does. There is no API for it, so this
@@ -26,3 +27,4 @@ func toggleDockTile() {
     dockPrefs.synchronize()  // written through before the Dock restarts and reads it
     _ = try? Process.run(URL(fileURLWithPath: "/usr/bin/killall"), arguments: ["Dock"])
 }
+#endif

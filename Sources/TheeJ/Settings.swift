@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import Carbon.HIToolbox
 import UniformTypeIdentifiers
@@ -725,3 +726,4 @@ extension MenuBar: NSToolbarDelegate {
         if draft.columns.contains(nil) { startCalibration(onlyNew: true) }  // a knob added with + has no input yet
     }
 }
+#endif

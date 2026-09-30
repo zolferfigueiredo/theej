@@ -1,4 +1,7 @@
+import Foundation
+#if canImport(AppKit)
 import AppKit
+#endif
 
 // The menu bar icon's looks, picked in Settings. The raw values are saved, so renaming one resets it.
 enum IconStyle: String, CaseIterable {
@@ -7,6 +10,7 @@ enum IconStyle: String, CaseIterable {
     var title: String { tr("icon.\(rawValue)") }
 }
 
+#if canImport(AppKit)
 // Parked means disconnected: the mixer's knobs drop to the bottom and the dial's pointer to its minimum.
 // The app icon never changes. Numbers are in a 24-unit design space, y down, tuned to stay crisp at 18pt
 // on a Retina menu bar. Mixer and dial are templates so macOS colours them for light and dark menu
@@ -199,3 +203,4 @@ func makeAppIcon(side: CGFloat, scale: CGFloat = 1) -> NSImage {
                            endRadius: 22, options: .drawsAfterEndLocation)
     return NSImage(cgImage: ctx.makeImage()!, size: NSSize(width: side, height: side))
 }
+#endif

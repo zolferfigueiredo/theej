@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import CoreAudio
 
 // 'vmvc' is kAudioHardwareServiceDeviceProperty_VirtualMainVolume. Spelled as a FourCC so we
@@ -38,3 +39,4 @@ func setVolume(_ scalar: Float32, input: Bool = false) {
     _ = setScalar(dev, scope, kAudioDevicePropertyVolumeScalar, 1, scalar)
     _ = setScalar(dev, scope, kAudioDevicePropertyVolumeScalar, 2, scalar)
 }
+#endif

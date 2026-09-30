@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import ServiceManagement
 
@@ -313,3 +314,4 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         settingsWindow?.setFrameTopLeftPoint(corner)
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import IOKit.hid
 
@@ -35,3 +36,4 @@ func setExternalKeyboard(_ scalar: Float32) {
         viaKeyboard = nil
     }
 }
+#endif
