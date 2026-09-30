@@ -205,9 +205,9 @@ func targets(_ columns: [Int?], _ jobs: [Target?]) -> [Int: Target] {
     return result
 }
 
-// The order of the jobs in a knob's popup in Settings. Each hundred is a group that Settings separates.
-// Monitors count left to right within theirs, and activeDisplays() stops at 16, so they cannot reach
-// the next group.
+// The order of the jobs in a knob's popup in Settings. Each hundred is a section there, under the
+// header section() gives it. Monitors count left to right within theirs, and activeDisplays() stops
+// at 16, so they cannot reach the next section.
 func rank(_ target: Target) -> Int {
     switch target {
     case .master: return 0
@@ -242,6 +242,23 @@ func title(_ target: Target?) -> String {
     case .builtinKeyboard?: return "Built-in keyboard backlight"
     case .externalKeyboard?: return "External keyboard backlight"
     case .app(let id)?: return appName(id)
+    }
+}
+
+func section(_ target: Target) -> String {
+    ["Volume", "Brightness", "Contrast", "Night Shift", "Keyboard backlight", "Apps"][rank(target) / 100]
+}
+
+// A job's name under its section's header, which says the rest of title().
+func shortTitle(_ target: Target) -> String {
+    switch target {
+    case .master, .microphone: return title(target)
+    case .builtinBrightness, .builtinContrast: return "Built-in display"
+    case .brightness(let ordinal), .contrast(let ordinal): return "Monitor \(ordinal + 1)"
+    case .nightShift: return "Warmth"
+    case .builtinKeyboard: return "Built-in"
+    case .externalKeyboard: return "External"
+    case .app: return title(target)
     }
 }
 

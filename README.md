@@ -91,13 +91,14 @@ which physical slider is which index.
 ## Settings and calibration
 
 **Settings** has three tabs, laid out in groups as System Settings is: **General** for the profile
-and its knobs, **App settings** for shortcuts, the menu bar and sensitivity, and **About**. A tab too tall for
-the screen scrolls. General lists every knob by the letter on the box with a menu for what it does:
-nothing, or one of the jobs under [What a knob can do](#what-a-knob-can-do), grouped as volumes,
-brightness, contrast, Night Shift, keyboard backlights and the open apps. Monitors count left to right by their
-position in System Settings. The + and - buttons beside Knobs add or remove the last knob, down to
-none at all. A knob that has not been calibrated yet shows "Needs calibration" in red under its
-name, and does nothing until it is.
+and its knobs, **App settings** for shortcuts, the menu bar and sensitivity, and **About**. A tab
+too tall for the screen scrolls. General lists every knob by the letter on the box with a menu for
+what it does: nothing, or one of the jobs under [What a knob can do](#what-a-knob-can-do), each
+under the header of its section: Volume, Brightness, Contrast, Night Shift, Keyboard backlight or
+Apps, which lists the open ones. Monitors count left to right by their position in System Settings.
+The + and - buttons beside Knobs add or remove the last knob, down to none at all. A knob that has
+not been calibrated yet shows "Needs calibration" in red under its name, and does nothing until it
+is.
 
 Those jobs belong to a **profile**: a name, a job for every knob, and an optional keyboard shortcut.
 The menu at the top picks the profile you are editing, + adds one with every knob doing nothing,
