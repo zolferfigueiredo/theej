@@ -36,7 +36,7 @@ brew install m1ddc
 ```
 
 `run.sh` quits any running TheeJ, builds with `build.sh` and runs the new build in the terminal.
-`build.sh` produces `.build/TheeJ.app`, a real app bundle, so macOS has an icon to show in System
+`build.sh` runs the tests (`swift test`), then produces `.build/TheeJ.app`, a real app bundle, so macOS has an icon to show in System
 Settings, Activity Monitor and Finder. It is a universal app for Apple Silicon and Intel, macOS 14
 or later, and signed with your Apple Development certificate when you have one, so Login Items
 shows TheeJ by name and icon rather than as an unidentified developer. Without one it is signed ad
@@ -61,7 +61,7 @@ Mixer and Dial are template images, so they follow light and dark menu bars auto
 
 The app icon, also shown in the About window, is the mixer from
 [theej.zolfer.com](https://theej.zolfer.com/): three faders and an orange LED on a cream plate. Both
-icons are drawn in code in [main.swift](src/main.swift), the menu bar one by `makeIcon`
+icons are drawn in code in [Icons.swift](Sources/TheeJ/Icons.swift), the menu bar one by `makeIcon`
 and the app icon by `makeAppIcon`.
 
 Clicking it, with either button, opens a menu: the profiles first, with a check by the active one
@@ -199,7 +199,7 @@ so a clean exit is left alone while a crash is still restarted.
 ```
 
 Builds `dist/TheeJ-<version>.dmg`, taking the version from `appVersion` in
-[main.swift](src/main.swift). The app and the DMG are signed with Developer ID,
+[Version.swift](Sources/TheeJ/Version.swift). The app and the DMG are signed with Developer ID,
 notarized and stapled, and the DMG opens on a dark window with an arrow from TheeJ to Applications.
 Notarization needs a one-time `xcrun notarytool store-credentials bihan` with an App Store Connect
 API key, as the top of `release.sh` shows. BiHan Brightness uses the same profile.
@@ -210,7 +210,7 @@ API key, as the top of `release.sh` shows. BiHan Brightness uses the same profil
 ```bash
 ./run.sh /dev/cu.usbserial-1130     # force a specific port
 ./install.sh /dev/cu.usbserial-1130 # bake the port into the LaunchAgent
-./run.sh --selftest                 # run the built-in assertions and exit
+swift test                          # run the tests
 ```
 
 List available ports with `ls /dev/cu.*`.
@@ -223,7 +223,7 @@ defaults domain: `defaults read com.zolfer.theej` shows them, and `defaults dele
 com.zolfer.theej` followed by a restart clears them. Knobs saved by 1.0.2 or earlier become the
 Default profile the first time a newer TheeJ starts, and the old `knobs` key is left as it was.
 
-Constants at the top of [src/main.swift](src/main.swift), then rebuild:
+Constants in [Dispatch.swift](Sources/TheeJ/Dispatch.swift) and [HUD.swift](Sources/TheeJ/HUD.swift), then rebuild:
 
 - `deadzone`: `0.01` (1%, about 10 ADC counts). Raise it if a value drifts while you aren't
   touching the slider, lower it if the steps feel coarse. It is also how close to an end counts as
