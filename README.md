@@ -107,8 +107,8 @@ Monitoring permission.
 **Invert knobs** flips every knob's direction, for a board whose pots are wired the other way round.
 In App settings, under **Menu bar**, **Hide menu bar icon** removes the icon, name and all, and
 greys out the rest while it is on. **Show profile name** puts the active profile's name beside the
-icon, **Icon** picks Mixer, Dial or App icon, and **Profile list**, on by default, puts the profiles
-in the menu.
+icon, cut short when it is long, **Icon** picks Mixer, Dial or App icon, and **Profile list**, on by
+default, puts the profiles in the menu.
 
 **About** shows the version, with Check for updates…, and links to the website and to zolfer.com.
 

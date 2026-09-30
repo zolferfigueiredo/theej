@@ -46,6 +46,12 @@ private let every: [Target] = [.master, .microphone, .builtinBrightness, .builti
     #expect(try JSONDecoder().decode([Knob].self, from: Data(saved.utf8)) == zip(columns, jobs).map { Knob(column: $0, target: $1) })
 }
 
+@Test func longNamesAreClipped() {
+    #expect(clipped("Default", to: 20) == "Default")
+    #expect(clipped("Default dasdas asd asdas asd asdas", to: 20) == "Default dasdas asd…")
+    #expect(clipped(String(repeating: "a", count: 30), to: 20).count == 20)
+}
+
 // Next from the last profile is the first, and previous from the first is the last.
 @Test func steppingThroughProfilesWrapsRound() {
     var setup = Setup(profiles: [Profile(name: "A"), Profile(name: "B"), Profile(name: "C")])

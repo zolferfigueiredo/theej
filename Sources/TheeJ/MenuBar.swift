@@ -84,7 +84,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         if setup.showProfiles {
             menu.addItem(.sectionHeader(title: "Profiles"))
             for (index, profile) in setup.profiles.enumerated() {
-                let mi = entry(profile.name, #selector(pickProfile), profile.shortcut?.key ?? "")
+                let mi = entry(clipped(profile.name, to: 30), #selector(pickProfile), profile.shortcut?.key ?? "")
                 mi.keyEquivalentModifierMask = profile.shortcut?.flags ?? []
                 mi.tag = index
                 mi.state = index == setup.active ? .on : .off
@@ -139,7 +139,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         let setup = shared.config().setup
         item.isVisible = !setup.hideIcon
         item.button?.image = makeIcon(setup.icon, parked: !state.connected)
-        item.button?.title = setup.showName ? setup.profile.name : ""
+        item.button?.title = setup.showName ? clipped(setup.profile.name, to: 20) : ""
         item.button?.toolTip = "\(appName): \(state.connected ? state.port ?? "connected" : "not connected")"
     }
 

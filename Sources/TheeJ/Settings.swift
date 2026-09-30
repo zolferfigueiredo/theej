@@ -37,6 +37,8 @@ extension MenuBar: NSToolbarDelegate {
             setUpEdit(knobEdit, "Add a knob", "Remove the last knob", #selector(editKnobs))
             profilePicker.target = self
             profilePicker.action = #selector(pickDraftProfile)
+            // Whatever the name, + and - stay in the window.
+            profilePicker.widthAnchor.constraint(lessThanOrEqualToConstant: 240).isActive = true
             profileName.delegate = self
             profileName.widthAnchor.constraint(equalToConstant: 180).isActive = true
             for (index, (button, remove)) in zip(shortcutButtons, removeShortcutButtons).enumerated() {
@@ -301,7 +303,7 @@ extension MenuBar: NSToolbarDelegate {
         profilePicker.removeAllItems()
         for profile in draft.profiles {
             // Not addItem(withTitle:), which drops a second profile with the same name.
-            profilePicker.menu?.addItem(withTitle: profile.name, action: nil, keyEquivalent: "")
+            profilePicker.menu?.addItem(withTitle: clipped(profile.name, to: 30), action: nil, keyEquivalent: "")
         }
         profilePicker.selectItem(at: draft.active)
         profileName.stringValue = draft.profile.name
@@ -389,7 +391,7 @@ extension MenuBar: NSToolbarDelegate {
 
     func controlTextDidChange(_ obj: Notification) {
         draft.profile.name = profileName.stringValue
-        profilePicker.selectedItem?.title = profileName.stringValue
+        profilePicker.selectedItem?.title = clipped(profileName.stringValue, to: 30)
     }
 
     @objc func pick(_ sender: NSPopUpButton) {

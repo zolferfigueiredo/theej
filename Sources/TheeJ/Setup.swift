@@ -171,4 +171,9 @@ func title(_ target: Target?) -> String {
     }
 }
 
+// A profile name cut to fit where a long one would push other things out: the menu bar, a menu, a popup.
+func clipped(_ name: String, to limit: Int) -> String {
+    name.count > limit ? name.prefix(limit - 1).trimmingCharacters(in: .whitespaces) + "…" : name
+}
+
 func letter(_ index: Int) -> String { String(Character(UnicodeScalar(UInt8(65 + index)))) }
