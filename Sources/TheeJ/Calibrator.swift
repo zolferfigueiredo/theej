@@ -1,8 +1,8 @@
 import Foundation
 
 // Pure, so the tests can drive it with fake lines and a fake clock. Knobs are found one at a time, in
-// the order they are moved, until Finish or until every input has a knob. For each knob, phase 0 finds
-// its column, 1 to 3 are the slow, fast and slow turns, and 4 is the sweeps.
+// the order they are moved, until Finish. For each knob, phase 0 finds its column, 1 to 3 are the slow,
+// fast and slow turns, and 4 is the sweeps.
 struct Calibrator {
     static let turnSeconds = 20.0
     static let sweepsNeeded = 10
@@ -11,7 +11,8 @@ struct Calibrator {
     private(set) var phase = 0
     private(set) var left = turnSeconds
     private(set) var sweeps = 0
-    private(set) var done = false
+    private(set) var full = false  // every value the sketch sends has its knob, so none is left to find
+    private(set) var wrongKnob: Int?  // a knob already found, moving while the next one is asked for
     private var low: [Int] = []
     private var high: [Int] = []
     private var anchor = -1
@@ -22,8 +23,11 @@ struct Calibrator {
     // The knob being asked for, then turned.
     var knob: Int { phase == 0 ? found.count : found.count - 1 }
 
+    // A turning step's timer stops once the knob has been still for a second.
+    var paused: Bool { (1...3).contains(phase) && lastTime - lastMove > 1 }
+
     mutating func feed(_ values: [Int], at now: Double) {
-        guard !done else { return }
+        guard !full else { return }
         if phase == 0 {
             if low.count != values.count { low = values; high = values }
             for (i, v) in values.enumerated() {
@@ -35,7 +39,16 @@ struct Calibrator {
             let taken = found
             guard let best = values.indices.filter({ !taken.contains($0) })
                 .max(by: { high[$0] - low[$0] < high[$1] - low[$1] }) else {
-                done = true  // every input the sketch sends has its knob
+                full = true
+                return
+            }
+            // A found knob moving: say so, and start over, so a pin echoing it can't pass for the next knob.
+            // ponytail: 200 counts is well clear of a still pot's noise and of crosstalk from the knob
+            // being moved. Lower it if a found knob can move a fair way before this notices.
+            if let moved = found.indices.first(where: { found[$0] < values.count && high[found[$0]] - low[found[$0]] >= 200 }) {
+                wrongKnob = moved
+                low = values
+                high = values
                 return
             }
             if high[best] - low[best] >= 512 {
@@ -63,7 +76,7 @@ struct Calibrator {
 
     // Only once the knob is found, which it stays: this skips its turns and sweeps.
     mutating func skip() {
-        guard !done, phase > 0 else { return }
+        guard phase > 0 else { return }
         reset(0)
     }
 
@@ -80,5 +93,6 @@ struct Calibrator {
         anchor = -1
         lastMove = -.infinity
         armed = false
+        wrongKnob = nil
     }
 }

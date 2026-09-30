@@ -13,7 +13,6 @@ extension MenuBar {
             stepBody.preferredMaxLayoutWidth = 360
             stepBody.widthAnchor.constraint(equalToConstant: 360).isActive = true
             stepProgress.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-            stepProgress.textColor = .secondaryLabelColor
             let cancel = NSButton(title: "Cancel", target: nil, action: #selector(NSWindow.performClose(_:)))
             cancel.keyEquivalent = "\u{1b}"
             skipButton.target = self
@@ -42,16 +41,14 @@ extension MenuBar {
     // handle() sends every line here while calibrating.
     func feed(_ values: [Int], at now: Double) {
         guard var run = calibrator else { return }
-        let before = (run.knob, run.phase)
+        let before = (run.knob, run.phase, run.full)
         run.feed(values, at: now)
         calibrator = run
-        if run.done {
-            finish()
-        } else if (run.knob, run.phase) != before {
+        if (run.knob, run.phase, run.full) != before {
             NSSound(named: "Tink")?.play()  // the user is watching the knob, not the screen
             showStep()
         } else {
-            stepProgress.stringValue = progress(run)
+            showProgress(run)
         }
     }
 
@@ -66,8 +63,7 @@ extension MenuBar {
     func showStep() {
         guard let run = calibrator, let window = calibrationWindow else { return }
         let name = letter(run.knob)
-        stepTitle.stringValue = "Knob \(name)"
-        stepBody.stringValue = [
+        let steps = [
             run.knob == 0
                 ? "Move knob A from one end to the other, so \(appName) can tell which knob is which. Each knob "
                     + "then takes a minute or two of turning, which also cleans a jumpy one. Your knobs hold still "
@@ -77,19 +73,32 @@ extension MenuBar {
             "Now turn it fast.",
             "Slowly again.",
             "Sweep it from one end to the other, \(Calibrator.sweepsNeeded) times.",
-        ][run.phase]
-        stepProgress.stringValue = progress(run)
+        ]
+        stepTitle.stringValue = run.full ? "All knobs found" : "Knob \(name)"
+        stepBody.stringValue = run.full
+            ? "Your board sends \(run.found.count) values, and each one has its knob now, so that's all of them. "
+                + "Click Finish to choose what they do."
+            : steps[run.phase]
+        showProgress(run)
         skipButton.title = run.phase == 0 ? "Finish" : "Skip"
         fit(window)
     }
 
+    func showProgress(_ run: Calibrator) {
+        stepProgress.stringValue = progress(run)
+        stepProgress.textColor = run.paused || run.wrongKnob != nil ? .systemOrange : .secondaryLabelColor
+    }
+
     func progress(_ run: Calibrator) -> String {
+        if run.full { return run.found.count == 1 ? "1 knob found" : "\(run.found.count) knobs found" }
+        if let wrong = run.wrongKnob { return "That's knob \(letter(wrong)). Move knob \(letter(run.knob)) instead." }
         switch run.phase {
         case 0: return "Waiting for knob \(letter(run.knob)) to move"
         case 4: return "Sweep \(run.sweeps) of \(Calibrator.sweepsNeeded)"
         default:
             let seconds = Int(run.left.rounded(.up))
-            return seconds == 1 ? "1 second left" : "\(seconds) seconds left"
+            let left = seconds == 1 ? "1 second left" : "\(seconds) seconds left"
+            return run.paused ? "Paused with \(left). Keep turning knob \(letter(run.knob))." : left
         }
     }
 
