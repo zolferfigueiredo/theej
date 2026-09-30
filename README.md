@@ -35,7 +35,8 @@ brew install m1ddc
 ./run.sh
 ```
 
-`run.sh` quits any running TheeJ, builds with `build.sh` and runs the new build in the terminal.
+`run.sh` quits any running TheeJ, builds with `build.sh` and runs the new build in the terminal. Its first run also
+turns on the repository's git hook, which refuses commits made directly on `main`.
 `build.sh` runs the tests (`swift test`), then produces `.build/TheeJ.app`, a real app bundle, so macOS has an icon to show in System
 Settings, Activity Monitor and Finder. It is a universal app for Apple Silicon and Intel, macOS 14
 or later, and signed with your Apple Development certificate when you have one, so Login Items
