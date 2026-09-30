@@ -64,10 +64,14 @@ private typealias Responsible = @convention(c) (pid_t) -> pid_t
 private let responsible = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid")
     .map { unsafeBitCast($0, to: Responsible.self) }
 
+// FaceTime's calls are played by a system process that no app answers for, as Background Music found.
+private let alsoPlays = ["com.apple.FaceTime": ["com.apple.avconferenced"]]
+
 // An audio process is the app's when it is the app, or the app answers for it. With no answer to go
 // on, a helper is known by its identifier, as Chrome's is com.google.Chrome.helper.
 func belongs(bundle: String, owner: String?, to app: String) -> Bool {
-    bundle == app || owner == app || (owner == nil && bundle.hasPrefix(app + "."))
+    bundle == app || owner == app || alsoPlays[app]?.contains(bundle) == true
+        || (owner == nil && bundle.hasPrefix(app + "."))
 }
 
 private var processInfo: [AudioObjectID: (bundle: String, owner: String?)] = [:]
@@ -80,6 +84,33 @@ private func info(_ process: AudioObjectID) -> (bundle: String, owner: String?) 
     let found = (readString(process, kAudioProcessPropertyBundleID) ?? "", owner)
     processInfo[process] = found
     return found
+}
+
+// MARK: Which apps to offer
+
+// Well-known apps that make sound, offered in Settings while closed if they are installed: players,
+// browsers, call and chat apps. Any other app shows up while it plays, or is picked with Other….
+let knownAudioApps = [
+    "com.apple.Music", "com.spotify.client", "com.apple.podcasts", "com.apple.TV", "com.apple.QuickTimePlayerX",
+    "org.videolan.vlc", "com.colliderli.iina", "com.coppertino.Vox", "com.swinsian.Swinsian", "com.tidal.desktop",
+    "com.apple.Safari", "com.google.Chrome", "org.mozilla.firefox", "company.thebrowser.Browser", "com.brave.Browser",
+    "com.microsoft.edgemac", "com.operasoftware.Opera", "com.vivaldi.Vivaldi",
+    "com.apple.FaceTime", "us.zoom.xos", "com.microsoft.teams2", "com.hnc.Discord", "com.tinyspeck.slackmacgap",
+    "net.whatsapp.WhatsApp", "ru.keepcoder.Telegram", "org.whispersystems.signal-desktop", "com.skype.skype",
+    "com.valvesoftware.steam",
+]
+
+// The open apps playing sound at this moment. A helper counts as the app that answers for it, and only
+// apps with a Dock icon are told: the rest are system services.
+func appsPlayingSound() -> Set<String> {
+    let playing = appQueue.sync {
+        readList(system, kAudioHardwarePropertyProcessObjectList)
+            .filter { read($0, kAudioProcessPropertyIsRunningOutput, UInt32(0)) == 1 }
+            .map { info($0).owner ?? info($0).bundle }
+    }
+    let open = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
+        .compactMap(\.bundleIdentifier)
+    return Set(playing).intersection(open)
 }
 
 // MARK: One app's tap

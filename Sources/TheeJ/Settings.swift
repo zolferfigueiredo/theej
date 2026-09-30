@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import UniformTypeIdentifiers
 
 extension NSToolbarItem.Identifier {
     static let general = Self("general")
@@ -13,6 +14,7 @@ let settingsTabs: [(id: NSToolbarItem.Identifier, label: String, symbol: String)
 ]
 
 let formWidth: CGFloat = 420  // every group, heading and footnote
+private let otherApp = "other"  // what the Other… item of a knob's menu carries in place of a job
 
 // Flipped, so a page taller than the window starts at its top rather than its bottom.
 final class TopClipView: NSClipView {
@@ -343,13 +345,14 @@ extension MenuBar: NSToolbarDelegate {
         // Includes an assigned monitor that is unplugged right now, so Save cannot drop it.
         let monitors: [Target] = (0..<max(2, externalDisplays().count, assigned))
             .flatMap { [.brightness($0), .contrast($0)] }
-        // The open apps, and any app a profile already uses, so Save cannot drop one that isn't open.
+        // Apps that make sound: the ones playing now, the well-known ones that are installed, and any a
+        // profile already uses, so Save cannot drop one. Other… in each menu picks any app.
+        let appsAvailable = if #available(macOS 14.2, *) { true } else { false }
         var apps: [Target] = []
-        if #available(macOS 14.2, *) {
-            let open = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
-                .compactMap(\.bundleIdentifier)
-            apps = draft.apps.union(open).subtracting([Bundle.main.bundleIdentifier ?? ""]).map(Target.app)
-                .sorted { title($0).localizedStandardCompare(title($1)) == .orderedAscending }
+        if appsAvailable {
+            let known = knownAudioApps.filter { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
+            apps = draft.apps.union(known).union(appsPlayingSound()).subtracting([Bundle.main.bundleIdentifier ?? ""])
+                .map(Target.app).sorted { title($0).localizedStandardCompare(title($1)) == .orderedAscending }
         }
         let choices = ([Target.master, .microphone, .builtinBrightness, .builtinContrast, .nightShift,
                         .builtinKeyboard, .externalKeyboard] + monitors).sorted { rank($0) < rank($1) } + apps
@@ -371,6 +374,10 @@ extension MenuBar: NSToolbarDelegate {
                     item?.image = icon
                 }
                 if choice == draft.profile.target(index) { popup.select(item) }
+            }
+            if appsAvailable {
+                popup.menu?.addItem(apps.isEmpty ? .sectionHeader(title: "Apps") : .separator())
+                popup.menu?.addItem(withTitle: "Other…", action: nil, keyEquivalent: "").representedObject = otherApp
             }
             showJob(popup)
             popup.tag = index
@@ -431,11 +438,34 @@ extension MenuBar: NSToolbarDelegate {
     }
 
     @objc func pick(_ sender: NSPopUpButton) {
-        var jobs = draft.profile.targets
-        jobs += Array(repeating: nil, count: max(0, sender.tag + 1 - jobs.count))
-        jobs[sender.tag] = sender.selectedItem?.representedObject as? Target
-        draft.profile.targets = jobs
+        guard sender.selectedItem?.representedObject as? String != otherApp else {
+            chooseApp(forKnob: sender.tag)
+            return
+        }
+        setJob(sender.selectedItem?.representedObject as? Target, knob: sender.tag)
         showJob(sender)
+    }
+
+    func setJob(_ job: Target?, knob: Int) {
+        var jobs = draft.profile.targets
+        jobs += Array(repeating: nil, count: max(0, knob + 1 - jobs.count))
+        jobs[knob] = job
+        draft.profile.targets = jobs
+    }
+
+    // Other… in a knob's menu: any app on disk. The menus are rebuilt either way, to list the choice or to
+    // put this one back on the job it had.
+    func chooseApp(forKnob knob: Int) {
+        guard let window = settingsWindow else { return }
+        let panel = NSOpenPanel()
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.allowedContentTypes = [.application]
+        panel.prompt = "Choose"
+        panel.beginSheetModal(for: window) { [self] response in
+            let id = panel.url.flatMap { Bundle(url: $0)?.bundleIdentifier }
+            if response == .OK, let id, id != Bundle.main.bundleIdentifier { setJob(.app(id), knob: knob) }
+            reloadDraft()
+        }
     }
 
     // The closed popup shows the job's full title: the list's short one leans on its section header.

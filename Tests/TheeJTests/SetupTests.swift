@@ -78,6 +78,12 @@ private struct OldProfile: Decodable, Equatable {
     #expect(belongs(bundle: "com.google.Chrome.helper", owner: nil, to: "com.google.Chrome"))
     #expect(!belongs(bundle: "com.google.Chrome.canary", owner: "com.google.Chrome.canary", to: "com.google.Chrome"))
     #expect(!belongs(bundle: "com.apple.WebKit.GPU", owner: "com.apple.mail", to: "com.apple.Safari"))
+    #expect(belongs(bundle: "com.apple.avconferenced", owner: nil, to: "com.apple.FaceTime"))  // its calls
+    #expect(!belongs(bundle: "com.apple.avconferenced", owner: nil, to: "com.apple.Music"))
+}
+
+@Test func knownAudioAppsAreListedOnce() {
+    #expect(Set(knownAudioApps).count == knownAudioApps.count)
 }
 
 // Silent at the bottom, the app's own level at the top, and quieter than linear in between.

@@ -95,10 +95,12 @@ and its knobs, **App settings** for shortcuts, the menu bar and sensitivity, and
 too tall for the screen scrolls. General lists every knob by the letter on the box with a menu for
 what it does: nothing, or one of the jobs under [What a knob can do](#what-a-knob-can-do), each
 under the header of its section: Volume, Brightness, Contrast, Night Shift, Keyboard backlight or
-Apps, which lists the open ones. Monitors count left to right by their position in System Settings.
-The + and - buttons beside Knobs add or remove the last knob, down to none at all. A knob that has
-not been calibrated yet shows "Needs calibration" in red under its name, and does nothing until it
-is.
+Apps. Apps lists the apps that make sound: the ones playing right now, the well-known players,
+browsers and call apps you have installed, open or not, and any app already on a knob. Other… at its
+end picks any app from Applications. Monitors count left to right by their position in System
+Settings. The + and - buttons beside Knobs add or remove the last knob, down to none at all. A knob
+that has not been calibrated yet shows "Needs calibration" in red under its name, and does nothing
+until it is.
 
 Those jobs belong to a **profile**: a name, a job for every knob, and an optional keyboard shortcut.
 The menu at the top picks the profile you are editing, + adds one with every knob doing nothing,
@@ -154,15 +156,15 @@ never found, so click Finish when TheeJ asks for it.
 - **Master volume**: the current output device, through CoreAudio.
 - **Microphone volume**: the input volume of the current input device, the same slider as in
   System Settings, Sound.
-- **An app's volume** (macOS 14.2 or later): any open app, from silent at the bottom of the knob to
-  the app's own level at the top. macOS has no volume per app, so TheeJ captures the app's sound with
-  a Core Audio process tap and plays it back at the knob's level, about a hundredth of a second later.
-  That has three consequences. macOS must allow TheeJ under Screen & System Audio Recording, which
-  Save asks for the first time, and a TheeJ started before the answer needs reopening. macOS shows its
-  recording indicator while a turned-down app plays. And a sound can lose its first tenth of a second.
-  At the top of the knob there is no capture at all. The app is back to its own level when TheeJ
-  quits, or when no profile gives it a knob. It needs a TheeJ signed with a certificate, as the
-  release is: macOS gives an ad hoc build silence without asking.
+- **An app's volume** (macOS 14.2 or later): an app picked under Apps, from silent at the bottom of
+  the knob to the app's own level at the top. macOS has no volume per app, so TheeJ captures the
+  app's sound with a Core Audio process tap and plays it back at the knob's level, about a hundredth
+  of a second later. That has three consequences. macOS must allow TheeJ under Screen & System Audio
+  Recording, which Save asks for the first time, and a TheeJ started before the answer needs
+  reopening. macOS shows its recording indicator while a turned-down app plays. And a sound can lose
+  its first tenth of a second. At the top of the knob there is no capture at all. The app is back to
+  its own level when TheeJ quits, or when no profile gives it a knob. It needs a TheeJ signed with a
+  certificate, as the release is: macOS gives an ad hoc build silence without asking.
 - **Built-in display brightness**: the Retina panel, through DisplayServices.
 - **Built-in display contrast**: the Accessibility "Display contrast" setting, normal at the bottom
   of the knob and maximum at the top. External monitors ignore it.
