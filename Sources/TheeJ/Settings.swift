@@ -350,12 +350,17 @@ extension MenuBar: NSToolbarDelegate {
             let popup = NSPopUpButton()
             popup.isBordered = false
             popup.addItem(withTitle: title(nil))
+            popup.menu?.addItem(.separator())
             for (i, choice) in choices.enumerated() {
-                if i == 0 || rank(choice) / 100 != rank(choices[i - 1]) / 100 { popup.menu?.addItem(.separator()) }
-                popup.addItem(withTitle: title(choice))
-                popup.lastItem?.representedObject = choice
-                if choice == draft.profile.target(index) { popup.select(popup.lastItem) }
+                if i == 0 || rank(choice) / 100 != rank(choices[i - 1]) / 100 {
+                    popup.menu?.addItem(.sectionHeader(title: section(choice)))
+                }
+                // Not addItem(withTitle:), which drops the Monitor 1 under Brightness for the one under Contrast.
+                let item = popup.menu?.addItem(withTitle: shortTitle(choice), action: nil, keyEquivalent: "")
+                item?.representedObject = choice
+                if choice == draft.profile.target(index) { popup.select(item) }
             }
+            showJob(popup)
             popup.tag = index
             popup.target = self
             popup.action = #selector(pick)
@@ -418,6 +423,15 @@ extension MenuBar: NSToolbarDelegate {
         jobs += Array(repeating: nil, count: max(0, sender.tag + 1 - jobs.count))
         jobs[sender.tag] = sender.selectedItem?.representedObject as? Target
         draft.profile.targets = jobs
+        showJob(sender)
+    }
+
+    // The closed popup shows the job's full title: the list's short one leans on its section header.
+    func showJob(_ popup: NSPopUpButton) {
+        let cell = popup.cell as? NSPopUpButtonCell
+        cell?.usesItemFromMenu = false
+        cell?.menuItem = NSMenuItem(title: title(popup.selectedItem?.representedObject as? Target),
+                                    action: nil, keyEquivalent: "")
     }
 
     @objc func editKnobs(_ sender: NSSegmentedControl) {
