@@ -34,6 +34,10 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     let iconLabel = NSTextField(labelWithString: "")
     let speedPicker = NSPopUpButton()
     let languagePicker = NSPopUpButton()
+    let m1ddcStatus = NSTextField(labelWithString: "")
+    let m1ddcButton = NSButton(title: "", target: nil, action: nil)
+    var m1ddcSupport = NSStackView()
+    var m1ddcInstallStarted = false  // the button checks again instead of installing
     var calibrationWindow: NSWindow?
     var calibrator: Calibrator?
     var calibrationOffered = false

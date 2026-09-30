@@ -20,7 +20,15 @@ func findM1ddc() -> String? {
     return path.isEmpty ? nil : path
 }
 
-let m1ddcPath = findM1ddc()
+// Only ever changed on ddcQueue once running, where writeDDC reads it, so an install shows up without a restart.
+var m1ddcPath = findM1ddc()
+
+// Asks the hardware, not the running slice, so it is true under Rosetta too.
+let isAppleSilicon: Bool = {
+    var arm: Int32 = 0
+    var size = MemoryLayout<Int32>.size
+    return sysctlbyname("hw.optional.arm64", &arm, &size, nil, 0) == 0 && arm == 1
+}()
 
 // The uuid is what m1ddc addresses a monitor by; the id is what the HUD needs to pick a screen.
 struct Display {

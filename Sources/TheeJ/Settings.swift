@@ -33,6 +33,7 @@ extension MenuBar: NSToolbarDelegate {
     // rows and values change.
     func showSettings() {
         if settingsWindow != nil {
+            showM1ddc()
             reloadDraft()
             fitSettings()
         } else {
@@ -98,8 +99,10 @@ extension MenuBar: NSToolbarDelegate {
                                   row([profileListLabel], showProfiles)])
             let caption = footnote(tr("jobs_note"))
             caption.addView(NSButton(title: tr("calibrate"), target: self, action: #selector(calibrate)), in: .trailing)
-            let general = page([header(tr("profile"), leading: [profilePicker], trailing: [profileEdit]), profileGroup,
-                                header(tr("knobs"), trailing: [knobEdit]), knobGroup, caption, optionGroup, saveFooter()])
+            let m1ddc = isAppleSilicon ? [m1ddcGroup()] : []  // m1ddc runs on Apple Silicon only
+            let general = page(m1ddc + [header(tr("profile"), leading: [profilePicker], trailing: [profileEdit]), profileGroup,
+                                        header(tr("knobs"), trailing: [knobEdit]), knobGroup, caption, optionGroup, saveFooter()])
+            for view in m1ddc { general.setCustomSpacing(24, after: view) }
             general.setCustomSpacing(24, after: profileGroup)
             general.setCustomSpacing(16, after: caption)
             general.setCustomSpacing(24, after: optionGroup)
@@ -214,6 +217,65 @@ extension MenuBar: NSToolbarDelegate {
         page.edgeInsets = NSEdgeInsets(top: 24, left: 20, bottom: 28, right: 20)
         page.widthAnchor.constraint(equalToConstant: formWidth + 40).isActive = true  // as wide as the other tabs
         return page
+    }
+
+    // Whether m1ddc, which external screens need, is installed, with a button that installs it.
+    func m1ddcGroup() -> NSBox {
+        let site = link("github.com/waydabber/m1ddc", "https://github.com/waydabber/m1ddc")
+        site.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        m1ddcSupport = NSStackView(views: [small(tr("m1ddc.support")), site])
+        m1ddcSupport.spacing = 3
+        m1ddcSupport.alignment = .firstBaseline
+        let text = NSStackView(views: [NSTextField(labelWithString: "m1ddc"), small(tr("m1ddc.note")), m1ddcSupport])
+        text.orientation = .vertical
+        text.alignment = .leading
+        text.spacing = 2
+        m1ddcStatus.textColor = .secondaryLabelColor
+        m1ddcButton.target = self
+        m1ddcButton.action = #selector(installM1ddc)
+        let row = row([text], m1ddcStatus, m1ddcButton)
+        // As with a knob's list, the row centres its text without keeping its padding round it.
+        text.topAnchor.constraint(greaterThanOrEqualTo: row.topAnchor, constant: 8).isActive = true
+        text.bottomAnchor.constraint(lessThanOrEqualTo: row.bottomAnchor, constant: -8).isActive = true
+        let rows = NSStackView()
+        let box = group(rows)
+        setRows(rows, [row])
+        showM1ddc()
+        return box
+    }
+
+    // Checked whenever Settings opens or is rebuilt, and by Refresh. A path found here also reaches
+    // writeDDC, so screens work without restarting TheeJ.
+    func showM1ddc() {
+        guard isAppleSilicon else { return }
+        let path = findM1ddc()
+        ddcQueue.async { m1ddcPath = path }
+        m1ddcStatus.stringValue = path == nil ? "⚠️ " + tr("m1ddc.missing") : "✅ " + tr("m1ddc.installed")
+        m1ddcButton.title = tr(m1ddcInstallStarted ? "m1ddc.refresh" : "m1ddc.install")
+        m1ddcButton.isHidden = path != nil
+        m1ddcSupport.isHidden = path != nil
+    }
+
+    // A .command file opens in Terminal and runs there, with no Automation permission to ask for. Its
+    // last line opens TheeJ again, which brings Settings back to check once brew is done.
+    @objc func installM1ddc() {
+        if !m1ddcInstallStarted {
+            let script = FileManager.default.temporaryDirectory.appendingPathComponent("install-m1ddc.command")
+            let text = """
+            #!/bin/zsh
+            export PATH="/opt/homebrew/bin:$PATH"
+            echo '$ brew install m1ddc'
+            command -v brew >/dev/null || { echo 'Homebrew is needed first: https://brew.sh'; exit 1; }
+            brew install m1ddc && open -b \(Bundle.main.bundleIdentifier ?? "com.zolfer.theej")
+
+            """
+            guard (try? text.write(to: script, atomically: true, encoding: .utf8)) != nil,
+                  (try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)) != nil,
+                  NSWorkspace.shared.open(script) else { return NSSound.beep() }
+            m1ddcInstallStarted = true
+        }
+        showM1ddc()
+        fitSettings()
     }
 
     func setUpEdit(_ control: NSSegmentedControl, _ add: String, _ remove: String, _ action: Selector) {

@@ -30,7 +30,9 @@ Needs Xcode command line tools (`xcode-select --install`).
 
 External screen brightness and contrast additionally need
 [m1ddc](https://github.com/waydabber/m1ddc), a small standalone binary. Apple Silicon only, so on
-an Intel Mac external screens are not available. Everything else works without it.
+an Intel Mac external screens are not available. Everything else works without it. On Apple Silicon,
+the General tab of Settings shows whether m1ddc is installed, and its Install button runs the
+command below in Terminal.
 
 ```bash
 brew install m1ddc
