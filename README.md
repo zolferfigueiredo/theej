@@ -96,13 +96,13 @@ too tall for the screen scrolls. General lists every knob by the letter on the b
 what it does: nothing, or any of the jobs under [What a knob can do](#what-a-knob-can-do). Clicking
 a job ticks it and clicking it again unticks it, so one knob can do several at once, of any kind:
 two monitors' brightness, or an app's volume and a keyboard backlight. They all take the knob's
-position. Each job sits under the header of its section: Volume, Brightness, Contrast, Night Shift,
-Keyboard backlight or Apps. Apps lists the apps that make sound: the ones playing right now, the
-well-known players, browsers and call apps you have installed, open or not, and any app already on a
-knob. Other… at its end picks any app from Applications. Monitors count left to right by their
-position in System Settings. The + and - buttons beside Knobs add or remove the last knob, down to
-none at all. A knob that has not been calibrated yet shows "Needs calibration" in red under its
-name, and does nothing until it is.
+position, and the row lists them one under the other, an app with its icon. Each job sits under the
+header of its section: Volume, Brightness, Contrast, Night Shift, Keyboard backlight or Apps. Apps
+lists the apps that make sound: the ones playing right now, the well-known players, browsers and
+call apps you have installed, open or not, and any app already on a knob. Other… at its end picks
+any app from Applications. Monitors count left to right by their position in System Settings. The +
+and - buttons beside Knobs add or remove the last knob, down to none at all. A knob that has not
+been calibrated yet shows "Needs calibration" in red under its name, and does nothing until it is.
 
 Those jobs belong to a **profile**: a name, the jobs of every knob, and an optional keyboard
 shortcut. The menu at the top picks the profile you are editing, + adds one with every knob doing

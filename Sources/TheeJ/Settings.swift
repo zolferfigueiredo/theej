@@ -362,8 +362,6 @@ extension MenuBar: NSToolbarDelegate {
             popup.isBordered = false
             // A checklist, not a choice of one: the ticks are set from the knob's jobs, not by the last click.
             (popup.cell as? NSPopUpButtonCell)?.altersStateOfSelectedItem = false
-            popup.cell?.lineBreakMode = .byTruncatingTail
-            popup.widthAnchor.constraint(lessThanOrEqualToConstant: 300).isActive = true
             popup.addItem(withTitle: title(nil))
             popup.menu?.addItem(.separator())
             for (i, choice) in choices.enumerated() {
@@ -380,12 +378,19 @@ extension MenuBar: NSToolbarDelegate {
                 popup.menu?.addItem(withTitle: "Other…", action: nil, keyEquivalent: "").representedObject = otherApp
             }
             popup.tag = index
-            showJobs(popup)
+            tickJobs(popup)
             popup.target = self
             popup.action = #selector(pick)
             popup.setAccessibilityLabel("Knob \(letter(index))")
+            let jobs = draft.profile.jobs(of: index)
+            popup.setAccessibilityValue(title(jobs))
             let note = draft.columns[index] == nil ? "Needs calibration" : nil
-            return row([label("Knob \(letter(index))", note: note, noteColor: .systemRed)], popup)
+            let list = jobList(jobs, opens: popup)
+            let knob = row([label("Knob \(letter(index))", note: note, noteColor: .systemRed)], list, popup)
+            // The row centres the list without keeping its own padding round it, so a tall one needs it spelt out.
+            list.topAnchor.constraint(greaterThanOrEqualTo: knob.topAnchor, constant: 8).isActive = true
+            list.bottomAnchor.constraint(lessThanOrEqualTo: knob.bottomAnchor, constant: -8).isActive = true
+            return knob
         }
         if rows.isEmpty {
             let empty = NSTextField(labelWithString: "No knobs. Calibrate finds them, or press + to add one.")
@@ -450,7 +455,11 @@ extension MenuBar: NSToolbarDelegate {
             jobs = []
         }
         setJobs(jobs, knob: sender.tag)
-        showJobs(sender)
+        // The rows are rebuilt to list the jobs anew, once this popup's own click is over.
+        DispatchQueue.main.async { [self] in
+            reloadDraft()
+            fitSettings()
+        }
     }
 
     func setJobs(_ jobs: [Target], knob: Int) {
@@ -478,9 +487,9 @@ extension MenuBar: NSToolbarDelegate {
         }
     }
 
-    // Ticks the knob's jobs in its menu, Nothing when it has none. The closed popup names them in full,
-    // since a job's short name in the list leans on its section header.
-    func showJobs(_ popup: NSPopUpButton) {
+    // Ticks the knob's jobs in its menu, Nothing when it has none. The popup itself shows only its
+    // arrows: a popup draws one line, and the jobs are listed beside it, one under the other.
+    func tickJobs(_ popup: NSPopUpButton) {
         let jobs = draft.profile.jobs(of: popup.tag)
         for item in popup.itemArray where !item.isSeparatorItem && !item.isSectionHeader {
             if let job = item.representedObject as? Target {
@@ -491,10 +500,34 @@ extension MenuBar: NSToolbarDelegate {
         }
         let cell = popup.cell as? NSPopUpButtonCell
         cell?.usesItemFromMenu = false
-        let shown = NSMenuItem(title: title(jobs), action: nil, keyEquivalent: "")
-        shown.image = jobs.count == 1 ? menuIcon(jobs[0]) : nil
-        cell?.menuItem = shown
-        popup.toolTip = jobs.count > 1 ? title(jobs) : nil
+        cell?.menuItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    }
+
+    // A knob's jobs in full, one under the other, an app's with its icon. A click on them opens the menu.
+    // One label with the icons in its text: the row lays that out as it does any other label.
+    func jobList(_ jobs: [Target], opens popup: NSPopUpButton) -> NSTextField {
+        let text = NSMutableAttributedString()
+        for job in jobs.isEmpty ? [nil] : jobs.map(Optional.some) {
+            if text.length > 0 { text.append(NSAttributedString(string: "\n")) }
+            if let icon = menuIcon(job) {
+                let attachment = NSTextAttachment()
+                attachment.image = icon
+                attachment.bounds = NSRect(x: 0, y: -3, width: 16, height: 16)  // centred on the text, not on its baseline
+                text.append(NSAttributedString(attachment: attachment))
+                text.append(NSAttributedString(string: " "))
+            }
+            text.append(NSAttributedString(string: title(job)))
+        }
+        let style = NSMutableParagraphStyle()
+        style.alignment = .right
+        style.lineSpacing = 5
+        text.addAttributes([.paragraphStyle: style, .font: NSFont.systemFont(ofSize: NSFont.systemFontSize),
+                            .foregroundColor: NSColor.labelColor], range: NSRange(location: 0, length: text.length))
+        let list = NSTextField(labelWithAttributedString: text)
+        // A label reports one line's height whatever it holds, so the row would not grow with the jobs.
+        list.heightAnchor.constraint(equalToConstant: text.size().height.rounded(.up)).isActive = true
+        list.addGestureRecognizer(NSClickGestureRecognizer(target: popup, action: #selector(NSPopUpButton.performClick(_:))))
+        return list
     }
 
     @objc func editKnobs(_ sender: NSSegmentedControl) {
