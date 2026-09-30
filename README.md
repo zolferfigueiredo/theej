@@ -68,10 +68,10 @@ icons are drawn in code in [Icons.swift](Sources/TheeJ/Icons.swift), the menu ba
 and the app icon by `makeAppIcon`.
 
 Clicking it, with either button, opens a menu: Show data below first, on by default, with the live
-value of every knob under it, one per line in knob order, an app's with its icon, then the profiles,
-with a check by the active one and each one's shortcut, then Settings and Calibrate, then the
-current port with Reconnect under it, then Launch at login and Keep in Dock, About TheeJ, which
-opens the About tab of Settings, Check for updates… with Check automatically (daily, weekly by
+value of every knob's jobs under it, one job per line in knob order, an app's with its icon, then
+the profiles, with a check by the active one and each one's shortcut, then Settings and Calibrate,
+then the current port with Reconnect under it, then Launch at login and Keep in Dock, About TheeJ,
+which opens the About tab of Settings, Check for updates… with Check automatically (daily, weekly by
 default, or never), and Quit TheeJ. Settings can leave the profiles out.
 
 **Check for updates…** asks theej.zolfer.com for `latest.json`, a plain download that sends nothing
@@ -93,24 +93,26 @@ which physical slider is which index.
 **Settings** has three tabs, laid out in groups as System Settings is: **General** for the profile
 and its knobs, **App settings** for shortcuts, the menu bar and sensitivity, and **About**. A tab
 too tall for the screen scrolls. General lists every knob by the letter on the box with a menu for
-what it does: nothing, or one of the jobs under [What a knob can do](#what-a-knob-can-do), each
-under the header of its section: Volume, Brightness, Contrast, Night Shift, Keyboard backlight or
-Apps. Apps lists the apps that make sound: the ones playing right now, the well-known players,
-browsers and call apps you have installed, open or not, and any app already on a knob. Other… at its
-end picks any app from Applications. Monitors count left to right by their position in System
-Settings. The + and - buttons beside Knobs add or remove the last knob, down to none at all. A knob
-that has not been calibrated yet shows "Needs calibration" in red under its name, and does nothing
-until it is.
+what it does: nothing, or any of the jobs under [What a knob can do](#what-a-knob-can-do). Clicking
+a job ticks it and clicking it again unticks it, so one knob can do several at once, of any kind:
+two monitors' brightness, or an app's volume and a keyboard backlight. They all take the knob's
+position, and the row lists them one under the other, an app with its icon. Each job sits under the
+header of its section: Volume, Brightness, Contrast, Night Shift, Keyboard backlight or Apps. Apps
+lists the apps that make sound: the ones playing right now, the well-known players, browsers and
+call apps you have installed, open or not, and any app already on a knob. Other… at its end picks
+any app from Applications. Monitors count left to right by their position in System Settings. The +
+and - buttons beside Knobs add or remove the last knob, down to none at all. A knob that has not
+been calibrated yet shows "Needs calibration" in red under its name, and does nothing until it is.
 
-Those jobs belong to a **profile**: a name, a job for every knob, and an optional keyboard shortcut.
-The menu at the top picks the profile you are editing, + adds one with every knob doing nothing,
-and - removes the one shown. Switch profiles from the menu bar, or with a profile's shortcut from any
-app. In App settings, under **Shortcuts**, **Next profile** and **Previous profile** step through
-them in order from any app, wrapping round at either end, and every profile is listed below them
-with its own shortcut, so you can set them all in one place. To set a shortcut, click Record Shortcut
-and press it; it needs ⌘ or ⌃, can't be one already in use, and Escape cancels. The ✕ after a
-shortcut removes it, as does Delete while recording. Shortcuts need no Accessibility or Input
-Monitoring permission.
+Those jobs belong to a **profile**: a name, the jobs of every knob, and an optional keyboard
+shortcut. The menu at the top picks the profile you are editing, + adds one with every knob doing
+nothing, and - removes the one shown. Switch profiles from the menu bar, or with a profile's
+shortcut from any app. In App settings, under **Shortcuts**, **Next profile** and **Previous
+profile** step through them in order from any app, wrapping round at either end, and every profile
+is listed below them with its own shortcut, so you can set them all in one place. To set a shortcut,
+click Record Shortcut and press it; it needs ⌘ or ⌃, can't be one already in use, and Escape
+cancels. The ✕ after a shortcut removes it, as does Delete while recording. Shortcuts need no
+Accessibility or Input Monitoring permission.
 
 **Invert knobs** flips every knob's direction, for a board whose pots are wired the other way round.
 In App settings, under **Menu bar**, **Hide menu bar icon** removes the icon, name and all, and
@@ -185,9 +187,10 @@ under On-screen feedback.
 
 ## On-screen feedback
 
-Turning a knob shows the same HUD macOS shows for its own brightness and volume keys, on the
-display that knob controls. macOS only raises that HUD from its media key handler, so the daemon
-asks for it directly over XPC to `com.apple.OSDUIHelper`.
+Turning a knob shows the same HUD macOS shows for its own brightness and volume keys, on the display
+that knob controls. A knob with several jobs shows one HUD per display, its first job's there. macOS
+only raises that HUD from its media key handler, so the daemon asks for it directly over XPC to
+`com.apple.OSDUIHelper`.
 
 The HUD tracks the knob live. Everything but the volumes only changes once the knob has been still
 for a moment, so a turn lands as one clean change when you let go instead of flickering the panel

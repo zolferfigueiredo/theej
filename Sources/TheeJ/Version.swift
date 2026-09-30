@@ -1,3 +1,3 @@
 // build.sh and release.sh read appVersion from this line.
 let appName = "TheeJ"
-let appVersion = "1.5.0"
+let appVersion = "1.6.0"

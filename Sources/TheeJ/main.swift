@@ -43,7 +43,7 @@ let saved = shared.config().setup
 print("\(appName): profile \(saved.profile.name)")
 for (index, column) in saved.columns.enumerated() {
     let input = column.map { "input \($0)" } ?? "not calibrated"
-    print("\(appName): knob \(letter(index)), \(input): \(title(saved.profile.target(index)))")
+    print("\(appName): knob \(letter(index)), \(input): \(title(saved.profile.jobs(of: index)))")
 }
 if m1ddcPath == nil {
     fputs("m1ddc not found, external brightness and contrast are disabled. brew install m1ddc\n", stderr)
