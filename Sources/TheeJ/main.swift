@@ -41,7 +41,8 @@ if NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bu
 
 app.setActivationPolicy(.accessory)  // menu bar only; a regular app only while Settings is open
 // Before anything else opens and before the setup loads, which names a new install's first profile.
-if prefs.string(forKey: "language") == nil { LanguagePrompt().run() }
+// Its buttons hold it weakly, so it is kept alive until Continue.
+if prefs.string(forKey: "language") == nil { withExtendedLifetime(LanguagePrompt()) { $0.run() } }
 
 let saved = shared.config().setup
 print("\(appName): profile \(saved.profile.name)")
