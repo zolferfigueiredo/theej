@@ -61,6 +61,19 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         let state = shared.snapshot()
         let setup = shared.config().setup
         menu.removeAllItems()
+        func label(_ text: String) -> NSMenuItem {
+            let mi = NSMenuItem(title: text, action: nil, keyEquivalent: "")
+            mi.isEnabled = false
+            return mi
+        }
+        let showData = prefs.bool(forKey: "showDataInMenu")
+        let data = entry("Show data below", #selector(toggleData), "")
+        data.state = showData ? .on : .off
+        menu.addItem(data)
+        if showData, state.connected {
+            state.lines.forEach { menu.addItem(label($0)) }
+        }
+        menu.addItem(.separator())
         menu.addItem(.sectionHeader(title: "Profiles"))
         for (index, profile) in setup.profiles.enumerated() {
             let mi = entry(profile.name, #selector(pickProfile), profile.shortcut?.key ?? "")
@@ -74,22 +87,9 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         let calibrateItem = entry("Calibrate", #selector(calibrate), "")
         calibrateItem.isEnabled = state.connected
         menu.addItem(calibrateItem)
-        func label(_ text: String) -> NSMenuItem {
-            let mi = NSMenuItem(title: text, action: nil, keyEquivalent: "")
-            mi.isEnabled = false
-            return mi
-        }
         menu.addItem(.separator())
         menu.addItem(label(state.connected ? "Connected: \(state.port ?? "?")" : "Not connected"))
         menu.addItem(entry("Reconnect", #selector(reconnect), ""))
-        menu.addItem(.separator())
-        let showData = prefs.bool(forKey: "showDataInMenu")
-        let data = entry("Show data in menu", #selector(toggleData), "")
-        data.state = showData ? .on : .off
-        menu.addItem(data)
-        if showData, state.connected {
-            state.lines.forEach { menu.addItem(label($0)) }
-        }
         menu.addItem(.separator())
         // Registering from anywhere else (a build folder) would point the login item at a bundle that disappears.
         let login = entry("Launch at login", #selector(toggleLogin), "")
