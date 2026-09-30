@@ -21,22 +21,27 @@ extension MenuBar {
             profilePicker.action = #selector(pickDraftProfile)
             profileName.delegate = self
             profileName.widthAnchor.constraint(equalToConstant: 180).isActive = true
-            shortcutButton.target = self
-            shortcutButton.action = #selector(recordShortcut)
-            shortcutButton.toolTip = "Use ⌘ or ⌃ with a key. Delete clears it, Escape cancels."
-            // With the ✕ after it, as wide as the name field: 156 + 8 + 16 = 180.
-            shortcutButton.widthAnchor.constraint(equalToConstant: 156).isActive = true
-            removeShortcutButton.widthAnchor.constraint(equalToConstant: 16).isActive = true
-            removeShortcutButton.isBordered = false
-            removeShortcutButton.toolTip = "Remove shortcut"
-            removeShortcutButton.target = self
-            removeShortcutButton.action = #selector(removeShortcut)
+            for (index, (button, remove)) in zip(shortcutButtons, removeShortcutButtons).enumerated() {
+                button.tag = index
+                button.target = self
+                button.action = #selector(recordShortcut)
+                button.toolTip = "Use ⌘ or ⌃ with a key. Delete clears it, Escape cancels."
+                // With the ✕ after it, as wide as the name field: 156 + 8 + 16 = 180.
+                button.widthAnchor.constraint(equalToConstant: 156).isActive = true
+                remove.tag = index
+                remove.target = self
+                remove.action = #selector(removeShortcut)
+                remove.toolTip = "Remove shortcut"
+                remove.isBordered = false
+                remove.widthAnchor.constraint(equalToConstant: 16).isActive = true
+            }
             profileName.bezelStyle = .roundedBezel
             let profileGroup = group(profileRows)
-            let shortcutRow = row([NSTextField(labelWithString: "Shortcut")], shortcutButton, removeShortcutButton)
-            shortcutRow.detachesHiddenViews = false  // the ✕ keeps its place when hidden, so the field stays put
-            setRows(profileRows, [row([NSTextField(labelWithString: "Name")], profileName), shortcutRow])
+            setRows(profileRows, [row([NSTextField(labelWithString: "Name")], profileName), shortcutRow("Shortcut", 0)])
             let knobGroup = group(knobRows)
+            let stepRows = NSStackView()
+            let stepGroup = group(stepRows)
+            setRows(stepRows, [shortcutRow("Next profile", 1), shortcutRow("Previous profile", 2)])
 
             for control: NSControl in [invertKnobs, showName, hideIcon, iconPicker] {
                 control.target = self
@@ -62,22 +67,22 @@ extension MenuBar {
             footer.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
             footer.addView(save, in: .trailing)
 
-            let calibrateButton = NSButton(title: "Calibrate", target: self, action: #selector(calibrate))
             let profileHeader = header("Profile", leading: [profilePicker], trailing: [profileEdit])
-            let knobHeader = header("Knobs", trailing: [calibrateButton, knobEdit])
+            let knobHeader = header("Knobs", trailing: [knobEdit])
+            let stepHeader = header("Shortcuts")
             let menuBarHeader = header("Menu bar")
             let caption = footnote("Choose what each knob does in this profile.")
+            caption.addView(NSButton(title: "Calibrate", target: self, action: #selector(calibrate)), in: .trailing)
             let content = NSStackView(views: [profileHeader, profileGroup, knobHeader, knobGroup, caption, optionGroup,
-                                              menuBarHeader, menuBarGroup, footer])
+                                              stepHeader, stepGroup, menuBarHeader, menuBarGroup, footer])
             content.orientation = .vertical
             content.alignment = .leading
             content.spacing = 8  // a heading to its group; sections sit further apart
-            for view in [profileGroup, optionGroup, menuBarGroup] { content.setCustomSpacing(24, after: view) }
-            content.setCustomSpacing(6, after: knobGroup)
+            for view in [profileGroup, optionGroup, stepGroup, menuBarGroup] { content.setCustomSpacing(24, after: view) }
             content.setCustomSpacing(16, after: caption)
             content.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
             content.setHuggingPriority(.defaultHigh, for: .horizontal)  // else fittingSize drops the right inset
-            for view in [profileHeader, knobHeader, menuBarHeader, caption, footer] {
+            for view in [profileHeader, knobHeader, stepHeader, menuBarHeader, caption, footer] {
                 view.widthAnchor.constraint(equalTo: knobGroup.widthAnchor).isActive = true
             }
             reloadDraft()
@@ -159,6 +164,13 @@ extension MenuBar {
             box.widthAnchor.constraint(equalToConstant: 420),
         ])
         return box
+    }
+
+    // The ✕ keeps its place while hidden, so the field doesn't move when a shortcut comes or goes.
+    func shortcutRow(_ title: String, _ index: Int) -> NSStackView {
+        let row = row([NSTextField(labelWithString: title)], shortcutButtons[index], removeShortcutButtons[index])
+        row.detachesHiddenViews = false
+        return row
     }
 
     func row(_ leading: [NSView], _ trailing: NSView...) -> NSStackView {
@@ -319,11 +331,15 @@ extension MenuBar {
         for label in [showNameLabel, iconLabel] { label.textColor = draft.hideIcon ? .disabledControlTextColor : .labelColor }
     }
 
-    // The shortcuts are off while recording, so pressing one records it instead of switching.
-    @objc func recordShortcut() {
-        guard recorder == nil else { return stopRecording() }
-        registerHotKeys([])
-        shortcutButton.title = "Press Shortcut"
+    // The shortcuts are off while recording, so pressing one records it instead of switching. A click on
+    // the field being recorded stops, and on another field records that one instead.
+    @objc func recordShortcut(_ sender: NSButton) {
+        let again = recorder != nil && recording == sender.tag
+        stopRecording()
+        guard !again else { return }
+        registerHotKeys(nil)
+        recording = sender.tag
+        sender.title = "Press Shortcut"
         recorder = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.record(event)
             return nil
@@ -336,13 +352,15 @@ extension MenuBar {
         let shortcut = Shortcut(keyCode: event.keyCode, modifiers: flags.rawValue,
                                 key: event.characters(byApplyingModifiers: []) ?? "")
         if Int(event.keyCode) == kVK_Delete && flags.isEmpty {
-            draft.profile.shortcut = nil
+            draft[keyPath: shortcutPaths[recording]] = nil
         } else if Int(event.keyCode) != kVK_Escape {
+            // Not another profile's, nor one of this window's other fields (this profile's, Next, Previous).
             let taken = draft.profiles.indices.contains { $0 != draft.active && draft.profiles[$0].shortcut == shortcut }
+                || shortcutPaths.indices.contains { $0 != recording && draft[keyPath: shortcutPaths[$0]] == shortcut }
             guard !shortcut.key.isEmpty, !flags.isDisjoint(with: [.command, .control]), !taken,
                   let probe = registerHotKey(shortcut, id: 0) else { return NSSound.beep() }
             UnregisterEventHotKey(probe)
-            draft.profile.shortcut = shortcut
+            draft[keyPath: shortcutPaths[recording]] = shortcut
         }
         stopRecording()
     }
@@ -350,15 +368,17 @@ extension MenuBar {
     func stopRecording() {
         if let recorder {
             NSEvent.removeMonitor(recorder)
-            registerHotKeys(shared.config().setup.profiles)
+            registerHotKeys(shared.config().setup)
         }
         recorder = nil
-        shortcutButton.title = draft.profile.shortcut?.label ?? "Record Shortcut"
-        removeShortcutButton.isHidden = draft.profile.shortcut == nil
+        for (index, path) in shortcutPaths.enumerated() {
+            shortcutButtons[index].title = draft[keyPath: path]?.label ?? "Record Shortcut"
+            removeShortcutButtons[index].isHidden = draft[keyPath: path] == nil
+        }
     }
 
-    @objc func removeShortcut() {
-        draft.profile.shortcut = nil
+    @objc func removeShortcut(_ sender: NSButton) {
+        draft[keyPath: shortcutPaths[sender.tag]] = nil
         stopRecording()
     }
 
@@ -367,7 +387,7 @@ extension MenuBar {
             draft.profiles[index].name = "Profile \(index + 1)"
         }
         shared.setSetup(draft)
-        registerHotKeys(draft.profiles)
+        registerHotKeys(draft)
         refresh()
         reloadDraft()
         if draft.columns.contains(nil) { calibrate() }  // a knob added with + has no input yet

@@ -46,6 +46,14 @@ private let every: [Target] = [.master, .microphone, .builtinBrightness, .builti
     #expect(try JSONDecoder().decode([Knob].self, from: Data(saved.utf8)) == zip(columns, jobs).map { Knob(column: $0, target: $1) })
 }
 
+// Next from the last profile is the first, and previous from the first is the last.
+@Test func steppingThroughProfilesWrapsRound() {
+    var setup = Setup(profiles: [Profile(name: "A"), Profile(name: "B"), Profile(name: "C")])
+    #expect(setup.stepped(1) == 1 && setup.stepped(-1) == 2)
+    setup.active = 2
+    #expect(setup.stepped(1) == 0 && setup.stepped(-1) == 1)
+}
+
 @Test func profilesAndShortcutsSurviveSaving() throws {
     let games = [Profile(name: "Games", targets: jobs, shortcut: Shortcut(
         keyCode: 18, modifiers: NSEvent.ModifierFlags([.control, .option]).rawValue, key: "1"))]

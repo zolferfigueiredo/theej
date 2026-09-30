@@ -94,10 +94,11 @@ calibrated yet shows "Needs calibration" in red under its name, and does nothing
 
 Those jobs belong to a **profile**: a name, a job for every knob, and an optional keyboard shortcut.
 The menu at the top picks the profile you are editing, + adds one with every knob doing nothing,
-and - removes the one shown. Switch profiles from the menu bar, or with a profile's shortcut from
-any app. To set one, click Record Shortcut and press it; it needs ⌘ or ⌃, and Escape cancels. The
-ⓧ beside a shortcut removes it, as does Delete while recording. Shortcuts need no Accessibility or
-Input Monitoring permission.
+and - removes the one shown. Switch profiles from the menu bar, or with a profile's shortcut from any
+app. Under **Shortcuts**, **Next profile** and **Previous profile** step through them in order from
+any app, wrapping round at either end. To set a shortcut, click Record Shortcut and press it; it
+needs ⌘ or ⌃, can't be one already in use, and Escape cancels. The ✕ after a shortcut removes it, as
+does Delete while recording. Shortcuts need no Accessibility or Input Monitoring permission.
 
 **Invert knobs** flips every knob's direction, for a board whose pots are wired the other way round.
 Under **Menu bar**, **Hide menu bar icon** removes the icon, name and all, and greys out the other
@@ -111,8 +112,8 @@ needs calibration, as after +, Save opens Calibration.
 
 **Calibration** finds your knobs by itself. It opens on its own the first time the board connects
 while a knob needs it, as on a fresh install, and **Calibrate** in the menu runs it any time the
-board is connected, as does the Calibrate button beside Knobs in Settings. It asks for knob A, then
-B, and so on. For each one:
+board is connected, as does the Calibrate button under the knobs in Settings. It asks for knob A,
+then B, and so on. For each one:
 
 1. Move it from one end to the other, so TheeJ can tell which knob it is.
 2. Turn it slowly, back and forth, for 20 seconds.

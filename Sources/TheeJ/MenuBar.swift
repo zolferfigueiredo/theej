@@ -10,11 +10,15 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     let profilePicker = NSPopUpButton()
     let profileEdit = NSSegmentedControl()
     let profileName = NSTextField(string: "")
-    let shortcutButton = NSButton(title: "", target: nil, action: nil)
-    let removeShortcutButton = NSButton(
-        image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Remove shortcut")!,
-        target: nil, action: nil)
+    // The profile's own shortcut, then Next and Previous profile: each a button that records it and a ✕.
+    let shortcutPaths: [WritableKeyPath<Setup, Shortcut?>] = [\.profile.shortcut, \.next, \.previous]
+    let shortcutButtons = (0..<3).map { _ in NSButton(title: "", target: nil, action: nil) }
+    let removeShortcutButtons = (0..<3).map { _ in
+        NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Remove shortcut")!,
+                 target: nil, action: nil)
+    }
     var recorder: Any?  // the key monitor while a shortcut is being recorded
+    var recording = 0  // which of shortcutPaths it records
     let profileRows = NSStackView()
     let knobRows = NSStackView()
     let knobEdit = NSSegmentedControl()
@@ -208,6 +212,10 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
 
     @objc func pickProfile(_ sender: NSMenuItem) {
         switchProfile(sender.tag)
+    }
+
+    func stepProfile(_ by: Int) {
+        switchProfile(shared.config().setup.stepped(by))
     }
 
     func switchProfile(_ index: Int) {
