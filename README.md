@@ -121,14 +121,15 @@ board is connected. It asks for knob A, then B, and so on. For each one:
 
 Steps 2 to 5 are the cure for jumpy knobs (below). The timers only run while the knob turns, and
 when one stops, the window says so in orange and asks you to keep turning. A short sound marks each
-new step, so you can watch the knob rather than the screen. Allow a minute or two per knob. While
-it waits for a knob, moving one it already found gets an orange reminder of which knob that is.
-Once a knob is found, Skip moves on to the next one without its turns and sweeps. When TheeJ asks
-for a knob you don't have, click Finish, and the knobs found so far become your knobs. Once every
-value the sketch sends has a knob, it says so, and Finish is all that's left. Every knob holds
-still for the whole run, Cancel leaves everything as it was, and Settings comes to the front at the
-end to choose what each knob does. A knob that stops being found keeps its jobs, for when a later
-calibration finds it again.
+new step, so you can watch the knob rather than the screen. Allow a minute or two per knob. While it
+waits for a knob, moving one it already found gets an orange reminder of which knob that is. Skip
+moves on to the next knob. A knob found in this run skips its turns and sweeps, and one that was
+already set up keeps its input, so after + you can skip straight to the new knob. When TheeJ asks
+for a knob with no input that you don't have, click Finish, and the knobs so far become your knobs.
+Once every value the sketch sends has a knob, it says so, and Finish is all that's left. Every knob
+holds still for the whole run, Cancel leaves everything as it was, and Settings comes to the front
+at the end to choose what each knob does. A knob that stops being found keeps its jobs, for when a
+later calibration finds it again.
 
 A knob only shows up once the Arduino sketch sends its value. A knob the sketch does not send is
 never found, so click Finish when TheeJ asks for it.

@@ -7,7 +7,7 @@ extension MenuBar {
             present(window)
             return
         }
-        calibrator = Calibrator()
+        calibrator = Calibrator(saved: shared.config().setup.columns)
         if calibrationWindow == nil {
             stepTitle.font = .boldSystemFont(ofSize: 16)
             stepBody.preferredMaxLayoutWidth = 360
@@ -63,12 +63,20 @@ extension MenuBar {
     func showStep() {
         guard let run = calibrator, let window = calibrationWindow else { return }
         let name = letter(run.knob)
+        var move = "Move knob \(name) from one end to the other"
+        if run.knob == 0 {
+            move += ", so \(appName) can tell which knob is which. Each knob then takes a minute or two of turning, "
+                + "which also cleans a jumpy one"
+        }
+        move += "."
+        if run.canSkip {
+            move += " It's already set up, so Skip keeps it as it is."
+        } else if run.knob > 0 {
+            move += " If you don't have a knob \(name), click Finish."
+        }
+        if run.knob == 0 { move += " Your knobs hold still until you finish." }
         let steps = [
-            run.knob == 0
-                ? "Move knob A from one end to the other, so \(appName) can tell which knob is which. Each knob "
-                    + "then takes a minute or two of turning, which also cleans a jumpy one. Your knobs hold still "
-                    + "until you finish."
-                : "Move knob \(name) from one end to the other. If you don't have a knob \(name), click Finish.",
+            move,
             "Found it. Now turn it slowly, back and forth. The timer only runs while it turns.",
             "Now turn it fast.",
             "Slowly again.",
@@ -80,7 +88,7 @@ extension MenuBar {
                 + "Click Finish to choose what they do."
             : steps[run.phase]
         showProgress(run)
-        skipButton.title = run.phase == 0 ? "Finish" : "Skip"
+        skipButton.title = run.canSkip ? "Skip" : "Finish"
         fit(window)
     }
 
@@ -102,13 +110,12 @@ extension MenuBar {
         }
     }
 
-    // Finish while waiting for a knob, since the one asked for isn't there. Skip once it's found.
     @objc func skipKnob() {
-        if calibrator?.phase == 0 {
-            finish()
-        } else {
+        if calibrator?.canSkip == true {
             calibrator?.skip()
             showStep()
+        } else {
+            finish()
         }
     }
 

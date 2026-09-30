@@ -7,6 +7,7 @@ struct Calibrator {
     static let turnSeconds = 20.0
     static let sweepsNeeded = 10
 
+    let saved: [Int?]  // each knob's column before this run, which Skip keeps
     private(set) var found: [Int] = []  // a column per knob, A first
     private(set) var phase = 0
     private(set) var left = turnSeconds
@@ -20,8 +21,19 @@ struct Calibrator {
     private var lastTime = 0.0
     private var armed = false
 
+    init(saved: [Int?] = []) { self.saved = saved }
+
     // The knob being asked for, then turned.
     var knob: Int { phase == 0 ? found.count : found.count - 1 }
+
+    // Once found, or while asked for if it already had a column that no knob in this run has taken.
+    // Otherwise the knob asked for isn't there, and Finish is what's left.
+    var canSkip: Bool {
+        guard !full else { return false }
+        if phase > 0 { return true }
+        guard knob < saved.count, let column = saved[knob] else { return false }
+        return !found.contains(column)
+    }
 
     // A turning step's timer stops once the knob has been still for a second.
     var paused: Bool { (1...3).contains(phase) && lastTime - lastMove > 1 }
@@ -74,9 +86,10 @@ struct Calibrator {
         }
     }
 
-    // Only once the knob is found, which it stays: this skips its turns and sweeps.
+    // A knob found in this run skips its turns and sweeps. One asked for keeps its old column.
     mutating func skip() {
-        guard phase > 0 else { return }
+        guard canSkip else { return }
+        if phase == 0, let column = saved[knob] { found.append(column) }
         reset(0)
     }
 

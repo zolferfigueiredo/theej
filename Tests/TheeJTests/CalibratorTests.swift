@@ -35,5 +35,22 @@ import Testing
     #expect(run.found == [2, 0, 1])
     run.skip()
     tick([0, 1023, 1023])
-    #expect(run.full && run.phase == 0)  // every input has its knob, so only Finish is left
+    #expect(run.full && run.phase == 0 && !run.canSkip)  // every input has its knob, so only Finish is left
+}
+
+// A knob set up before can be skipped while it's asked for, keeping its column, unless this run has
+// found that column on another knob. One with no column can't: the button is Finish.
+@Test func calibrationSkipsKnobsAlreadySetUp() {
+    var run = Calibrator(saved: [2, nil, 0, 3])
+    #expect(run.canSkip)
+    run.skip()
+    #expect(run.found == [2] && run.knob == 1 && run.phase == 0)
+    #expect(!run.canSkip)  // knob B has no column yet
+    run.feed([500, 500, 500, 500], at: 0)
+    run.feed([500, 500, 500, 1023], at: 0.03)
+    #expect(run.found == [2, 3] && run.phase == 1)  // knob B is on column 3, which knob D had
+    run.skip()
+    #expect(run.knob == 2 && run.canSkip)
+    run.skip()
+    #expect(run.found == [2, 3, 0] && run.knob == 3 && !run.canSkip)  // column 3 is knob B's now
 }
