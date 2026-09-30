@@ -27,12 +27,13 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     let invertKnobs = NSSwitch()
     let showName = NSSwitch()
     let hideIcon = NSSwitch()
-    let showNameLabel = NSTextField(labelWithString: "Show profile name")
+    let showNameLabel = NSTextField(labelWithString: "")  // these three are dimmed with the icon hidden
     let showProfiles = NSSwitch()
-    let profileListLabel = NSTextField(labelWithString: "Profile list")
+    let profileListLabel = NSTextField(labelWithString: "")
     let iconPicker = NSPopUpButton()
-    let iconLabel = NSTextField(labelWithString: "Icon")
+    let iconLabel = NSTextField(labelWithString: "")
     let speedPicker = NSPopUpButton()
+    let languagePicker = NSPopUpButton()
     var calibrationWindow: NSWindow?
     var calibrator: Calibrator?
     var calibrationOffered = false
@@ -40,6 +41,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     let stepBody = NSTextField(wrappingLabelWithString: "")
     let stepProgress = NSTextField(labelWithString: "")
     let skipButton = NSButton(title: "", target: nil, action: nil)
+    let cancelButton = NSButton(title: "", target: nil, action: #selector(NSWindow.performClose(_:)))
 
     override init() {
         super.init()
@@ -77,7 +79,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             return mi
         }
         let showData = prefs.bool(forKey: "showDataInMenu")
-        let data = entry("Show data below", #selector(toggleData), "")
+        let data = entry(tr("show_data"), #selector(toggleData), "")
         data.state = showData ? .on : .off
         menu.addItem(data)
         if showData, state.connected {
@@ -92,7 +94,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         }
         menu.addItem(.separator())
         if setup.showProfiles {
-            menu.addItem(.sectionHeader(title: "Profiles"))
+            menu.addItem(.sectionHeader(title: tr("profiles")))
             for (index, profile) in setup.profiles.enumerated() {
                 let mi = entry(clipped(profile.name, to: 30), #selector(pickProfile), profile.shortcut?.key ?? "")
                 mi.keyEquivalentModifierMask = profile.shortcut?.flags ?? []
@@ -102,26 +104,38 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             }
             menu.addItem(.separator())
         }
-        menu.addItem(entry("Settings", #selector(openSettings), ","))
-        let calibrateItem = entry("Calibrate", #selector(calibrate), "")
+        menu.addItem(entry(tr("settings"), #selector(openSettings), ","))
+        let calibrateItem = entry(tr("calibrate"), #selector(calibrate), "")
         calibrateItem.isEnabled = state.connected
         menu.addItem(calibrateItem)
+        // The globe is the website's language picker. Each language is named in itself, so it can always be found.
+        let languages = NSMenu()
+        for (index, language) in Language.allCases.enumerated() {
+            let choice = entry("\(language.flag) \(language.name)", #selector(pickLanguage), "")
+            choice.tag = index
+            choice.state = language == .current ? .on : .off
+            languages.addItem(choice)
+        }
+        let languageItem = NSMenuItem(title: tr("language"), action: nil, keyEquivalent: "")
+        languageItem.image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
+        languageItem.submenu = languages
+        menu.addItem(languageItem)
         menu.addItem(.separator())
-        menu.addItem(label(state.connected ? "Connected: \(state.port ?? "?")" : "Not connected"))
-        menu.addItem(entry("Reconnect", #selector(reconnect), ""))
+        menu.addItem(label(state.connected ? tr("connected", ["port": state.port ?? "?"]) : tr("not_connected")))
+        menu.addItem(entry(tr("reconnect"), #selector(reconnect), ""))
         menu.addItem(.separator())
         // Registering from anywhere else (a build folder) would point the login item at a bundle that disappears.
-        let login = entry("Launch at login", #selector(toggleLogin), "")
+        let login = entry(tr("login"), #selector(toggleLogin), "")
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         login.isEnabled = Bundle.main.bundlePath.hasPrefix("/Applications/")
         menu.addItem(login)
-        let dock = entry("Keep in Dock", #selector(toggleDock), "")
+        let dock = entry(tr("dock"), #selector(toggleDock), "")
         dock.state = inDock() ? .on : .off
         menu.addItem(dock)
         menu.addItem(.separator())
-        menu.addItem(entry("About \(appName)", #selector(about), "", symbol: "info.circle"))
+        menu.addItem(entry(tr("about"), #selector(about), "", symbol: "info.circle"))
         menu.addItem(.separator())
-        let check = entry("Check for updates…", #selector(checkNow), "", symbol: "arrow.down.circle")
+        let check = entry(tr("check"), #selector(checkNow), "", symbol: "arrow.down.circle")
         check.isEnabled = !checking
         if let version = availableUpdate() {
             check.attributedTitle = updateAvailableTitle(version)
@@ -129,18 +143,18 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         }
         menu.addItem(check)
         let every = NSMenu()
-        for (seconds, title) in [(86400, "Daily"), (604800, "Weekly"), (0, "Never")] {
+        for (seconds, title) in [(86400, tr("daily")), (604800, tr("weekly")), (0, tr("never"))] {
             let choice = entry(title, #selector(pickUpdateEvery), "")
             choice.tag = seconds
             choice.state = prefs.integer(forKey: "updateEvery") == seconds ? .on : .off
             every.addItem(choice)
         }
-        let auto = NSMenuItem(title: "Check automatically", action: nil, keyEquivalent: "")
+        let auto = NSMenuItem(title: tr("auto"), action: nil, keyEquivalent: "")
         auto.submenu = every
         auto.image = NSImage(size: NSSize(width: 16, height: 16))  // lines the title up with the icon rows
         menu.addItem(auto)
         menu.addItem(.separator())
-        menu.addItem(entry("Quit \(appName)", #selector(quit), "q", symbol: "xmark.square"))
+        menu.addItem(entry(tr("quit"), #selector(quit), "q", symbol: "xmark.square"))
     }
 
     // No knob values here: nothing calls this as they change, so they would be stale.
@@ -150,7 +164,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         item.isVisible = !setup.hideIcon
         item.button?.image = makeIcon(setup.icon, parked: !state.connected)
         item.button?.title = setup.showName ? clipped(setup.profile.name, to: 20) : ""
-        item.button?.toolTip = "\(appName): \(state.connected ? state.port ?? "connected" : "not connected")"
+        item.button?.toolTip = "\(appName): \(state.connected ? state.port ?? "?" : tr("not_connected"))"
     }
 
     func makeWindow(_ title: String, _ content: NSView) -> NSWindow {
@@ -260,5 +274,31 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
 
     @objc func pickUpdateEvery(_ sender: NSMenuItem) {
         prefs.set(sender.tag, forKey: "updateEvery")
+    }
+
+    // From the menu, by tag, or from the popup in Settings, by index.
+    @objc func pickLanguage(_ sender: Any) {
+        let index = (sender as? NSPopUpButton)?.indexOfSelectedItem ?? (sender as? NSMenuItem)?.tag ?? 0
+        // Once the click is over: Settings is built again, and the popup that sent this with it.
+        DispatchQueue.main.async { [self] in setLanguage(Language.allCases[index]) }
+    }
+
+    // The menu is rebuilt as it opens and the calibration window at each step. Settings is built once,
+    // so it is built again, on the same tab, in the same place and with its unsaved edits.
+    func setLanguage(_ language: Language) {
+        prefs.set(language.rawValue, forKey: "language")
+        refresh()
+        if calibrator != nil { showStep() }
+        guard let old = settingsWindow else { return }
+        let tab = old.toolbar?.selectedItemIdentifier ?? .general
+        let corner = NSPoint(x: old.frame.minX, y: old.frame.maxY)
+        let visible = old.isVisible
+        stopRecording()
+        settingsWindow = nil
+        old.orderOut(nil)  // not close(), which would take the app out of the Dock and ⌘Tab for a moment
+        guard visible else { return }
+        showSettings()
+        showTab(tab)
+        settingsWindow?.setFrameTopLeftPoint(corner)
     }
 }

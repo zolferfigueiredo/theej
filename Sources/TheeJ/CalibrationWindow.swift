@@ -19,12 +19,11 @@ extension MenuBar {
             stepBody.preferredMaxLayoutWidth = 360
             stepBody.widthAnchor.constraint(equalToConstant: 360).isActive = true
             stepProgress.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-            let cancel = NSButton(title: "Cancel", target: nil, action: #selector(NSWindow.performClose(_:)))
-            cancel.keyEquivalent = "\u{1b}"
+            cancelButton.keyEquivalent = "\u{1b}"
             skipButton.target = self
             skipButton.action = #selector(skipKnob)
             let buttons = NSStackView()
-            buttons.addView(cancel, in: .trailing)
+            buttons.addView(cancelButton, in: .trailing)
             buttons.addView(skipButton, in: .trailing)
             let content = NSStackView(views: [stepTitle, stepBody, stepProgress, buttons])
             content.orientation = .vertical
@@ -34,9 +33,9 @@ extension MenuBar {
             content.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
             content.setHuggingPriority(.defaultHigh, for: .horizontal)
             buttons.widthAnchor.constraint(equalTo: stepBody.widthAnchor).isActive = true
-            let window = makeWindow("\(appName) Calibration", content)
+            let window = makeWindow("", content)
             window.delegate = self
-            cancel.target = window
+            cancelButton.target = window
             calibrationWindow = window
         }
         showStep()
@@ -70,32 +69,26 @@ extension MenuBar {
         guard let run = calibrator, let window = calibrationWindow else { return }
         let name = letter(run.knob)
         let turns = Int(Calibrator.turnSeconds)
-        var move = "Move knob \(name) from one end to the other"
-        if run.knob == run.first {
-            move += ", so \(appName) can tell which knob is which. Each knob then gets \(turns) seconds of turning, "
-                + "which cleans a jumpy one"
-        }
-        move += "."
+        // The first knob also says why, and what the turning after it is for.
+        var move = tr(run.knob == run.first ? "cal.move_first" : "cal.move", ["letter": name, "n": turns])
+        var more: [String] = []
         if run.canSkip {
-            move += " It's already set up, so Skip keeps it as it is."
+            more.append(tr("cal.skip_keeps"))
         } else if run.knob < run.saved.count {
-            move += " Finish stops here and leaves it for later."
+            more.append(tr("cal.finish_later"))
         } else if run.knob > 0 {
-            move += " If you don't have a knob \(name), click Finish."
+            more.append(tr("cal.no_knob", ["letter": name]))
         }
-        if run.knob == run.first { move += " Your knobs hold still until you finish." }
-        let steps = [
-            move,
-            "Found it. Now turn it back and forth, from one end to the other, for \(turns) seconds. "
-                + "The timer only runs while it turns. Skip if it doesn't need cleaning.",
-        ]
-        stepTitle.stringValue = run.full ? "All knobs found" : "Knob \(name)"
-        stepBody.stringValue = run.full
-            ? "Your board sends \(run.found.count) values, and each one has its knob now, so that's all of them. "
-                + "Click Finish to choose what they do."
-            : steps[run.phase]
+        if run.knob == run.first { more.append(tr("cal.hold")) }
+        // Chinese and Japanese put no space between sentences.
+        for sentence in more { move += ([.zh, .ja].contains(Language.current) ? "" : " ") + sentence }
+        let steps = [move, tr("cal.turn", ["n": turns])]
+        window.title = tr("calibration_title")  // set here, not once, so a language change reaches an open window
+        cancelButton.title = tr("cancel")
+        stepTitle.stringValue = run.full ? tr("cal.all_found") : tr("knob", ["letter": name])
+        stepBody.stringValue = run.full ? tr("cal.all_found_text", ["n": run.found.count]) : steps[run.phase]
         showProgress(run)
-        skipButton.title = run.canSkip ? "Skip" : "Finish"
+        skipButton.title = run.canSkip ? tr("skip") : tr("finish")
         fit(window)
     }
 
@@ -105,14 +98,13 @@ extension MenuBar {
     }
 
     func progress(_ run: Calibrator) -> String {
-        if run.full { return run.found.count == 1 ? "1 knob found" : "\(run.found.count) knobs found" }
-        if let wrong = run.wrongKnob { return "That's knob \(letter(wrong)). Move knob \(letter(run.knob)) instead." }
+        if run.full { return plural("knobs_found", run.found.count) }
+        if let wrong = run.wrongKnob { return tr("cal.wrong", ["wrong": letter(wrong), "letter": letter(run.knob)]) }
         if run.phase == 0 {
-            return shared.snapshot().connected ? "Waiting for knob \(letter(run.knob)) to move" : "Waiting for the board to connect"
+            return shared.snapshot().connected ? tr("cal.waiting_knob", ["letter": letter(run.knob)]) : tr("cal.waiting_board")
         }
-        let seconds = Int(run.left.rounded(.up))
-        let left = seconds == 1 ? "1 second left" : "\(seconds) seconds left"
-        return run.paused ? "Paused with \(left). Keep turning knob \(letter(run.knob))." : left
+        let left = plural("seconds_left", Int(run.left.rounded(.up)))
+        return run.paused ? tr("cal.paused", ["left": left, "letter": letter(run.knob)]) : left
     }
 
     @objc func skipKnob() {
