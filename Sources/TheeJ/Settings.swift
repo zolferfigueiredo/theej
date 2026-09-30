@@ -205,6 +205,8 @@ extension MenuBar: NSToolbarDelegate {
         let version = NSTextField(labelWithString: tr("version", ["version": appVersion]))
         version.textColor = .secondaryLabelColor
         let check = NSButton(title: tr("check"), target: self, action: #selector(checkNow))
+        check.isEnabled = !checking && UpdateProgress.underway == nil
+        checkButton = check
         let website = link(tr("website"), "https://theej.zolfer.com/")
         let page = NSStackView(views: [icon, name, version, check, website, credit(tr("made_by"), "zolfer.com", "https://zolfer.com/"),
                                        credit(tr("inspired_by"), "deej", "https://github.com/omriharel/deej")])

@@ -41,7 +41,8 @@ if NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bu
 
 app.setActivationPolicy(.accessory)  // menu bar only; a regular app only while Settings is open
 // Before anything else opens and before the setup loads, which names a new install's first profile.
-if prefs.string(forKey: "language") == nil { LanguagePrompt().run() }
+// Its buttons hold it weakly, so it is kept alive until Continue.
+if prefs.string(forKey: "language") == nil { withExtendedLifetime(LanguagePrompt()) { $0.run() } }
 
 let saved = shared.config().setup
 print("\(appName): profile \(saved.profile.name)")
@@ -69,6 +70,7 @@ menuBar = MenuBar()
 app.delegate = menuBar
 UNUserNotificationCenter.current().delegate = menuBar
 DispatchQueue.main.async { menuBar?.showUpdateComplete() }  // once the app is running
+if prefs.bool(forKey: "testNotifications") { Task { _ = await showUpdateNotification(nextPatch(appVersion)) } }
 DistributedNotificationCenter.default().addObserver(forName: settingsRequest, object: nil, queue: .main) { _ in
     menuBar?.openSettings()
 }

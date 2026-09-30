@@ -2,6 +2,12 @@ import Foundation
 import Testing
 @testable import TheeJ
 
+@Test func nextPatchVersion() {
+    #expect(nextPatch("1.7.0") == "1.7.1")
+    #expect(nextPatch("0.9") == "0.10")
+    #expect(nextPatch("?") == "1")
+}
+
 @Test(arguments: [
     ("0.1.3", "0.1.2", true),
     ("0.1.10", "0.1.9", true),  // numeric, not alphabetical
