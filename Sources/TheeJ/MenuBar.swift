@@ -33,6 +33,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
 
     override init() {
         super.init()
+        prefs.register(defaults: ["updateEvery": 604800, "showDataInMenu": true])
         let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false
@@ -41,7 +42,6 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         item.button?.imagePosition = .imageLeading
         refresh()
 
-        prefs.register(defaults: ["updateEvery": 604800])
         let updates = Timer(timeInterval: 3600, target: self, selector: #selector(autoCheck), userInfo: nil, repeats: true)
         updates.tolerance = 600
         RunLoop.main.add(updates, forMode: .common)
@@ -83,10 +83,14 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         menu.addItem(label(state.connected ? "Connected: \(state.port ?? "?")" : "Not connected"))
         menu.addItem(entry("Reconnect", #selector(reconnect), ""))
         menu.addItem(.separator())
-        if state.connected, !state.lines.isEmpty {
+        let showData = prefs.bool(forKey: "showDataInMenu")
+        let data = entry("Show data in menu", #selector(toggleData), "")
+        data.state = showData ? .on : .off
+        menu.addItem(data)
+        if showData, state.connected {
             state.lines.forEach { menu.addItem(label($0)) }
-            menu.addItem(.separator())
         }
+        menu.addItem(.separator())
         // Registering from anywhere else (a build folder) would point the login item at a bundle that disappears.
         let login = entry("Launch at login", #selector(toggleLogin), "")
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
@@ -243,6 +247,10 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
 
     @objc func toggleDock() {
         toggleDockTile()
+    }
+
+    @objc func toggleData() {
+        prefs.set(!prefs.bool(forKey: "showDataInMenu"), forKey: "showDataInMenu")
     }
 
     @objc func pickUpdateEvery(_ sender: NSMenuItem) {
