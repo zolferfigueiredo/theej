@@ -7,7 +7,7 @@ with the native macOS HUD.
 Upstream deej is Windows-only for audio (it uses Windows Core Audio for per-app sessions). This is a
 small Swift daemon that speaks the same serial protocol and drives the macOS **output and input
 volume** through CoreAudio, **each app's volume** through Core Audio process taps, **external
-monitors** over DDC/CI, the **built-in display**, **Night
+screens** over DDC/CI, the **built-in display**, **Night
 Shift** and the **MacBook keyboard** through private macOS frameworks, and a **VIA keyboard's
 backlight** over USB. Arduino firmware is unchanged.
 
@@ -20,7 +20,7 @@ backlight** over USB. Arduino firmware is unchanged.
 - Menu bar icon showing connected or disconnected at a glance
 - Sets volume in-process via CoreAudio, with no `osascript`
 - Follows whichever output and input devices are current, so Bluetooth headphones just work
-- Identifies monitors by their CoreGraphics UUID and orders them by on-screen position, so two
+- Identifies screens by their CoreGraphics UUID and orders them by on-screen position, so two
   identical panels stay left and right across sleep and replug
 - Auto-detects the serial port and reconnects when the board is unplugged
 
@@ -28,9 +28,9 @@ backlight** over USB. Arduino firmware is unchanged.
 
 Needs Xcode command line tools (`xcode-select --install`).
 
-External monitor brightness and contrast additionally need
+External screen brightness and contrast additionally need
 [m1ddc](https://github.com/waydabber/m1ddc), a small standalone binary. Apple Silicon only, so on
-an Intel Mac external monitors are not available. Everything else works without it.
+an Intel Mac external screens are not available. Everything else works without it.
 
 ```bash
 brew install m1ddc
@@ -46,7 +46,7 @@ shows TheeJ by name and icon rather than as an unidentified developer. Without o
 hoc.
 
 **Quit MonitorControl, BetterDisplay or any similar app first.** Two processes writing the same
-monitor over I2C will fight over the value.
+screen over I2C will fight over the value.
 
 It prints live slider values so you can see which physical slider is which index.
 
@@ -95,12 +95,12 @@ and its knobs, **App settings** for shortcuts, the menu bar and sensitivity, and
 too tall for the screen scrolls. General lists every knob by the letter on the box with a menu for
 what it does: nothing, or any of the jobs under [What a knob can do](#what-a-knob-can-do). Clicking
 a job ticks it and clicking it again unticks it, so one knob can do several at once, of any kind:
-two monitors' brightness, or an app's volume and a keyboard backlight. They all take the knob's
+two screens' brightness, or an app's volume and a keyboard backlight. They all take the knob's
 position, and the row lists them one under the other, an app with its icon. Each job sits under the
 header of its section: Volume, Brightness, Contrast, Night Shift, Keyboard backlight or Apps. Apps
 lists the apps that make sound: the ones playing right now, the well-known players, browsers and
 call apps you have installed, open or not, and any app already on a knob. Other… at its end picks
-any app from Applications. Monitors count left to right by their position in System Settings. The +
+any app from Applications. Screens count left to right by their position in System Settings. The +
 and - buttons beside Knobs add or remove the last knob, down to none at all. A knob that has not
 been calibrated yet shows "Needs calibration" in red under its name, and does nothing until it is.
 
@@ -169,11 +169,11 @@ never found, so click Finish when TheeJ asks for it.
   certificate, as the release is: macOS gives an ad hoc build silence without asking.
 - **Built-in display brightness**: the Retina panel, through DisplayServices.
 - **Built-in display contrast**: the Accessibility "Display contrast" setting, normal at the bottom
-  of the knob and maximum at the top. External monitors ignore it.
+  of the knob and maximum at the top. External screens ignore it.
 - **Night Shift warmth**: off at the bottom of the knob, then from least to most warm, on every
   screen. It is macOS's own Night Shift, so a schedule still switches it on and off at its set
   times.
-- **Monitor brightness** and **Monitor contrast**: each external monitor over DDC/CI, through
+- **Screen brightness** and **Screen contrast**: each external screen over DDC/CI, through
   m1ddc.
 - **Built-in keyboard backlight**: the MacBook keyboard. macOS still turns it off when the keyboard
   sits idle or the room is bright, and brings it back at the knob's level.
@@ -278,7 +278,7 @@ Constants in [Dispatch.swift](Sources/TheeJ/Dispatch.swift), [Setup.swift](Sourc
 - `Calibrator.turnSeconds`, in [Calibrator.swift](Sources/TheeJ/Calibrator.swift): `20` seconds of
   turning per knob.
 
-Turning a brightness knob fully down sets the backlight to 0 and the panel goes black, and a monitor
+Turning a brightness knob fully down sets the backlight to 0 and the panel goes black, and a screen
 contrast knob at 0 leaves it close to black too. The knob is the way back.
 
 ## License

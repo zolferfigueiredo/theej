@@ -216,7 +216,7 @@ func targets(_ columns: [Int?], _ jobs: [[Target]]) -> [Int: [Target]] {
 }
 
 // The order of the jobs in a knob's popup in Settings. Each hundred is a section there, under the
-// header section() gives it. Monitors count left to right within theirs, and activeDisplays() stops
+// header section() gives it. Screens count left to right within theirs, and activeDisplays() stops
 // at 16, so they cannot reach the next section.
 func rank(_ target: Target) -> Int {
     switch target {
@@ -252,8 +252,8 @@ func title(_ target: Target?) -> String {
     case .builtinBrightness?: return "Built-in display brightness"
     case .builtinContrast?: return "Built-in display contrast"
     case .nightShift?: return "Night Shift warmth"
-    case .brightness(let ordinal)?: return "Monitor \(ordinal + 1) brightness"
-    case .contrast(let ordinal)?: return "Monitor \(ordinal + 1) contrast"
+    case .brightness(let ordinal)?: return "Screen \(ordinal + 1) brightness"
+    case .contrast(let ordinal)?: return "Screen \(ordinal + 1) contrast"
     case .builtinKeyboard?: return "Built-in keyboard backlight"
     case .externalKeyboard?: return "External keyboard backlight"
     case .app(let id)?: return appName(id)
@@ -269,7 +269,7 @@ func shortTitle(_ target: Target) -> String {
     switch target {
     case .master, .microphone: return title(target)
     case .builtinBrightness, .builtinContrast: return "Built-in display"
-    case .brightness(let ordinal), .contrast(let ordinal): return "Monitor \(ordinal + 1)"
+    case .brightness(let ordinal), .contrast(let ordinal): return "Screen \(ordinal + 1)"
     case .nightShift: return "Warmth"
     case .builtinKeyboard: return "Built-in"
     case .externalKeyboard: return "External"
