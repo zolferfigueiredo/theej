@@ -1,4 +1,5 @@
 import AppKit
+import UserNotifications
 
 // Launch argument `-updateSite http://localhost:8022/` tests against the website's run.sh.
 let site = URL(string: prefs.string(forKey: "updateSite") ?? "https://theej.zolfer.com/")!
@@ -129,6 +130,21 @@ final class UpdateProgress: NSObject {
     }
 }
 
+/// An automatic check tells about a new version once, as a notification, instead of interrupting with
+/// an alert. False when notifications aren't allowed, so the caller falls back to the alert.
+func notifyUpdate(_ version: String) async -> Bool {
+    if prefs.string(forKey: "notifiedVersion") == version { return true }
+    let center = UNUserNotificationCenter.current()
+    guard (try? await center.requestAuthorization(options: [.alert, .sound])) == true else { return false }
+    let content = UNMutableNotificationContent()
+    content.title = "\(appName) \(version) is available"
+    content.body = "You have \(appVersion). Click to update."
+    content.sound = .default
+    guard (try? await center.add(UNNotificationRequest(identifier: "update", content: content, trigger: nil))) != nil else { return false }
+    prefs.set(version, forKey: "notifiedVersion")
+    return true
+}
+
 /// Replaces the running bundle with the one in the DMG for `version`. The caller relaunches.
 /// URLSession downloads carry no quarantine flag, so the new copy opens without the Gatekeeper prompt.
 func install(_ version: String, step: @MainActor (String) -> Void) async throws {
@@ -221,6 +237,7 @@ extension MenuBar {
                 if !quiet { alert("You're up to date!", "\(appName) \(appVersion) is currently the newest version available.", "OK") }
                 return
             }
+            if quiet, await notifyUpdate(latest) { return }
             guard alert("\(appName) \(latest) is available", "You have \(appVersion). Update now?", "Update Now", "Later") else { return }
             let progress = UpdateProgress("Updating \(appName) to \(latest)")
             do {
@@ -250,5 +267,20 @@ extension MenuBar {
         buttons.forEach { alert.addButton(withTitle: $0) }
         NSApp.activate()
         return alert.runModal() == .alertFirstButtonReturn
+    }
+}
+
+extension MenuBar: UNUserNotificationCenterDelegate {
+    /// Clicking "… is available" checks again, which offers Update Now.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                withCompletionHandler done: @escaping () -> Void) {
+        if response.notification.request.identifier == "update" { DispatchQueue.main.async { self.checkNow() } }
+        done()
+    }
+
+    /// Shown even while the app is in front.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                withCompletionHandler done: @escaping (UNNotificationPresentationOptions) -> Void) {
+        done([.banner, .sound])
     }
 }
