@@ -1,4 +1,5 @@
 import AppKit
+import UserNotifications
 
 // build.sh runs this to render the app icon into an .iconset, then iconutil packs it.
 if let flag = args.firstIndex(of: "--iconset"), flag + 1 < args.count {
@@ -63,6 +64,7 @@ if keyboardLight == nil {
 app.setActivationPolicy(.accessory)  // menu bar only; a regular app only while Settings is open
 menuBar = MenuBar()
 app.delegate = menuBar
+UNUserNotificationCenter.current().delegate = menuBar
 DispatchQueue.main.async { menuBar?.showUpdateComplete() }  // once the app is running
 DistributedNotificationCenter.default().addObserver(forName: settingsRequest, object: nil, queue: .main) { _ in
     menuBar?.openSettings()
