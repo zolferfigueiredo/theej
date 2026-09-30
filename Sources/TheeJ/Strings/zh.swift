@@ -33,6 +33,7 @@ extension Strings {
         "choose": "选取",
         "choose_language": "选择语言",
         "click_to_update": "当前版本为 {version}。点按即可更新。",
+        "close": "关闭",
         "connected": "已连接：{port}",
         "continue": "继续",
         "daily": "每天",

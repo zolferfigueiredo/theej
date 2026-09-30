@@ -33,6 +33,7 @@ extension Strings {
         "choose": "選択",
         "choose_language": "言語を選択",
         "click_to_update": "現在は {version} です。クリックしてアップデート。",
+        "close": "閉じる",
         "connected": "接続済み: {port}",
         "continue": "続ける",
         "daily": "毎日",

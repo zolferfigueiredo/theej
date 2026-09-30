@@ -189,10 +189,12 @@ extension MenuBar: NSToolbarDelegate {
     }
 
     func saveFooter() -> NSStackView {
+        let close = NSButton(title: tr("close"), target: nil, action: #selector(NSWindow.performClose(_:)))
         let save = NSButton(title: tr("save"), target: self, action: #selector(saveSettings))
         save.keyEquivalent = "\r"
         let footer = NSStackView()
         footer.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
+        footer.addView(close, in: .leading)
         footer.addView(save, in: .trailing)
         return footer
     }

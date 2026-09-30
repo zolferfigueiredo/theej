@@ -33,6 +33,7 @@ extension Strings {
         "choose": "Выбрать",
         "choose_language": "Выберите язык",
         "click_to_update": "У вас {version}. Нажмите, чтобы обновить.",
+        "close": "Закрыть",
         "connected": "Подключено: {port}",
         "continue": "Продолжить",
         "daily": "Ежедневно",

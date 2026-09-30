@@ -174,8 +174,11 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         let state = shared.snapshot()
         let setup = shared.config().setup
         item.isVisible = !setup.hideIcon
-        item.button?.image = makeIcon(setup.icon, parked: !state.connected)
-        item.button?.title = setup.showName ? clipped(setup.profile.name, to: 20) : ""
+        item.button?.image = menuBarIcon(setup.icon, parked: !state.connected)
+        // In labelColor, not a plain title's controlTextColor, which is dimmed like a template on the menu bars
+        // of the displays not in use: see menuBarIcon.
+        item.button?.attributedTitle = NSAttributedString(string: setup.showName ? clipped(setup.profile.name, to: 20) : "",
+                                                          attributes: [.foregroundColor: NSColor.labelColor])
         item.button?.toolTip = "\(appName): \(state.connected ? state.port ?? "?" : tr("not_connected"))"
     }
 
