@@ -72,8 +72,9 @@ then Launch at login and Keep in Dock, About TheeJ, Check for updates… with Ch
 (daily, weekly by default, or never), and Quit TheeJ.
 
 **Check for updates…** asks theej.zolfer.com for `latest.json`, a plain download that sends nothing
-about you. When there is a newer version, **Update Now** downloads it, replaces the copy in
-Applications and relaunches.
+about you. When there is a newer version, **Update Now** downloads it, checks it is signed by you
+and replaces the copy in Applications, showing each step and a loading bar; **Reopen** then starts
+the new version.
 
 Settings can show the active profile's name beside the icon, or hide the icon altogether. Opening
 TheeJ again while it runs, from Finder, Spotlight or `open`, brings up Settings, which is the way
