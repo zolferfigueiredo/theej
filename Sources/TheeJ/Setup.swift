@@ -164,9 +164,9 @@ func targets(_ columns: [Int?], _ jobs: [Target?]) -> [Int: Target] {
     return result
 }
 
-// The one order for the jobs in Settings and the status lines, which is not the order of the serial
-// columns driving them. Each hundred is a group that Settings separates. Monitors count left to right
-// within theirs, and activeDisplays() stops at 16, so they cannot reach the next group.
+// The order of the jobs in a knob's popup in Settings. Each hundred is a group that Settings separates.
+// Monitors count left to right within theirs, and activeDisplays() stops at 16, so they cannot reach
+// the next group.
 func rank(_ target: Target) -> Int {
     switch target {
     case .master: return 0
@@ -181,8 +181,10 @@ func rank(_ target: Target) -> Int {
     }
 }
 
-func ordered(_ mapping: [Int: Target]) -> [(key: Int, value: Target)] {
-    mapping.sorted { (rank($0.value), $0.key) < (rank($1.value), $1.key) }
+// The status lines follow the knobs, A first, which is not the order of the serial columns driving
+// them. lastIndex, since the last knob on a column is the one targets() keeps.
+func ordered(_ mapping: [Int: Target], by columns: [Int?]) -> [(key: Int, value: Target)] {
+    mapping.sorted { (columns.lastIndex(of: $0.key) ?? 0) < (columns.lastIndex(of: $1.key) ?? 0) }
 }
 
 func title(_ target: Target?) -> String {
