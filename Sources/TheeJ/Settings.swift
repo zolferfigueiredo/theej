@@ -1,7 +1,20 @@
 import AppKit
 import Carbon.HIToolbox
 
-extension MenuBar {
+extension NSToolbarItem.Identifier {
+    static let general = Self("general")
+    static let app = Self("app")
+    static let about = Self("about")
+}
+
+// Settings' tabs in toolbar order, with their labels and SF Symbols.
+let settingsTabs: [(id: NSToolbarItem.Identifier, label: String, symbol: String)] = [
+    (.general, "General", "slider.vertical.3"), (.app, "App settings", "gearshape"), (.about, "About", "info.circle"),
+]
+
+let formWidth: CGFloat = 420  // every group, heading and footnote
+
+extension MenuBar: NSToolbarDelegate {
     // A second click keeps unsaved edits in an open window.
     @objc func openSettings() {
         if settingsWindow?.isVisible != true { draft = shared.config().setup }
@@ -9,7 +22,7 @@ extension MenuBar {
         settingsWindow?.makeFirstResponder(nil)  // else the name field opens with its text selected
     }
 
-    // Laid out as System Settings groups. Built once; after that only the rows and values change.
+    // Three tabs of System Settings groups. Built once; after that only the rows and values change.
     func showSettings() {
         if let window = settingsWindow {
             reloadDraft()
@@ -43,11 +56,11 @@ extension MenuBar {
             let stepGroup = group(stepRows)
             setRows(stepRows, [shortcutRow("Next profile", 1), shortcutRow("Previous profile", 2)])
 
-            for control: NSControl in [invertKnobs, showName, hideIcon, iconPicker] {
+            for control: NSControl in [invertKnobs, showName, hideIcon, iconPicker, showProfiles] {
                 control.target = self
                 control.action = #selector(toggleOption)
             }
-            for toggle in [invertKnobs, showName, hideIcon] { toggle.controlSize = .mini }
+            for toggle in [invertKnobs, showName, hideIcon, showProfiles] { toggle.controlSize = .mini }
             iconPicker.isBordered = false
             for style in IconStyle.allCases {
                 iconPicker.addItem(withTitle: style.title)
@@ -60,43 +73,106 @@ extension MenuBar {
             let menuBarGroup = group(menuBarRows)
             setRows(menuBarRows, [row([label("Hide menu bar icon", note: "Open \(appName) again to get back here.")], hideIcon),
                                   row([showNameLabel], showName),
-                                  row([iconLabel], iconPicker)])
-            let save = NSButton(title: "Save", target: self, action: #selector(saveSettings))
-            save.keyEquivalent = "\r"
-            let footer = NSStackView()
-            footer.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
-            footer.addView(save, in: .trailing)
-
-            let profileHeader = header("Profile", leading: [profilePicker], trailing: [profileEdit])
-            let knobHeader = header("Knobs", trailing: [knobEdit])
-            let stepHeader = header("Shortcuts")
-            let menuBarHeader = header("Menu bar")
+                                  row([iconLabel], iconPicker),
+                                  row([profileListLabel], showProfiles)])
             let caption = footnote("Choose what each knob does in this profile.")
             caption.addView(NSButton(title: "Calibrate", target: self, action: #selector(calibrate)), in: .trailing)
-            let content = NSStackView(views: [profileHeader, profileGroup, knobHeader, knobGroup, caption, optionGroup,
-                                              stepHeader, stepGroup, menuBarHeader, menuBarGroup, footer])
-            content.orientation = .vertical
-            content.alignment = .leading
-            content.spacing = 8  // a heading to its group; sections sit further apart
-            for view in [profileGroup, optionGroup, stepGroup, menuBarGroup] { content.setCustomSpacing(24, after: view) }
-            content.setCustomSpacing(16, after: caption)
-            content.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
-            content.setHuggingPriority(.defaultHigh, for: .horizontal)  // else fittingSize drops the right inset
-            for view in [profileHeader, knobHeader, stepHeader, menuBarHeader, caption, footer] {
-                view.widthAnchor.constraint(equalTo: knobGroup.widthAnchor).isActive = true
-            }
+            let general = page([header("Profile", leading: [profilePicker], trailing: [profileEdit]), profileGroup,
+                                header("Knobs", trailing: [knobEdit]), knobGroup, caption, optionGroup, saveFooter()])
+            general.setCustomSpacing(24, after: profileGroup)
+            general.setCustomSpacing(16, after: caption)
+            general.setCustomSpacing(24, after: optionGroup)
+            let app = page([header("Shortcuts"), stepGroup, header("Menu bar"), menuBarGroup, saveFooter()])
+            for view in [stepGroup, menuBarGroup] { app.setCustomSpacing(24, after: view) }
+            tabs = [.general: general, .app: app, .about: aboutPage()]
             reloadDraft()
-            let window = makeWindow("\(appName) Settings", content)
+            let window = makeWindow("", general)
+            let toolbar = NSToolbar(identifier: "settings")
+            toolbar.delegate = self
+            window.toolbar = toolbar
+            window.toolbarStyle = .preference
             // Else closing the window mid-recording would leave every shortcut off.
             NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: window,
                                                    queue: .main) { [weak self] _ in self?.stopRecording() }
             NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window,
                                                    queue: .main) { _ in NSApp.setActivationPolicy(.accessory) }
             settingsWindow = window
+            showTab(.general)
+            window.center()  // again, now that the toolbar has made it taller
         }
         // A regular app while Settings is open, so Cmd+Tab can switch back to it.
         NSApp.setActivationPolicy(.regular)
         present(settingsWindow!)
+    }
+
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] { settingsTabs.map(\.id) }
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] { settingsTabs.map(\.id) }
+    func toolbarSelectableItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] { settingsTabs.map(\.id) }
+
+    func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier id: NSToolbarItem.Identifier,
+                 willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
+        guard let tab = settingsTabs.first(where: { $0.id == id }) else { return nil }
+        let item = NSToolbarItem(itemIdentifier: id)
+        item.label = tab.label
+        item.image = NSImage(systemSymbolName: tab.symbol, accessibilityDescription: tab.label)
+        item.target = self
+        item.action = #selector(pickTab)
+        return item
+    }
+
+    @objc func pickTab(_ sender: NSToolbarItem) { showTab(sender.itemIdentifier) }
+
+    // The window takes each page's own height, growing or shrinking from its top edge.
+    func showTab(_ id: NSToolbarItem.Identifier) {
+        guard let window = settingsWindow, let page = tabs[id] else { return }
+        window.toolbar?.selectedItemIdentifier = id
+        window.title = settingsTabs.first { $0.id == id }?.label ?? ""
+        window.contentView = page
+        fit(window, animate: window.isVisible)
+    }
+
+    // Headings sit 8 above their group. Groups sit further apart, as the caller sets.
+    func page(_ views: [NSView]) -> NSStackView {
+        let page = NSStackView(views: views)
+        page.orientation = .vertical
+        page.alignment = .leading
+        page.spacing = 8
+        page.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+        page.setHuggingPriority(.defaultHigh, for: .horizontal)  // else fittingSize drops the right inset
+        for view in views where !(view is NSBox) { view.widthAnchor.constraint(equalToConstant: formWidth).isActive = true }
+        return page
+    }
+
+    func saveFooter() -> NSStackView {
+        let save = NSButton(title: "Save", target: self, action: #selector(saveSettings))
+        save.keyEquivalent = "\r"
+        let footer = NSStackView()
+        footer.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
+        footer.addView(save, in: .trailing)
+        return footer
+    }
+
+    func aboutPage() -> NSStackView {
+        let icon = NSImageView(image: makeAppIcon(side: 96, scale: 2))
+        icon.widthAnchor.constraint(equalToConstant: 96).isActive = true
+        icon.heightAnchor.constraint(equalToConstant: 96).isActive = true
+        let name = NSTextField(labelWithString: appName)
+        name.font = .boldSystemFont(ofSize: 16)
+        let version = NSTextField(labelWithString: "Version \(appVersion)")
+        version.textColor = .secondaryLabelColor
+        let check = NSButton(title: "Check for updates…", target: self, action: #selector(checkNow))
+        let website = link("Website", "https://theej.zolfer.com/")
+        let page = NSStackView(views: [icon, name, version, check, website, credit("Made by", "zolfer.com", "https://zolfer.com/"),
+                                       credit("Inspired by", "deej", "https://github.com/omriharel/deej")])
+        page.orientation = .vertical
+        page.alignment = .centerX
+        page.spacing = 4
+        page.setCustomSpacing(12, after: icon)
+        page.setCustomSpacing(16, after: version)
+        page.setCustomSpacing(16, after: check)
+        page.edgeInsets = NSEdgeInsets(top: 24, left: 20, bottom: 28, right: 20)
+        page.widthAnchor.constraint(equalToConstant: formWidth + 40).isActive = true  // as wide as the other tabs
+        return page
     }
 
     func setUpEdit(_ control: NSSegmentedControl, _ add: String, _ remove: String, _ action: Selector) {
@@ -161,7 +237,7 @@ extension MenuBar {
             rows.bottomAnchor.constraint(equalTo: box.bottomAnchor),
             rows.leadingAnchor.constraint(equalTo: box.leadingAnchor),
             rows.trailingAnchor.constraint(equalTo: box.trailingAnchor),
-            box.widthAnchor.constraint(equalToConstant: 420),
+            box.widthAnchor.constraint(equalToConstant: formWidth),
         ])
         return box
     }
@@ -209,6 +285,7 @@ extension MenuBar {
         profileEdit.setEnabled(draft.profiles.count > 1, forSegment: 1)
         invertKnobs.state = draft.invert ? .on : .off
         showName.state = draft.showName ? .on : .off
+        showProfiles.state = draft.showProfiles ? .on : .off
         hideIcon.state = draft.hideIcon ? .on : .off
         iconPicker.selectItem(at: IconStyle.allCases.firstIndex(of: draft.icon) ?? 0)
         dimMenuBarOptions()
@@ -319,16 +396,18 @@ extension MenuBar {
     @objc func toggleOption() {
         draft.invert = invertKnobs.state == .on
         draft.showName = showName.state == .on
+        draft.showProfiles = showProfiles.state == .on
         draft.hideIcon = hideIcon.state == .on
         draft.icon = IconStyle.allCases[iconPicker.indexOfSelectedItem]
         dimMenuBarOptions()
     }
 
-    // With the icon hidden there is nothing in the menu bar to name or draw.
+    // With the icon hidden there is nothing in the menu bar to name, draw or open.
     func dimMenuBarOptions() {
-        showName.isEnabled = !draft.hideIcon
-        iconPicker.isEnabled = !draft.hideIcon
-        for label in [showNameLabel, iconLabel] { label.textColor = draft.hideIcon ? .disabledControlTextColor : .labelColor }
+        for control: NSControl in [showName, iconPicker, showProfiles] { control.isEnabled = !draft.hideIcon }
+        for label in [showNameLabel, iconLabel, profileListLabel] {
+            label.textColor = draft.hideIcon ? .disabledControlTextColor : .labelColor
+        }
     }
 
     // The shortcuts are off while recording, so pressing one records it instead of switching. A click on

@@ -3,9 +3,9 @@ import ServiceManagement
 
 final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate, NSTextFieldDelegate {
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    var aboutWindow: NSWindow?
     var checking = false  // an update check or install is running
     var settingsWindow: NSWindow?
+    var tabs: [NSToolbarItem.Identifier: NSView] = [:]  // Settings' pages, kept while another is shown
     var draft = Setup()
     let profilePicker = NSPopUpButton()
     let profileEdit = NSSegmentedControl()
@@ -26,6 +26,8 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     let showName = NSSwitch()
     let hideIcon = NSSwitch()
     let showNameLabel = NSTextField(labelWithString: "Show profile name")
+    let showProfiles = NSSwitch()
+    let profileListLabel = NSTextField(labelWithString: "Profile list")
     let iconPicker = NSPopUpButton()
     let iconLabel = NSTextField(labelWithString: "Icon")
     var calibrationWindow: NSWindow?
@@ -79,15 +81,17 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             state.lines.forEach { menu.addItem(label($0)) }
         }
         menu.addItem(.separator())
-        menu.addItem(.sectionHeader(title: "Profiles"))
-        for (index, profile) in setup.profiles.enumerated() {
-            let mi = entry(profile.name, #selector(pickProfile), profile.shortcut?.key ?? "")
-            mi.keyEquivalentModifierMask = profile.shortcut?.flags ?? []
-            mi.tag = index
-            mi.state = index == setup.active ? .on : .off
-            menu.addItem(mi)
+        if setup.showProfiles {
+            menu.addItem(.sectionHeader(title: "Profiles"))
+            for (index, profile) in setup.profiles.enumerated() {
+                let mi = entry(profile.name, #selector(pickProfile), profile.shortcut?.key ?? "")
+                mi.keyEquivalentModifierMask = profile.shortcut?.flags ?? []
+                mi.tag = index
+                mi.state = index == setup.active ? .on : .off
+                menu.addItem(mi)
+            }
+            menu.addItem(.separator())
         }
-        menu.addItem(.separator())
         menu.addItem(entry("Settings", #selector(openSettings), ","))
         let calibrateItem = entry("Calibrate", #selector(calibrate), "")
         calibrateItem.isEnabled = state.connected
@@ -151,11 +155,11 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     }
 
     // Keeps the top edge where it is: setContentSize keeps the bottom one, so the title bar would move.
-    func fit(_ window: NSWindow) {
+    func fit(_ window: NSWindow, animate: Bool = false) {
         guard let size = window.contentView?.fittingSize else { return }
         var frame = window.frameRect(forContentRect: NSRect(origin: .zero, size: size))
         frame.origin = NSPoint(x: window.frame.minX, y: window.frame.maxY - frame.height)
-        window.setFrame(frame, display: true)
+        window.setFrame(frame, display: true, animate: animate)
     }
 
     // A menu bar app is never frontmost on its own, and activation can be refused once the user has
@@ -166,27 +170,9 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         window.orderFrontRegardless()
     }
 
-    // Same layout as BiHan Brightness's About window.
     @objc func about() {
-        if aboutWindow == nil {
-            let name = NSTextField(labelWithString: appName)
-            name.font = .boldSystemFont(ofSize: 16)
-            let text = NSStackView(views: [name,
-                                           credit("By", "Zolfer Figueiredo", "http://zolfer.com/"),
-                                           credit("Inspired by", "deej", "https://github.com/omriharel/deej"),
-                                           NSTextField(labelWithString: "Version \(appVersion)"),
-                                           link("Website", "https://theej.zolfer.com/")])
-            text.orientation = .vertical
-            text.setCustomSpacing(12, after: name)
-            let logo = NSImageView(image: makeAppIcon(side: 96, scale: 2))
-            logo.widthAnchor.constraint(equalToConstant: 96).isActive = true
-            logo.heightAnchor.constraint(equalToConstant: 96).isActive = true
-            let row = NSStackView(views: [logo, text])
-            row.spacing = 24
-            row.edgeInsets = NSEdgeInsets(top: 16, left: 24, bottom: 24, right: 40)
-            aboutWindow = makeWindow("", row)
-        }
-        present(aboutWindow!)
+        openSettings()
+        showTab(.about)
     }
 
     // Only the name is a link. The tooltip holds the URL, so hovering also shows where it goes.

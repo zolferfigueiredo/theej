@@ -68,8 +68,9 @@ and the app icon by `makeAppIcon`.
 Clicking it, with either button, opens a menu: Show data below first, on by default, with the live
 value of every knob under it, one per line, then the profiles, with a check by the active one and
 each one's shortcut, then Settings and Calibrate, then the current port with Reconnect under it,
-then Launch at login and Keep in Dock, About TheeJ, Check for updates… with Check automatically
-(daily, weekly by default, or never), and Quit TheeJ.
+then Launch at login and Keep in Dock, About TheeJ, which opens the About tab of Settings, Check for
+updates… with Check automatically (daily, weekly by default, or never), and Quit TheeJ. Settings can
+leave the profiles out.
 
 **Check for updates…** asks theej.zolfer.com for `latest.json`, a plain download that sends nothing
 about you. When there is a newer version, **Update Now** downloads it, replaces the copy in
@@ -85,9 +86,10 @@ which physical slider is which index.
 
 ## Settings and calibration
 
-**Settings** is laid out in groups, as System Settings is. It lists every knob by the letter on the
-box with a menu for what it does: nothing, or one of the jobs under
-[What a knob can do](#what-a-knob-can-do), grouped as volumes, brightness, contrast, Night Shift and
+**Settings** has three tabs, laid out in groups as System Settings is: **General** for the profile
+and its knobs, **App settings** for shortcuts and the menu bar, and **About**. General lists every
+knob by the letter on the box with a menu for what it does: nothing, or one of the jobs under [What
+a knob can do](#what-a-knob-can-do), grouped as volumes, brightness, contrast, Night Shift and
 keyboard backlights. Monitors count left to right by their position in System Settings. The + and -
 buttons beside Knobs add or remove the last knob, down to none at all. A knob that has not been
 calibrated yet shows "Needs calibration" in red under its name, and does nothing until it is.
@@ -95,15 +97,19 @@ calibrated yet shows "Needs calibration" in red under its name, and does nothing
 Those jobs belong to a **profile**: a name, a job for every knob, and an optional keyboard shortcut.
 The menu at the top picks the profile you are editing, + adds one with every knob doing nothing,
 and - removes the one shown. Switch profiles from the menu bar, or with a profile's shortcut from any
-app. Under **Shortcuts**, **Next profile** and **Previous profile** step through them in order from
-any app, wrapping round at either end. To set a shortcut, click Record Shortcut and press it; it
-needs ⌘ or ⌃, can't be one already in use, and Escape cancels. The ✕ after a shortcut removes it, as
-does Delete while recording. Shortcuts need no Accessibility or Input Monitoring permission.
+app. In App settings, under **Shortcuts**, **Next profile** and **Previous profile** step through
+them in order from any app, wrapping round at either end. To set a shortcut, click Record Shortcut
+and press it; it needs ⌘ or ⌃, can't be one already in use, and Escape cancels. The ✕ after a
+shortcut removes it, as does Delete while recording. Shortcuts need no Accessibility or Input
+Monitoring permission.
 
 **Invert knobs** flips every knob's direction, for a board whose pots are wired the other way round.
-Under **Menu bar**, **Hide menu bar icon** removes the icon, name and all, and greys out the other
-two while it is on. **Show profile name** puts the active profile's name beside the icon, and
-**Icon** picks Mixer, Dial or App icon.
+In App settings, under **Menu bar**, **Hide menu bar icon** removes the icon, name and all, and
+greys out the rest while it is on. **Show profile name** puts the active profile's name beside the
+icon, **Icon** picks Mixer, Dial or App icon, and **Profile list**, on by default, puts the profiles
+in the menu.
+
+**About** shows the version, with Check for updates…, and links to the website and to zolfer.com.
 
 Save applies at once, makes the profile shown the active one, and leaves the window open. A knob
 given a new job, by Save or by switching profiles, takes it over the next time you move it, so

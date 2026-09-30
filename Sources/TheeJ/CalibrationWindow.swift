@@ -131,6 +131,7 @@ extension MenuBar {
         // Started from an open Settings, which may hold unsaved edits: only the inputs change there.
         if settingsWindow?.isVisible == true { draft.columns = setup.columns } else { draft = setup }
         showSettings()
+        showTab(.general)  // where each knob's job is chosen
     }
 
     // Every way out of a run ends here, Cancel and the close button included, so the knobs never

@@ -70,6 +70,7 @@ struct Setup: Equatable {
     var previous: Shortcut?
     var invert = false
     var showName = false
+    var showProfiles = true  // the profiles in the menu bar's menu
     var hideIcon = false
     var icon = IconStyle.mixer
 
@@ -101,6 +102,7 @@ struct Setup: Equatable {
         setup.previous = decode("previousProfile")
         setup.invert = prefs.bool(forKey: "invertKnobs")
         setup.showName = prefs.bool(forKey: "showProfileName")
+        setup.showProfiles = prefs.object(forKey: "showProfileList") as? Bool ?? true
         setup.hideIcon = prefs.bool(forKey: "hideMenuBarIcon")
         setup.icon = IconStyle(rawValue: prefs.string(forKey: "menuBarIcon") ?? "") ?? .mixer
         return setup
@@ -118,6 +120,7 @@ struct Setup: Equatable {
         encode(previous, "previousProfile")
         prefs.set(invert, forKey: "invertKnobs")
         prefs.set(showName, forKey: "showProfileName")
+        prefs.set(showProfiles, forKey: "showProfileList")
         prefs.set(hideIcon, forKey: "hideMenuBarIcon")
         prefs.set(icon.rawValue, forKey: "menuBarIcon")
     }
