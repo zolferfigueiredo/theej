@@ -70,6 +70,6 @@ DistributedNotificationCenter.default().addObserver(forName: settingsRequest, ob
     menuBar?.openSettings()
 }
 installHotKeyHandler()
-registerHotKeys(saved.profiles)
+registerHotKeys(saved)
 DispatchQueue.global(qos: .utility).async { serialLoop() }
 app.run()

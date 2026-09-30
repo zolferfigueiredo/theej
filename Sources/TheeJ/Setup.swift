@@ -66,8 +66,11 @@ struct Setup: Equatable {
     var columns: [Int?] = []
     var profiles = [Profile(name: "Default")]
     var active = 0
+    var next: Shortcut?  // from any app, like a profile's own shortcut
+    var previous: Shortcut?
     var invert = false
     var showName = false
+    var showProfiles = true  // the profiles in the menu bar's menu
     var hideIcon = false
     var icon = IconStyle.mixer
 
@@ -77,6 +80,9 @@ struct Setup: Equatable {
     }
 
     var mapping: [Int: Target] { targets(columns, profile.targets) }
+
+    // The profile `by` steps away from the active one, wrapping round at either end.
+    func stepped(_ by: Int) -> Int { ((active + by) % profiles.count + profiles.count) % profiles.count }
 
     // JSON strings rather than data, so `defaults read com.zolfer.theej` is readable.
     static func load() -> Setup {
@@ -92,8 +98,11 @@ struct Setup: Equatable {
             setup.profile.targets = knobs.map(\.target)
         }
         setup.active = min(max(prefs.integer(forKey: "profile"), 0), setup.profiles.count - 1)
+        setup.next = decode("nextProfile")
+        setup.previous = decode("previousProfile")
         setup.invert = prefs.bool(forKey: "invertKnobs")
         setup.showName = prefs.bool(forKey: "showProfileName")
+        setup.showProfiles = prefs.object(forKey: "showProfileList") as? Bool ?? true
         setup.hideIcon = prefs.bool(forKey: "hideMenuBarIcon")
         setup.icon = IconStyle(rawValue: prefs.string(forKey: "menuBarIcon") ?? "") ?? .mixer
         return setup
@@ -107,8 +116,11 @@ struct Setup: Equatable {
         encode(columns, "columns")
         encode(profiles, "profiles")
         prefs.set(active, forKey: "profile")
+        encode(next, "nextProfile")
+        encode(previous, "previousProfile")
         prefs.set(invert, forKey: "invertKnobs")
         prefs.set(showName, forKey: "showProfileName")
+        prefs.set(showProfiles, forKey: "showProfileList")
         prefs.set(hideIcon, forKey: "hideMenuBarIcon")
         prefs.set(icon.rawValue, forKey: "menuBarIcon")
     }
@@ -157,6 +169,11 @@ func title(_ target: Target?) -> String {
     case .builtinKeyboard?: return "Built-in keyboard backlight"
     case .externalKeyboard?: return "External keyboard backlight"
     }
+}
+
+// A profile name cut to fit where a long one would push other things out: the menu bar, a menu, a popup.
+func clipped(_ name: String, to limit: Int) -> String {
+    name.count > limit ? name.prefix(limit - 1).trimmingCharacters(in: .whitespaces) + "…" : name
 }
 
 func letter(_ index: Int) -> String { String(Character(UnicodeScalar(UInt8(65 + index)))) }

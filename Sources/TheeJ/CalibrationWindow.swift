@@ -1,13 +1,19 @@
 import AppKit
 
 extension MenuBar {
-    // The window says what to do, and Cancel leaves everything as it was, so it opens straight away.
+    // Every knob, from A: the menu's Calibrate and the button in Settings.
     @objc func calibrate() {
+        startCalibration(onlyNew: false)
+    }
+
+    // The window says what to do, and Cancel leaves everything as it was, so it opens straight away.
+    // onlyNew, for Save and the automatic start, asks only for the knobs that have no input yet.
+    func startCalibration(onlyNew: Bool) {
         if let window = calibrationWindow, calibrator != nil {
             present(window)
             return
         }
-        calibrator = Calibrator(saved: shared.config().setup.columns)
+        calibrator = Calibrator(saved: shared.config().setup.columns, onlyNew: onlyNew)
         if calibrationWindow == nil {
             stepTitle.font = .boldSystemFont(ofSize: 16)
             stepBody.preferredMaxLayoutWidth = 360
@@ -57,30 +63,31 @@ extension MenuBar {
         let columns = shared.config().setup.columns
         guard !calibrationOffered, columns.isEmpty || columns.contains(nil) else { return }
         calibrationOffered = true
-        calibrate()
+        startCalibration(onlyNew: true)
     }
 
     func showStep() {
         guard let run = calibrator, let window = calibrationWindow else { return }
         let name = letter(run.knob)
+        let turns = Int(Calibrator.turnSeconds)
         var move = "Move knob \(name) from one end to the other"
-        if run.knob == 0 {
-            move += ", so \(appName) can tell which knob is which. Each knob then takes a minute or two of turning, "
-                + "which also cleans a jumpy one"
+        if run.knob == run.first {
+            move += ", so \(appName) can tell which knob is which. Each knob then gets \(turns) seconds of turning, "
+                + "which cleans a jumpy one"
         }
         move += "."
         if run.canSkip {
             move += " It's already set up, so Skip keeps it as it is."
+        } else if run.knob < run.saved.count {
+            move += " Finish stops here and leaves it for later."
         } else if run.knob > 0 {
             move += " If you don't have a knob \(name), click Finish."
         }
-        if run.knob == 0 { move += " Your knobs hold still until you finish." }
+        if run.knob == run.first { move += " Your knobs hold still until you finish." }
         let steps = [
             move,
-            "Found it. Now turn it slowly, back and forth. The timer only runs while it turns.",
-            "Now turn it fast.",
-            "Slowly again.",
-            "Sweep it from one end to the other, \(Calibrator.sweepsNeeded) times.",
+            "Found it. Now turn it back and forth, from one end to the other, for \(turns) seconds. "
+                + "The timer only runs while it turns. Skip if it doesn't need cleaning.",
         ]
         stepTitle.stringValue = run.full ? "All knobs found" : "Knob \(name)"
         stepBody.stringValue = run.full
@@ -100,14 +107,12 @@ extension MenuBar {
     func progress(_ run: Calibrator) -> String {
         if run.full { return run.found.count == 1 ? "1 knob found" : "\(run.found.count) knobs found" }
         if let wrong = run.wrongKnob { return "That's knob \(letter(wrong)). Move knob \(letter(run.knob)) instead." }
-        switch run.phase {
-        case 0: return shared.snapshot().connected ? "Waiting for knob \(letter(run.knob)) to move" : "Waiting for the board to connect"
-        case 4: return "Sweep \(run.sweeps) of \(Calibrator.sweepsNeeded)"
-        default:
-            let seconds = Int(run.left.rounded(.up))
-            let left = seconds == 1 ? "1 second left" : "\(seconds) seconds left"
-            return run.paused ? "Paused with \(left). Keep turning knob \(letter(run.knob))." : left
+        if run.phase == 0 {
+            return shared.snapshot().connected ? "Waiting for knob \(letter(run.knob)) to move" : "Waiting for the board to connect"
         }
+        let seconds = Int(run.left.rounded(.up))
+        let left = seconds == 1 ? "1 second left" : "\(seconds) seconds left"
+        return run.paused ? "Paused with \(left). Keep turning knob \(letter(run.knob))." : left
     }
 
     @objc func skipKnob() {
@@ -119,18 +124,19 @@ extension MenuBar {
         }
     }
 
-    // Saves before closing: windowWillClose throws the run away. The knobs found become the knobs, and
-    // with none found it ends like Cancel. Jobs past the last knob stay, for when it is found again.
+    // Saves before closing: windowWillClose throws the run away. With nothing to save, as when Finish
+    // comes straight away, it ends like Cancel.
     func finish() {
         guard let run = calibrator else { return }
-        guard !run.found.isEmpty else { calibrationWindow?.close(); return }
         var setup = shared.config().setup
-        setup.columns = run.found
+        guard run.result != setup.columns else { calibrationWindow?.close(); return }
+        setup.columns = run.result
         shared.setSetup(setup)
         calibrationWindow?.close()
         // Started from an open Settings, which may hold unsaved edits: only the inputs change there.
         if settingsWindow?.isVisible == true { draft.columns = setup.columns } else { draft = setup }
         showSettings()
+        showTab(.general)  // where each knob's job is chosen
     }
 
     // Every way out of a run ends here, Cancel and the close button included, so the knobs never

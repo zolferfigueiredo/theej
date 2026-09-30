@@ -1,17 +1,17 @@
 import Foundation
 
 // Pure, so the tests can drive it with fake lines and a fake clock. Knobs are found one at a time, in
-// the order they are moved, until Finish. For each knob, phase 0 finds its column, 1 to 3 are the slow,
-// fast and slow turns, and 4 is the sweeps.
+// the order they are moved, until Finish. For each knob, phase 0 finds its column and phase 1 is the
+// turning that cleans it, which a knob can skip once it is found.
 struct Calibrator {
     static let turnSeconds = 20.0
-    static let sweepsNeeded = 10
 
     let saved: [Int?]  // each knob's column before this run, which Skip keeps
+    let onlyNew: Bool  // pass by every knob that keeps its column, so only the ones without are asked for
+    private(set) var first = 0  // the first knob asked for
     private(set) var found: [Int] = []  // a column per knob, A first
     private(set) var phase = 0
     private(set) var left = turnSeconds
-    private(set) var sweeps = 0
     private(set) var full = false  // every value the sketch sends has its knob, so none is left to find
     private(set) var wrongKnob: Int?  // a knob already found, moving while the next one is asked for
     private var low: [Int] = []
@@ -19,15 +19,19 @@ struct Calibrator {
     private var anchor = -1
     private var lastMove = -Double.infinity
     private var lastTime = 0.0
-    private var stepStart = Double.infinity  // the step's first line; not yet while infinite
-    private var armed = false
+    private var stepStart = Double.infinity  // the turning's first line; not yet while infinite
 
-    init(saved: [Int?] = []) { self.saved = saved }
+    init(saved: [Int?] = [], onlyNew: Bool = false) {
+        self.saved = saved
+        self.onlyNew = onlyNew
+        skipKept()
+        first = knob
+    }
 
     // The knob being asked for, then turned.
     var knob: Int { phase == 0 ? found.count : found.count - 1 }
 
-    // Once found, or while asked for if it already had a column that no knob in this run has taken.
+    // Only a knob that is found: in this run, or before it with a column no other knob here has taken.
     // Otherwise the knob asked for isn't there, and Finish is what's left.
     var canSkip: Bool {
         guard !full else { return false }
@@ -36,9 +40,15 @@ struct Calibrator {
         return !found.contains(column)
     }
 
-    // A turning step's timer stops once the knob has been still for a second. Counted from the step's
-    // start too, or every step would open on "paused" until the knob first moves 10 counts.
-    var paused: Bool { (1...3).contains(phase) && lastTime - max(lastMove, stepStart) > 1 }
+    // The columns Finish saves: the knobs this run found or kept, then the rest as they were, less any
+    // column this run found on another knob.
+    var result: [Int?] {
+        found + saved.dropFirst(found.count).map { $0.flatMap { found.contains($0) ? nil : $0 } }
+    }
+
+    // The turning's timer stops once the knob has been still for a second. Counted from its start too,
+    // or it would open on "paused" until the knob first moves 10 counts.
+    var paused: Bool { phase == 1 && lastTime - max(lastMove, stepStart) > 1 }
 
     mutating func feed(_ values: [Int], at now: Double) {
         guard !full else { return }
@@ -73,30 +83,32 @@ struct Calibrator {
         }
         guard let column = found.last, column < values.count else { return }
         let value = values[column]
-        if phase < 4 {
-            // Checked before lastMove moves on, so the gap of a reconnect never counts.
-            if anchor < 0 { anchor = value; stepStart = now }
-            if now - lastMove <= 1 { left -= now - lastTime }
-            if abs(value - anchor) >= 10 { anchor = value; lastMove = now }
-            lastTime = now
-            if left <= 0 { next() }
-        } else {
-            // ponytail: a stray reading at the far end can re-arm and count a sweep early. That only
-            // shortens the cleaning; require a few readings at each end if it ever matters.
-            if value <= 100 { armed = true } else if armed && value >= 923 { armed = false; sweeps += 1 }
-            if sweeps >= Self.sweepsNeeded { next() }
-        }
+        // Checked before lastMove moves on, so the gap of a reconnect never counts.
+        if anchor < 0 { anchor = value; stepStart = now }
+        if now - lastMove <= 1 { left -= now - lastTime }
+        if abs(value - anchor) >= 10 { anchor = value; lastMove = now }
+        lastTime = now
+        if left <= 0 { next() }
     }
 
-    // A knob found in this run skips its turns and sweeps. One asked for keeps its old column.
+    // A knob found in this run skips its turning. One asked for keeps its old column.
     mutating func skip() {
         guard canSkip else { return }
         if phase == 0, let column = saved[knob] { found.append(column) }
         reset(0)
+        skipKept()
     }
 
     private mutating func next() {
-        reset(phase == 4 ? 0 : phase + 1)
+        reset(phase == 1 ? 0 : 1)
+        skipKept()
+    }
+
+    private mutating func skipKept() {
+        while onlyNew, phase == 0, canSkip, let column = saved[knob] {
+            found.append(column)
+            reset(0)
+        }
     }
 
     private mutating func reset(_ newPhase: Int) {
@@ -104,11 +116,9 @@ struct Calibrator {
         low = []
         high = []
         left = Self.turnSeconds
-        sweeps = 0
         anchor = -1
         lastMove = -.infinity
         stepStart = .infinity
-        armed = false
         wrongKnob = nil
     }
 }
