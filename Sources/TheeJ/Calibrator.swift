@@ -19,6 +19,7 @@ struct Calibrator {
     private var anchor = -1
     private var lastMove = -Double.infinity
     private var lastTime = 0.0
+    private var stepStart = Double.infinity  // the step's first line; not yet while infinite
     private var armed = false
 
     init(saved: [Int?] = []) { self.saved = saved }
@@ -35,8 +36,9 @@ struct Calibrator {
         return !found.contains(column)
     }
 
-    // A turning step's timer stops once the knob has been still for a second.
-    var paused: Bool { (1...3).contains(phase) && lastTime - lastMove > 1 }
+    // A turning step's timer stops once the knob has been still for a second. Counted from the step's
+    // start too, or every step would open on "paused" until the knob first moves 10 counts.
+    var paused: Bool { (1...3).contains(phase) && lastTime - max(lastMove, stepStart) > 1 }
 
     mutating func feed(_ values: [Int], at now: Double) {
         guard !full else { return }
@@ -73,7 +75,7 @@ struct Calibrator {
         let value = values[column]
         if phase < 4 {
             // Checked before lastMove moves on, so the gap of a reconnect never counts.
-            if anchor < 0 { anchor = value }
+            if anchor < 0 { anchor = value; stepStart = now }
             if now - lastMove <= 1 { left -= now - lastTime }
             if abs(value - anchor) >= 10 { anchor = value; lastMove = now }
             lastTime = now
@@ -105,6 +107,7 @@ struct Calibrator {
         sweeps = 0
         anchor = -1
         lastMove = -.infinity
+        stepStart = .infinity
         armed = false
         wrongKnob = nil
     }

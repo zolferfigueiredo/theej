@@ -11,7 +11,9 @@ import Testing
     tick([520, 500, 100])
     #expect(run.phase == 0)  // column 2 has only swung 400
     tick([520, 500, 1000])
-    #expect(run.found == [2] && run.phase == 1)
+    #expect(run.found == [2] && run.phase == 1 && !run.paused)
+    tick([520, 500, 1000])
+    #expect(!run.paused)  // a step doesn't open on "paused" before the knob has had a second
     for _ in 0..<1000 { tick([520, 500, 1000]) }  // 30 seconds untouched
     #expect(run.phase == 1 && run.left == Calibrator.turnSeconds && run.paused)
     tick([520, 500, 600])
