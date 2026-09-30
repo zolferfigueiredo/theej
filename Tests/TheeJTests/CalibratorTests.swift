@@ -1,16 +1,17 @@
 import Testing
 @testable import TheeJ
 
-// Calibration finds the knob that swings, times only while it turns, then counts sweeps.
+// Calibration finds the knob that swings, times only while it turns, counts sweeps, then asks for the
+// next knob until every input has one.
 @Test func calibrationRun() {
-    var run = Calibrator(knobs: 2)
+    var run = Calibrator()
     var clock = 0.0
     func tick(_ values: [Int]) { clock += 0.03; run.feed(values, at: clock) }
     tick([500, 500, 500])
     tick([520, 500, 100])
     #expect(run.phase == 0)  // column 2 has only swung 400
     tick([520, 500, 1000])
-    #expect(run.found == [2, nil] && run.phase == 1)
+    #expect(run.found == [2] && run.phase == 1)
     for _ in 0..<1000 { tick([520, 500, 1000]) }  // 30 seconds untouched
     #expect(run.phase == 1 && run.left == Calibrator.turnSeconds)
     var turning = 400
@@ -21,10 +22,16 @@ import Testing
     tick([520, 500, 0])
     tick([520, 500, 1023])
     #expect(run.phase == 0)  // column 2 is taken, so knob B cannot claim it
+    tick([0, 500, 1023])
+    #expect(run.found == [2, 0] && run.knob == 1 && run.phase == 1)
     run.skip()
-    #expect(run.done && run.found == [2, nil])
-}
-
-@Test func calibratedColumnsKeepTheOnesNotFound() {
-    #expect(calibrated([0, 2, 4], found: [2, nil, nil]) == [2, nil, 4])
+    #expect(run.knob == 2 && run.phase == 0 && !run.done)
+    run.skip()
+    #expect(run.knob == 2 && run.phase == 0)  // nothing to skip until knob C is found
+    tick([0, 0, 1023])
+    tick([0, 1023, 1023])
+    #expect(run.found == [2, 0, 1])
+    run.skip()
+    tick([0, 1023, 1023])
+    #expect(run.done)  // every input has its knob
 }

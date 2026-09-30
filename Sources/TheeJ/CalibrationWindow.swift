@@ -1,34 +1,13 @@
 import AppKit
 
 extension MenuBar {
-    // runModal only ever runs from here, a menu or button action. Inside a main queue block (feed)
-    // it would stall every line queued behind it until the alert closed.
+    // The window says what to do, and Cancel leaves everything as it was, so it opens straight away.
     @objc func calibrate() {
         if let window = calibrationWindow, calibrator != nil {
             present(window)
             return
         }
-        let count = shared.config().setup.columns.count
-        guard count > 0 else { return }
-        let turns = Int(Calibrator.turnSeconds)
-        let alert = NSAlert()
-        alert.messageText = count == 1 ? "Calibrate knob A?" : "Calibrate knobs A to \(letter(count - 1))?"
-        alert.informativeText = """
-            This takes about \(count == 1 ? "a minute" : "\(count) minutes, one per knob"). For each \
-            knob, you first move it from one end to the other so \(appName) can tell which one it is. \
-            Then you turn it slowly, fast, and slowly again for \(turns) seconds each, and sweep it \
-            \(Calibrator.sweepsNeeded) times. The timers only run while the knob turns.
-
-            You can skip a knob, but please don't skip one that jumps around: turning it is what cleans it.
-
-            Every knob holds still until you finish.
-            """
-        alert.addButton(withTitle: "Start")
-        alert.addButton(withTitle: "Cancel")
-        NSApp.activate()
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-
-        calibrator = Calibrator(knobs: count)
+        calibrator = Calibrator()
         if calibrationWindow == nil {
             stepTitle.font = .boldSystemFont(ofSize: 16)
             stepBody.preferredMaxLayoutWidth = 360
@@ -76,20 +55,31 @@ extension MenuBar {
         }
     }
 
+    // Once per launch, as the board connects: on a fresh install, or after + in Settings, a knob has no input yet.
+    func calibrateIfNeeded() {
+        let columns = shared.config().setup.columns
+        guard !calibrationOffered, columns.isEmpty || columns.contains(nil) else { return }
+        calibrationOffered = true
+        calibrate()
+    }
+
     func showStep() {
         guard let run = calibrator, let window = calibrationWindow else { return }
         let name = letter(run.knob)
-        let found = run.found[run.knob] == nil ? "" : "Found it. "
-        stepTitle.stringValue = "Knob \(name), \(run.knob + 1) of \(run.found.count)"
+        stepTitle.stringValue = "Knob \(name)"
         stepBody.stringValue = [
-            "Move knob \(name) from one end to the other.",
-            "\(found)Now turn it slowly, back and forth.",
+            run.knob == 0
+                ? "Move knob A from one end to the other, so \(appName) can tell which knob is which. Each knob "
+                    + "then takes a minute or two of turning, which also cleans a jumpy one. Your knobs hold still "
+                    + "until you finish."
+                : "Move knob \(name) from one end to the other. If you don't have a knob \(name), click Finish.",
+            "Found it. Now turn it slowly, back and forth. The timer only runs while it turns.",
             "Now turn it fast.",
             "Slowly again.",
             "Sweep it from one end to the other, \(Calibrator.sweepsNeeded) times.",
         ][run.phase]
         stepProgress.stringValue = progress(run)
-        skipButton.title = "Skip knob \(name)"
+        skipButton.title = run.phase == 0 ? "Finish" : "Skip"
         fit(window)
     }
 
@@ -103,16 +93,23 @@ extension MenuBar {
         }
     }
 
+    // Finish while waiting for a knob, since the one asked for isn't there. Skip once it's found.
     @objc func skipKnob() {
-        calibrator?.skip()
-        if calibrator?.done == true { finish() } else { showStep() }
+        if calibrator?.phase == 0 {
+            finish()
+        } else {
+            calibrator?.skip()
+            showStep()
+        }
     }
 
-    // Saves before closing: windowWillClose throws the run away.
+    // Saves before closing: windowWillClose throws the run away. The knobs found become the knobs, and
+    // with none found it ends like Cancel. Jobs past the last knob stay, for when it is found again.
     func finish() {
         guard let run = calibrator else { return }
+        guard !run.found.isEmpty else { calibrationWindow?.close(); return }
         var setup = shared.config().setup
-        setup.columns = calibrated(setup.columns, found: run.found)
+        setup.columns = run.found
         shared.setSetup(setup)
         calibrationWindow?.close()
         draft = setup

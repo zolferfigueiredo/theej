@@ -205,7 +205,7 @@ extension MenuBar {
             return row(leading, popup)
         }
         if rows.isEmpty {
-            let empty = NSTextField(labelWithString: "No knobs. Press + to add one.")
+            let empty = NSTextField(labelWithString: "No knobs. Calibrate finds them, or press + to add one.")
             empty.textColor = .secondaryLabelColor
             let row = NSStackView()
             row.edgeInsets = NSEdgeInsets(top: 14, left: 12, bottom: 14, right: 12)
@@ -341,6 +341,7 @@ extension MenuBar {
         registerHotKeys(draft.profiles)
         refresh()
         reloadDraft()
-        if calibrateNow && shared.snapshot().connected { calibrate() }
+        // Only while a knob has no input, as after +. Else the first Save after a calibration would start another.
+        if calibrateNow && draft.columns.contains(nil) && shared.snapshot().connected { calibrate() }
     }
 }

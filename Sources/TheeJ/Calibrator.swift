@@ -1,16 +1,17 @@
 import Foundation
 
-// Pure, so --selftest can drive it with fake lines and a fake clock. For each knob, phase 0 finds
+// Pure, so the tests can drive it with fake lines and a fake clock. Knobs are found one at a time, in
+// the order they are moved, until Finish or until every input has a knob. For each knob, phase 0 finds
 // its column, 1 to 3 are the slow, fast and slow turns, and 4 is the sweeps.
 struct Calibrator {
     static let turnSeconds = 20.0
     static let sweepsNeeded = 10
 
-    private(set) var found: [Int?]
-    private(set) var knob = 0
+    private(set) var found: [Int] = []  // a column per knob, A first
     private(set) var phase = 0
     private(set) var left = turnSeconds
     private(set) var sweeps = 0
+    private(set) var done = false
     private var low: [Int] = []
     private var high: [Int] = []
     private var anchor = -1
@@ -18,9 +19,8 @@ struct Calibrator {
     private var lastTime = 0.0
     private var armed = false
 
-    init(knobs: Int) { found = Array(repeating: nil, count: knobs) }
-
-    var done: Bool { knob >= found.count }
+    // The knob being asked for, then turned.
+    var knob: Int { phase == 0 ? found.count : found.count - 1 }
 
     mutating func feed(_ values: [Int], at now: Double) {
         guard !done else { return }
@@ -33,15 +33,18 @@ struct Calibrator {
             // The widest swing, not the first past the bar: a pin with no pot echoes the channel
             // read before it, so it moves with the knob.
             let taken = found
-            let best = values.indices.filter { !taken.contains($0) }
-                .max { high[$0] - low[$0] < high[$1] - low[$1] }
-            if let best, high[best] - low[best] >= 512 {
-                found[knob] = best
+            guard let best = values.indices.filter({ !taken.contains($0) })
+                .max(by: { high[$0] - low[$0] < high[$1] - low[$1] }) else {
+                done = true  // every input the sketch sends has its knob
+                return
+            }
+            if high[best] - low[best] >= 512 {
+                found.append(best)
                 next()
             }
             return
         }
-        guard let column = found[knob], column < values.count else { return }
+        guard let column = found.last, column < values.count else { return }
         let value = values[column]
         if phase < 4 {
             // Checked before lastMove moves on, so the gap of a reconnect never counts.
@@ -58,15 +61,14 @@ struct Calibrator {
         }
     }
 
-    // Keeps anything already found, so skipping a new knob's turns still records its input.
+    // Only once the knob is found, which it stays: this skips its turns and sweeps.
     mutating func skip() {
-        guard !done else { return }
-        knob += 1
+        guard !done, phase > 0 else { return }
         reset(0)
     }
 
     private mutating func next() {
-        if phase == 4 { knob += 1; reset(0) } else { reset(phase + 1) }
+        reset(phase == 4 ? 0 : phase + 1)
     }
 
     private mutating func reset(_ newPhase: Int) {
@@ -78,14 +80,5 @@ struct Calibrator {
         anchor = -1
         lastMove = -.infinity
         armed = false
-    }
-}
-
-// A skipped knob keeps its old input unless this run found that input on another knob.
-func calibrated(_ columns: [Int?], found: [Int?]) -> [Int?] {
-    let claimed = Set(found.compactMap { $0 })
-    return columns.enumerated().map { index, column in
-        if index < found.count, let column = found[index] { return column }
-        return column.flatMap { claimed.contains($0) ? nil : $0 }
     }
 }

@@ -13,7 +13,7 @@ backlight** over USB. Arduino firmware is unchanged.
 - Reads the deej serial protocol at 9600 baud, however many sliders the sketch sends
 - Settings picks what each knob does: a volume, a display, Night Shift or a keyboard backlight
 - Profiles switch every knob's job at once, from the menu bar or a global keyboard shortcut
-- Calibrate finds which input each knob is wired to and sweeps its pot clean
+- Calibrate finds your knobs and which input each is wired to, and sweeps each pot clean
 - Shows the real macOS HUD on the display each knob controls
 - Menu bar icon showing connected or disconnected at a glance
 - Sets volume in-process via CoreAudio, with no `osascript`
@@ -107,8 +107,12 @@ icon. **Menu bar icon** picks Mixer, Dial or App icon.
 Save applies at once, makes the profile shown the active one, and leaves the window open. A knob
 given a new job, by Save or by switching profiles, takes it over the next time you move it, so
 neither ever jumps the volume or a panel to wherever that knob happens to sit. With "Calibrate on
-save" checked (the default, and remembered), Save also offers to calibrate.
-**Calibrate** in the menu runs it any time the board is connected. For each knob, in letter order:
+save" checked (the default, and remembered), Save also calibrates while a knob still needs it, as
+after +.
+
+**Calibration** finds your knobs by itself. It opens on its own the first time the board connects
+while a knob needs it, as on a fresh install, and **Calibrate** in the menu runs it any time the
+board is connected. It asks for knob A, then B, and so on. For each one:
 
 1. Move it from one end to the other, so TheeJ can tell which knob it is.
 2. Turn it slowly, back and forth, for 20 seconds.
@@ -118,12 +122,15 @@ save" checked (the default, and remembered), Save also offers to calibrate.
 
 Steps 2 to 5 are the cure for jumpy knobs (below). The timers only run while the knob turns, and a
 short sound marks each new step, so you can watch the knob rather than the screen. Allow a minute or
-two per knob. Any knob can be skipped: it keeps the input it had, unless the run found that input on
-another knob. Every knob holds still for the whole run, Cancel leaves everything as it was, and
-Settings comes to the front at the end to choose what each knob does.
+two per knob. Once a knob is found, Skip moves on to the next one without its turns and sweeps.
+When TheeJ asks for a knob you don't have, click Finish, and the knobs found so far become your
+knobs. It also finishes by itself once every value the sketch sends has a knob. Every knob holds
+still for the whole run, Cancel leaves everything as it was, and Settings comes to the front at the
+end to choose what each knob does. A knob that stops being found keeps its jobs, for when a later
+calibration finds it again.
 
-A new knob only shows up once the Arduino sketch sends one more value. A knob the sketch does not
-send is never found, so skip it.
+A knob only shows up once the Arduino sketch sends its value. A knob the sketch does not send is
+never found, so click Finish when TheeJ asks for it.
 
 ## What a knob can do
 
@@ -219,7 +226,7 @@ List available ports with `ls /dev/cu.*`.
 ## Tuning
 
 What each knob does and which input it is on live in Settings, not in source. A fresh install has
-no knobs: add yours in Settings and calibrate. They are stored as JSON in the `com.zolfer.theej`
+no knobs, and calibration finds them. They are stored as JSON in the `com.zolfer.theej`
 defaults domain: `defaults read com.zolfer.theej` shows them, and `defaults delete
 com.zolfer.theej` followed by a restart clears them. Knobs saved by 1.0.2 or earlier become the
 Default profile the first time a newer TheeJ starts, and the old `knobs` key is left as it was.

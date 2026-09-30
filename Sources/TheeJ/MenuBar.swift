@@ -26,6 +26,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     let calibrateOnSave = NSButton(checkboxWithTitle: "Calibrate on save", target: nil, action: nil)
     var calibrationWindow: NSWindow?
     var calibrator: Calibrator?
+    var calibrationOffered = false
     let stepTitle = NSTextField(labelWithString: "")
     let stepBody = NSTextField(wrappingLabelWithString: "")
     let stepProgress = NSTextField(labelWithString: "")
@@ -72,7 +73,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         menu.addItem(.separator())
         menu.addItem(entry("Settings", #selector(openSettings), ","))
         let calibrateItem = entry("Calibrate", #selector(calibrate), "")
-        calibrateItem.isEnabled = state.connected && !setup.columns.isEmpty
+        calibrateItem.isEnabled = state.connected
         menu.addItem(calibrateItem)
         func label(_ text: String) -> NSMenuItem {
             let mi = NSMenuItem(title: text, action: nil, keyEquivalent: "")
