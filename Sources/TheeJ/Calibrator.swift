@@ -8,6 +8,8 @@ struct Calibrator {
     static let sweepsNeeded = 10
 
     let saved: [Int?]  // each knob's column before this run, which Skip keeps
+    let onlyNew: Bool  // pass by every knob that keeps its column, so only the ones without are asked for
+    private(set) var first = 0  // the first knob asked for
     private(set) var found: [Int] = []  // a column per knob, A first
     private(set) var phase = 0
     private(set) var left = turnSeconds
@@ -22,7 +24,12 @@ struct Calibrator {
     private var stepStart = Double.infinity  // the step's first line; not yet while infinite
     private var armed = false
 
-    init(saved: [Int?] = []) { self.saved = saved }
+    init(saved: [Int?] = [], onlyNew: Bool = false) {
+        self.saved = saved
+        self.onlyNew = onlyNew
+        skipKept()
+        first = knob
+    }
 
     // The knob being asked for, then turned.
     var knob: Int { phase == 0 ? found.count : found.count - 1 }
@@ -93,10 +100,19 @@ struct Calibrator {
         guard canSkip else { return }
         if phase == 0, let column = saved[knob] { found.append(column) }
         reset(0)
+        skipKept()
     }
 
     private mutating func next() {
         reset(phase == 4 ? 0 : phase + 1)
+        skipKept()
+    }
+
+    private mutating func skipKept() {
+        while onlyNew, phase == 0, canSkip, let column = saved[knob] {
+            found.append(column)
+            reset(0)
+        }
     }
 
     private mutating func reset(_ newPhase: Int) {

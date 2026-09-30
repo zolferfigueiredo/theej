@@ -40,6 +40,25 @@ import Testing
     #expect(run.full && run.phase == 0 && !run.canSkip)  // every input has its knob, so only Finish is left
 }
 
+// After Save, only the knobs with no column are asked for: the others keep theirs, before and between.
+@Test func calibrationOfOnlyNewKnobs() {
+    var run = Calibrator(saved: [0, 3, 2, 4, nil], onlyNew: true)
+    #expect(run.found == [0, 3, 2, 4] && run.knob == 4 && run.first == 4 && run.phase == 0 && !run.canSkip)
+    run.feed([500, 500, 500, 500, 500], at: 0)
+    run.feed([500, 1023, 500, 500, 500], at: 0.03)
+    #expect(run.found == [0, 3, 2, 4, 1] && run.phase == 1)
+    run.skip()
+    run.feed([500, 1023, 500, 500, 500], at: 0.06)
+    #expect(run.full)  // every input has its knob now
+
+    var middle = Calibrator(saved: [0, nil, 2], onlyNew: true)
+    #expect(middle.knob == 1)
+    middle.feed([500, 500, 500, 500], at: 0)
+    middle.feed([500, 500, 500, 1023], at: 0.03)
+    middle.skip()
+    #expect(middle.found == [0, 3, 2] && middle.knob == 3)  // knob C kept its column without being asked
+}
+
 // A knob set up before can be skipped while it's asked for, keeping its column, unless this run has
 // found that column on another knob. One with no column can't: the button is Finish.
 @Test func calibrationSkipsKnobsAlreadySetUp() {

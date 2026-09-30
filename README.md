@@ -114,12 +114,13 @@ in the menu.
 Save applies at once, makes the profile shown the active one, and leaves the window open. A knob
 given a new job, by Save or by switching profiles, takes it over the next time you move it, so
 neither ever jumps the volume or a panel to wherever that knob happens to sit. When a knob still
-needs calibration, as after +, Save opens Calibration.
+needs calibration, as after +, Save opens Calibration for just the knobs that need it.
 
-**Calibration** finds your knobs by itself. It opens on its own the first time the board connects
-while a knob needs it, as on a fresh install, and **Calibrate** in the menu runs it any time the
-board is connected, as does the Calibrate button under the knobs in Settings. It asks for knob A,
-then B, and so on. For each one:
+**Calibration** finds your knobs by itself. **Calibrate** in the menu runs it any time the board is
+connected, as does the Calibrate button under the knobs in Settings, and asks for knob A, then B,
+and so on. It also opens on its own when a knob needs it: the first time the board connects, as on a
+fresh install, and on Save after +. Then it asks only for the knobs that need it and keeps the
+others as they are. For each knob it asks for:
 
 1. Move it from one end to the other, so TheeJ can tell which knob it is.
 2. Turn it slowly, back and forth, for 20 seconds.

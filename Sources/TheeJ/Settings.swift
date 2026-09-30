@@ -469,6 +469,6 @@ extension MenuBar: NSToolbarDelegate {
         registerHotKeys(draft)
         refresh()
         reloadDraft()
-        if draft.columns.contains(nil) { calibrate() }  // a knob added with + has no input yet
+        if draft.columns.contains(nil) { startCalibration(onlyNew: true) }  // a knob added with + has no input yet
     }
 }

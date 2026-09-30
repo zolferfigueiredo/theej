@@ -1,13 +1,19 @@
 import AppKit
 
 extension MenuBar {
-    // The window says what to do, and Cancel leaves everything as it was, so it opens straight away.
+    // Every knob, from A: the menu's Calibrate and the button in Settings.
     @objc func calibrate() {
+        startCalibration(onlyNew: false)
+    }
+
+    // The window says what to do, and Cancel leaves everything as it was, so it opens straight away.
+    // onlyNew, for Save and the automatic start, asks only for the knobs that have no input yet.
+    func startCalibration(onlyNew: Bool) {
         if let window = calibrationWindow, calibrator != nil {
             present(window)
             return
         }
-        calibrator = Calibrator(saved: shared.config().setup.columns)
+        calibrator = Calibrator(saved: shared.config().setup.columns, onlyNew: onlyNew)
         if calibrationWindow == nil {
             stepTitle.font = .boldSystemFont(ofSize: 16)
             stepBody.preferredMaxLayoutWidth = 360
@@ -57,14 +63,14 @@ extension MenuBar {
         let columns = shared.config().setup.columns
         guard !calibrationOffered, columns.isEmpty || columns.contains(nil) else { return }
         calibrationOffered = true
-        calibrate()
+        startCalibration(onlyNew: true)
     }
 
     func showStep() {
         guard let run = calibrator, let window = calibrationWindow else { return }
         let name = letter(run.knob)
         var move = "Move knob \(name) from one end to the other"
-        if run.knob == 0 {
+        if run.knob == run.first {
             move += ", so \(appName) can tell which knob is which. Each knob then takes a minute or two of turning, "
                 + "which also cleans a jumpy one"
         }
@@ -74,7 +80,7 @@ extension MenuBar {
         } else if run.knob > 0 {
             move += " If you don't have a knob \(name), click Finish."
         }
-        if run.knob == 0 { move += " Your knobs hold still until you finish." }
+        if run.knob == run.first { move += " Your knobs hold still until you finish." }
         let steps = [
             move,
             "Found it. Now turn it slowly, back and forth. The timer only runs while it turns.",
