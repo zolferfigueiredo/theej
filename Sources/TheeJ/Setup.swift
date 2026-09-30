@@ -58,6 +58,32 @@ struct Shortcut: Codable, Equatable {
     }
 }
 
+// How soon a knob's job applies, picked in Settings. The raw values are saved, so renaming one resets it.
+enum Speed: String, CaseIterable {
+    case slow, medium, fast, superFast
+
+    var title: String {
+        switch self {
+        case .slow: return "Slow (Recommended)"
+        case .medium: return "Medium"
+        case .fast: return "Fast"
+        case .superFast: return "Super fast"
+        }
+    }
+
+    // ponytail: every job but the volumes applies once a knob has been still this long; each movement
+    // restarts the wait. It must stay above ~110ms, the longest wiper dropout on this board (a moving
+    // pot briefly reads its neighbour's value), or a dropout reaches the panel as a flash.
+    var settle: Double {
+        switch self {
+        case .slow: return 0.3
+        case .medium: return 0.22
+        case .fast: return 0.18
+        case .superFast: return 0.15
+        }
+    }
+}
+
 // The domain is the bundle identifier, com.zolfer.theej. A suite with that name is refused, since
 // it is the app's own domain.
 let prefs = UserDefaults.standard
@@ -73,6 +99,7 @@ struct Setup: Equatable {
     var showProfiles = true  // the profiles in the menu bar's menu
     var hideIcon = false
     var icon = IconStyle.mixer
+    var speed = Speed.slow
 
     var profile: Profile {
         get { profiles[active] }
@@ -105,6 +132,7 @@ struct Setup: Equatable {
         setup.showProfiles = prefs.object(forKey: "showProfileList") as? Bool ?? true
         setup.hideIcon = prefs.bool(forKey: "hideMenuBarIcon")
         setup.icon = IconStyle(rawValue: prefs.string(forKey: "menuBarIcon") ?? "") ?? .mixer
+        setup.speed = Speed(rawValue: prefs.string(forKey: "speed") ?? "") ?? .slow
         return setup
     }
 
@@ -123,6 +151,7 @@ struct Setup: Equatable {
         prefs.set(showProfiles, forKey: "showProfileList")
         prefs.set(hideIcon, forKey: "hideMenuBarIcon")
         prefs.set(icon.rawValue, forKey: "menuBarIcon")
+        prefs.set(speed.rawValue, forKey: "speed")
     }
 }
 

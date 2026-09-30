@@ -10,18 +10,13 @@ func percent(_ scalar: Float32) -> Int {
     return min(100, max(0, Int(scalar * 100 + 0.5)))
 }
 
-// ponytail: every job but the volumes applies once a knob has been still this long; each movement
-// restarts the wait. It must stay well above ~110ms, the longest wiper dropout on this board (a
-// moving pot briefly reads its neighbour's value), or a dropout reaches the panel as a flash.
-let brightnessSettle = 0.3
-
 var pendingBrightness: [Target: DispatchWorkItem] = [:]  // serial thread only, like lastApplied
 
-func debounce(_ target: Target, on queue: DispatchQueue, _ apply: @escaping () -> Void) {
+func debounce(_ target: Target, on queue: DispatchQueue, after settle: Double, _ apply: @escaping () -> Void) {
     pendingBrightness[target]?.cancel()
     let work = DispatchWorkItem(block: apply)
     pendingBrightness[target] = work
-    queue.asyncAfter(deadline: .now() + brightnessSettle, execute: work)
+    queue.asyncAfter(deadline: .now() + settle, execute: work)
 }
 
 // The previous version printed a retry line every 2 seconds while the device was missing, which
@@ -41,6 +36,7 @@ let interactive = isatty(1) != 0
 func handle(_ values: [Int]) {
     let config = shared.config()
     let mapping = config.setup.mapping
+    let settle = config.setup.speed.settle
     // Flipped along with the knobs, or every knob would count as moved and jump to its mirror image.
     if config.setup.invert != lastInvert {
         lastApplied = lastApplied.mapValues { 1 - $0 }
@@ -64,7 +60,7 @@ func handle(_ values: [Int]) {
         guard scalar != previous, extreme || abs(scalar - previous) >= deadzone else { continue }
         lastApplied[index] = scalar
 
-        // The volumes follow the knob. Everything else waits for brightnessSettle, and the HUD tracks
+        // The volumes follow the knob. Everything else waits for Speed.settle, and the HUD tracks
         // the knob live, so the HUD is the only feedback during a turn. Do not debounce it.
         switch target {
         case .master:
@@ -76,23 +72,23 @@ func handle(_ values: [Int]) {
         case .builtinBrightness:
             if let id = builtinDisplayID() {
                 // Main, not ddcQueue, so a stuck m1ddc can never hold the built-in up.
-                debounce(target, on: .main) { setBuiltinBrightness(id, scalar) }
+                debounce(target, on: .main, after: settle) { setBuiltinBrightness(id, scalar) }
                 showOSD(osdBrightnessImage, on: id, scalar)
             }
         case .builtinContrast:
             if let id = builtinDisplayID() {
-                debounce(target, on: .main) { _ = setDisplayContrast?(Float(scalar)) }
+                debounce(target, on: .main, after: settle) { _ = setDisplayContrast?(Float(scalar)) }
                 showHUD(hudContrast, on: id, scalar)
             }
         case .nightShift:
-            debounce(target, on: .main) { setNightShift(scalar) }
+            debounce(target, on: .main, after: settle) { setNightShift(scalar) }
             showHUD(hudNightShift, on: CGMainDisplayID(), scalar)
         case .brightness(let ordinal), .contrast(let ordinal):
             let externals = externalDisplays()
             if ordinal < externals.count {
                 let display = externals[ordinal]
                 let brightness = target == .brightness(ordinal)
-                debounce(target, on: ddcQueue) {
+                debounce(target, on: ddcQueue, after: settle) {
                     if !writeDDC(display.uuid, brightness ? "luminance" : "contrast", percent(scalar)) {
                         fputs("\n\(title(target)) write failed. Is m1ddc installed?\n", stderr)
                     }
@@ -101,10 +97,10 @@ func handle(_ values: [Int]) {
                 else { showHUD(hudContrast, on: display.id, scalar) }
             }
         case .builtinKeyboard:
-            debounce(target, on: .main) { setBuiltinKeyboard(scalar) }
+            debounce(target, on: .main, after: settle) { setBuiltinKeyboard(scalar) }
             showOSD(osdKeyboardImage, on: builtinDisplayID() ?? CGMainDisplayID(), scalar)
         case .externalKeyboard:
-            debounce(target, on: .main) { setExternalKeyboard(scalar) }
+            debounce(target, on: .main, after: settle) { setExternalKeyboard(scalar) }
             showOSD(osdKeyboardImage, on: CGMainDisplayID(), scalar)
         }
     }
