@@ -68,11 +68,11 @@ icons are drawn in code in [Icons.swift](Sources/TheeJ/Icons.swift), the menu ba
 and the app icon by `makeAppIcon`.
 
 Clicking it, with either button, opens a menu: Show data below first, on by default, with the live
-value of every knob under it, one per line in knob order, then the profiles, with a check by the active one and
-each one's shortcut, then Settings and Calibrate, then the current port with Reconnect under it,
-then Launch at login and Keep in Dock, About TheeJ, which opens the About tab of Settings, Check for
-updates… with Check automatically (daily, weekly by default, or never), and Quit TheeJ. Settings can
-leave the profiles out.
+value of every knob under it, one per line in knob order, an app's with its icon, then the profiles,
+with a check by the active one and each one's shortcut, then Settings and Calibrate, then the
+current port with Reconnect under it, then Launch at login and Keep in Dock, About TheeJ, which
+opens the About tab of Settings, Check for updates… with Check automatically (daily, weekly by
+default, or never), and Quit TheeJ. Settings can leave the profiles out.
 
 **Check for updates…** asks theej.zolfer.com for `latest.json`, a plain download that sends nothing
 about you. When there is a newer version, **Update Now** downloads it, checks it is signed by you
