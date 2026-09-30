@@ -106,9 +106,8 @@ icon. **Menu bar icon** picks Mixer, Dial or App icon.
 
 Save applies at once, makes the profile shown the active one, and leaves the window open. A knob
 given a new job, by Save or by switching profiles, takes it over the next time you move it, so
-neither ever jumps the volume or a panel to wherever that knob happens to sit. With "Calibrate on
-save" checked (the default, and remembered), Save also calibrates while a knob still needs it, as
-after +.
+neither ever jumps the volume or a panel to wherever that knob happens to sit. When a knob still
+needs calibration, as after +, Save opens Calibration.
 
 **Calibration** finds your knobs by itself. It opens on its own the first time the board connects
 while a knob needs it, as on a fresh install, and **Calibrate** in the menu runs it any time the

@@ -93,7 +93,7 @@ extension MenuBar {
         if run.full { return run.found.count == 1 ? "1 knob found" : "\(run.found.count) knobs found" }
         if let wrong = run.wrongKnob { return "That's knob \(letter(wrong)). Move knob \(letter(run.knob)) instead." }
         switch run.phase {
-        case 0: return "Waiting for knob \(letter(run.knob)) to move"
+        case 0: return shared.snapshot().connected ? "Waiting for knob \(letter(run.knob)) to move" : "Waiting for the board to connect"
         case 4: return "Sweep \(run.sweeps) of \(Calibrator.sweepsNeeded)"
         default:
             let seconds = Int(run.left.rounded(.up))

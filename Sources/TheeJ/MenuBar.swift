@@ -23,7 +23,6 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     let hideIcon = NSButton(checkboxWithTitle: "Hide menu bar icon", target: nil, action: nil)
     let iconPicker = NSPopUpButton()
     let iconLabel = NSTextField(labelWithString: "Menu bar icon")
-    let calibrateOnSave = NSButton(checkboxWithTitle: "Calibrate on save", target: nil, action: nil)
     var calibrationWindow: NSWindow?
     var calibrator: Calibrator?
     var calibrationOffered = false

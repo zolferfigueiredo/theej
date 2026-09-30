@@ -4,10 +4,7 @@ import Carbon.HIToolbox
 extension MenuBar {
     // A second click keeps unsaved edits in an open window.
     @objc func openSettings() {
-        if settingsWindow?.isVisible != true {
-            draft = shared.config().setup
-            calibrateOnSave.state = prefs.object(forKey: "calibrateOnSave") as? Bool == false ? .off : .on
-        }
+        if settingsWindow?.isVisible != true { draft = shared.config().setup }
         showSettings()
         settingsWindow?.makeFirstResponder(nil)  // else the name field opens with its text selected
     }
@@ -58,7 +55,6 @@ extension MenuBar {
             let save = NSButton(title: "Save", target: self, action: #selector(saveSettings))
             save.keyEquivalent = "\r"
             let footer = NSStackView()
-            footer.addView(calibrateOnSave, in: .leading)
             footer.addView(save, in: .trailing)
 
             let profileHeader = header("Profile", [profilePicker], profileEdit)
@@ -332,8 +328,6 @@ extension MenuBar {
     }
 
     @objc func saveSettings() {
-        let calibrateNow = calibrateOnSave.state == .on
-        prefs.set(calibrateNow, forKey: "calibrateOnSave")
         for index in draft.profiles.indices where draft.profiles[index].name.trimmingCharacters(in: .whitespaces).isEmpty {
             draft.profiles[index].name = "Profile \(index + 1)"
         }
@@ -341,7 +335,6 @@ extension MenuBar {
         registerHotKeys(draft.profiles)
         refresh()
         reloadDraft()
-        // Only while a knob has no input, as after +. Else the first Save after a calibration would start another.
-        if calibrateNow && draft.columns.contains(nil) && shared.snapshot().connected { calibrate() }
+        if draft.columns.contains(nil) { calibrate() }  // a knob added with + has no input yet
     }
 }
