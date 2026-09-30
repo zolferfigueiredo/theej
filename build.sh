@@ -4,15 +4,14 @@ cd "$(dirname "$0")"
 
 # A real .app, so macOS has an icon to show in System Settings, Activity Monitor and Finder.
 APP=.build/TheeJ.app
-VERSION=$(sed -n 's/^let appVersion = "\(.*\)"$/\1/p' src/main.swift)
+VERSION=$(sed -n 's/^let appVersion = "\(.*\)"$/\1/p' Sources/TheeJ/Version.swift)
 
+swift test
+# One universal binary, so the same app runs on Apple Silicon and Intel. Package.swift sets macOS 14 as the oldest.
+UNIVERSAL=(-c release --arch arm64 --arch x86_64)
+swift build "${UNIVERSAL[@]}"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-# macOS 14 is the oldest the code builds for. A plain swiftc build targets the running macOS.
-# One universal binary, so the same app runs on Apple Silicon and Intel.
-for arch in arm64 x86_64; do
-    swiftc -O -target $arch-apple-macos14 -o .build/TheeJ-$arch src/main.swift
-done
-lipo -create -output "$APP/Contents/MacOS/TheeJ" .build/TheeJ-arm64 .build/TheeJ-x86_64
+cp "$(swift build "${UNIVERSAL[@]}" --show-bin-path)/TheeJ" "$APP/Contents/MacOS/"
 # iconutil packs every file in the folder, so sizes left over from older builds would ride along.
 rm -rf .build/AppIcon.iconset
 "$APP/Contents/MacOS/TheeJ" --iconset .build/AppIcon.iconset
