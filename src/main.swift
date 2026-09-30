@@ -9,7 +9,7 @@ import Carbon.HIToolbox
 import ServiceManagement
 
 let appName = "TheeJ"
-let appVersion = "1.1.1"
+let appVersion = "1.1.2"
 
 let baud = speed_t(B9600)
 let maxADC: Float32 = 1023.0
