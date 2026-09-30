@@ -77,6 +77,8 @@ extension MenuBar {
         move += "."
         if run.canSkip {
             move += " It's already set up, so Skip keeps it as it is."
+        } else if run.knob < run.saved.count {
+            move += " Finish stops here and leaves it for later."
         } else if run.knob > 0 {
             move += " If you don't have a knob \(name), click Finish."
         }
@@ -125,13 +127,13 @@ extension MenuBar {
         }
     }
 
-    // Saves before closing: windowWillClose throws the run away. The knobs found become the knobs, and
-    // with none found it ends like Cancel. Jobs past the last knob stay, for when it is found again.
+    // Saves before closing: windowWillClose throws the run away. With nothing to save, as when Finish
+    // comes straight away, it ends like Cancel.
     func finish() {
         guard let run = calibrator else { return }
-        guard !run.found.isEmpty else { calibrationWindow?.close(); return }
         var setup = shared.config().setup
-        setup.columns = run.found
+        guard run.result != setup.columns else { calibrationWindow?.close(); return }
+        setup.columns = run.result
         shared.setSetup(setup)
         calibrationWindow?.close()
         // Started from an open Settings, which may hold unsaved edits: only the inputs change there.

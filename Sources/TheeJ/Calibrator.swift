@@ -2,7 +2,7 @@ import Foundation
 
 // Pure, so the tests can drive it with fake lines and a fake clock. Knobs are found one at a time, in
 // the order they are moved, until Finish. For each knob, phase 0 finds its column, 1 to 3 are the slow,
-// fast and slow turns, and 4 is the sweeps.
+// fast and slow turns, and 4 is the sweeps. Only a knob calibrated before the run can be skipped.
 struct Calibrator {
     static let turnSeconds = 20.0
     static let sweepsNeeded = 10
@@ -34,13 +34,18 @@ struct Calibrator {
     // The knob being asked for, then turned.
     var knob: Int { phase == 0 ? found.count : found.count - 1 }
 
-    // Once found, or while asked for if it already had a column that no knob in this run has taken.
-    // Otherwise the knob asked for isn't there, and Finish is what's left.
+    // A knob calibrated before this run, whose column no other knob here has taken, keeps it (or the one
+    // just found for it). One that needs calibrating can't be skipped: Finish is what's left.
     var canSkip: Bool {
-        guard !full else { return false }
-        if phase > 0 { return true }
-        guard knob < saved.count, let column = saved[knob] else { return false }
-        return !found.contains(column)
+        guard !full, knob < saved.count, let column = saved[knob] else { return false }
+        return phase > 0 || !found.contains(column)
+    }
+
+    // The columns Finish saves: the knobs this run got through, then the rest as they were, less any
+    // column this run found on another knob. A new knob part way through its turns isn't done yet.
+    var result: [Int?] {
+        let done = phase == 0 ? found : Array(found.dropLast())
+        return done + saved.dropFirst(done.count).map { $0.flatMap { done.contains($0) ? nil : $0 } }
     }
 
     // A turning step's timer stops once the knob has been still for a second. Counted from the step's
