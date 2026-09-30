@@ -81,7 +81,14 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         data.state = showData ? .on : .off
         menu.addItem(data)
         if showData, state.connected {
-            state.lines.forEach { menu.addItem(label($0)) }
+            // An app's line has its icon. Once one does, the others get a blank, to keep their text in line.
+            let icons = state.lines.map { menuIcon($0.target) }
+            let blank = icons.contains { $0 != nil } ? NSImage(size: NSSize(width: 16, height: 16)) : nil
+            for (line, icon) in zip(state.lines, icons) {
+                let item = label(line.text)
+                item.image = icon ?? blank
+                menu.addItem(item)
+            }
         }
         menu.addItem(.separator())
         if setup.showProfiles {

@@ -7,13 +7,13 @@ final class Shared {
     private let lock = NSLock()
     private var connected = false
     private var port: String?
-    // Preformatted, one per knob in menu order: the same strings the terminal prints.
-    private var lines: [String] = []
+    // One per knob in menu order: the text the terminal prints too, and the job, for an app's icon.
+    private var lines: [(text: String, target: Target)] = []
     private var reconnectFlag = false
     private var setup = Setup.load()
     private var calibrating = false
 
-    func snapshot() -> (connected: Bool, port: String?, lines: [String]) {
+    func snapshot() -> (connected: Bool, port: String?, lines: [(text: String, target: Target)]) {
         lock.lock(); defer { lock.unlock() }
         return (connected, port, lines)
     }
@@ -45,7 +45,7 @@ final class Shared {
         }
     }
 
-    func setLines(_ value: [String]) {
+    func setLines(_ value: [(text: String, target: Target)]) {
         lock.lock(); lines = value; lock.unlock()
     }
 

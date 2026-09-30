@@ -114,7 +114,9 @@ func handle(_ values: [Int]) {
         return
     }
 
-    let lines = ordered(mapping, by: config.setup.columns).map { "\(title($0.value)) \(percent(lastApplied[$0.key] ?? 0))%" }
+    let lines = ordered(mapping, by: config.setup.columns).map {
+        (text: "\(title($0.value)) \(percent(lastApplied[$0.key] ?? 0))%", target: $0.value)
+    }
     shared.setLines(lines)  // every line, so a job changed in Settings shows before the knob moves
 
     // Silent under launchd (no tty), so the log file doesn't grow forever.
@@ -123,7 +125,7 @@ func handle(_ values: [Int]) {
     let cols = values.enumerated()
         .map { "\(mapping[$0.offset] != nil ? "*" : " ")\($0.offset):\(String(format: "%4d", $0.element))" }
         .joined()
-    print("\r\(cols)   \(lines.joined(separator: "  "))  ", terminator: "")
+    print("\r\(cols)   \(lines.map(\.text).joined(separator: "  "))  ", terminator: "")
     fflush(stdout)
 }
 

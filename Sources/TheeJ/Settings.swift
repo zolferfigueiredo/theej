@@ -369,10 +369,7 @@ extension MenuBar: NSToolbarDelegate {
                 // Not addItem(withTitle:), which drops the Monitor 1 under Brightness for the one under Contrast.
                 let item = popup.menu?.addItem(withTitle: shortTitle(choice), action: nil, keyEquivalent: "")
                 item?.representedObject = choice
-                if case .app(let id) = choice, let icon = appIcon(id)?.copy() as? NSImage {
-                    icon.size = NSSize(width: 16, height: 16)
-                    item?.image = icon
-                }
+                item?.image = menuIcon(choice)
                 if choice == draft.profile.target(index) { popup.select(item) }
             }
             if appsAvailable {
@@ -472,8 +469,10 @@ extension MenuBar: NSToolbarDelegate {
     func showJob(_ popup: NSPopUpButton) {
         let cell = popup.cell as? NSPopUpButtonCell
         cell?.usesItemFromMenu = false
-        cell?.menuItem = NSMenuItem(title: title(popup.selectedItem?.representedObject as? Target),
-                                    action: nil, keyEquivalent: "")
+        let job = popup.selectedItem?.representedObject as? Target
+        let shown = NSMenuItem(title: title(job), action: nil, keyEquivalent: "")
+        shown.image = menuIcon(job)
+        cell?.menuItem = shown
     }
 
     @objc func editKnobs(_ sender: NSSegmentedControl) {

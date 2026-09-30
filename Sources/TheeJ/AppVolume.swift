@@ -328,3 +328,10 @@ func appIcon(_ id: String) -> NSImage? {
     appIcons[id] = icon
     return icon
 }
+
+// An app job's icon at a menu item's size, and nothing for any other job.
+func menuIcon(_ target: Target?) -> NSImage? {
+    guard case .app(let id)? = target, let icon = appIcon(id)?.copy() as? NSImage else { return nil }
+    icon.size = NSSize(width: 16, height: 16)
+    return icon
+}
