@@ -33,8 +33,10 @@ codesign --force --options runtime --timestamp --sign "$ID" "dist/dmg/$NAME.app"
 ln -s /Applications dist/dmg/Applications
 
 # Finder lays out a temporary read-write copy (background, icon spots) and saves it in the volume's .DS_Store.
-# Icon positions must match the arrow. Finder finds the volume by name, so no other TheeJ volume may be mounted.
-! mount | grep -qi " on /Volumes/$NAME" || { echo "Eject every mounted $NAME volume first." >&2; exit 1; }
+# Icon positions must match the arrow. Finder finds the volume by name, so every mounted TheeJ volume
+# ("TheeJ 1"...) is ejected first.
+mount | { grep -i " on /Volumes/$NAME" || true; } | sed 's|^.* on \(/Volumes/[^(]*\) (.*|\1|' |
+    while IFS= read -r volume; do hdiutil detach -quiet -force "$volume"; done
 trap '[ -z "${MNT:-}" ] || hdiutil detach -quiet -force "$MNT"' EXIT
 hdiutil create -quiet -volname "$NAME" -srcfolder dist/dmg -format UDRW dist/rw.dmg
 hdiutil attach -quiet -readwrite -noverify -noautoopen dist/rw.dmg
