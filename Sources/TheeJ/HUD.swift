@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 
 // The same XPC service and selector MonitorControl uses, taken from its binary. Private, so every
@@ -140,3 +141,4 @@ func showHUD(on displayID: CGDirectDisplayID, _ scalar: Float32, image: @escapin
         }
     }
 }
+#endif

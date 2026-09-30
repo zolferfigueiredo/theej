@@ -1,5 +1,8 @@
-import AppKit
+import Foundation
 import Testing
+#if canImport(AppKit)
+import AppKit
+#endif
 @testable import TheeJ
 
 // Knob A to E arrive on serial columns 0, 3, 2, 4 and 1.
@@ -84,13 +87,15 @@ private struct OldProfile: Decodable, Equatable {
     #expect(try JSONDecoder().decode([Profile].self, from: saved) == both)
     #expect(try JSONDecoder().decode([OldProfile].self, from: saved) == [OldProfile(name: "Desk", targets: [.master, nil, nil])])
     let json = try #require(JSONSerialization.jsonObject(with: saved) as? [[String: Any]])
-    #expect(json[0]["apps"] as? [String?] == [nil, "com.google.Chrome", nil])
+    // Each item cast on its own: Linux reads a JSON null as NSNull, which [String?] doesn't take.
+    #expect((json[0]["apps"] as? [Any])?.map { $0 as? String } == [nil, "com.google.Chrome", nil])
     // With one job per knob nothing new is written, so what is saved stays as it was.
     let plain = try JSONEncoder().encode([Profile(name: "Default", jobs: [[.master], []])])
     #expect(try #require(JSONSerialization.jsonObject(with: plain) as? [[String: Any]])[0]["jobs"] == nil)
     #expect(title([.master, .app("no.such.thing")]) == "Master volume, no.such.thing" && title([Target]()) == "Nothing")
 }
 
+#if canImport(AppKit)
 // A helper belongs to the app that answers for it, which keeps Chrome Canary out of Chrome's knob.
 @Test func audioProcessesBelongToTheirApp() {
     #expect(belongs(bundle: "com.google.Chrome", owner: "com.google.Chrome", to: "com.google.Chrome"))
@@ -111,6 +116,7 @@ private struct OldProfile: Decodable, Equatable {
 @Test func appGainCurve() {
     #expect(appGain(0) == 0 && appGain(1) == 1 && appGain(0.5) == 0.125)
 }
+#endif
 
 @Test func longNamesAreClipped() {
     #expect(clipped("Default", to: 20) == "Default")
@@ -126,6 +132,7 @@ private struct OldProfile: Decodable, Equatable {
     #expect(setup.stepped(1) == 0 && setup.stepped(-1) == 1)
 }
 
+#if canImport(AppKit)
 @Test func profilesAndShortcutsSurviveSaving() throws {
     let games = [Profile(name: "Games", jobs: jobs, shortcut: Shortcut(
         keyCode: 18, modifiers: NSEvent.ModifierFlags([.control, .option]).rawValue, key: "1"))]
@@ -134,3 +141,4 @@ private struct OldProfile: Decodable, Equatable {
     let f1 = Shortcut(keyCode: 122, modifiers: NSEvent.ModifierFlags.command.rawValue, key: "\u{F704}")
     #expect(f1.label == "⌘F1")
 }
+#endif

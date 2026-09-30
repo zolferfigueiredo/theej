@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import Carbon.HIToolbox
 
@@ -43,3 +44,4 @@ func installHotKeyHandler() {
         return noErr
     }, 1, &pressed, nil, nil)
 }
+#endif

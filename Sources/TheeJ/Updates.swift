@@ -1,3 +1,22 @@
+import Foundation
+
+func isNewer(_ remote: String, than local: String) -> Bool {
+    remote.compare(local, options: .numeric) == .orderedDescending
+}
+
+/// "1.7.0" gives "1.7.1": the version the test notification offers, so it reads like a real one.
+func nextPatch(_ version: String) -> String {
+    var parts = version.split(separator: ".", omittingEmptySubsequences: false).map { Int($0) ?? 0 }
+    parts[parts.count - 1] += 1
+    return parts.map(String.init).joined(separator: ".")
+}
+
+/// `every` 0 means never.
+func updateCheckIsDue(last: Date?, every: TimeInterval, now: Date) -> Bool {
+    every > 0 && now.timeIntervalSince(last ?? .distantPast) >= every
+}
+
+#if canImport(AppKit)
 import AppKit
 import UserNotifications
 
@@ -14,22 +33,6 @@ func latestVersion() async -> String? {
           (response as? HTTPURLResponse)?.statusCode == 200,
           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
     return json["version"] as? String
-}
-
-func isNewer(_ remote: String, than local: String) -> Bool {
-    remote.compare(local, options: .numeric) == .orderedDescending
-}
-
-/// "1.7.0" gives "1.7.1": the version the test notification offers, so it reads like a real one.
-func nextPatch(_ version: String) -> String {
-    var parts = version.split(separator: ".", omittingEmptySubsequences: false).map { Int($0) ?? 0 }
-    parts[parts.count - 1] += 1
-    return parts.map(String.init).joined(separator: ".")
-}
-
-/// `every` 0 means never.
-func updateCheckIsDue(last: Date?, every: TimeInterval, now: Date) -> Bool {
-    every > 0 && now.timeIntervalSince(last ?? .distantPast) >= every
 }
 
 struct UpdateError: LocalizedError {
@@ -312,3 +315,4 @@ extension MenuBar: UNUserNotificationCenterDelegate {
         done([.banner, .sound])
     }
 }
+#endif

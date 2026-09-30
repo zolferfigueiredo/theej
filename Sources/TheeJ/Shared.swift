@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import Foundation
 
 // Shared between the serial thread and the menu bar on the main thread.
@@ -62,3 +63,4 @@ final class Shared {
 }
 
 let shared = Shared()
+#endif

@@ -1,4 +1,7 @@
+import Foundation
+#if canImport(AppKit)
 import AppKit
+#endif
 
 // The case names are the JSON keys of saved profiles, so renaming one loses that knob's job.
 enum Target: Hashable, Codable {
@@ -78,7 +81,10 @@ struct Shortcut: Codable, Equatable {
     var keyCode: UInt16
     var modifiers: UInt
     var key: String
+}
 
+#if canImport(AppKit)
+extension Shortcut {
     var flags: NSEvent.ModifierFlags { NSEvent.ModifierFlags(rawValue: modifiers) }
 
     var label: String {
@@ -100,6 +106,10 @@ struct Shortcut: Codable, Equatable {
         return symbols.filter { flags.contains($0.0) }.map(\.1).joined() + name
     }
 }
+#else
+// Linux, where only the tests run, has no apps to name.
+func appName(_ id: String) -> String { id }
+#endif
 
 // How soon a knob's job applies, picked in Settings. The raw values are saved, so renaming one resets it.
 enum Speed: String, CaseIterable {

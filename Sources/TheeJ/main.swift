@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import UserNotifications
 
@@ -78,3 +79,4 @@ installHotKeyHandler()
 registerHotKeys(saved)
 DispatchQueue.global(qos: .utility).async { serialLoop() }
 app.run()
+#endif

@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 
 // The first window a new install shows: the Mac's language, or English, to confirm or change. It speaks
@@ -67,3 +68,4 @@ final class LanguagePrompt: NSObject {
         NSApp.stopModal()
     }
 }
+#endif
