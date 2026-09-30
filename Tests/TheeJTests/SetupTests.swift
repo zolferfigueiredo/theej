@@ -5,6 +5,8 @@ import Testing
 // Knob A to E arrive on serial columns 0, 3, 2, 4 and 1.
 private let columns: [Int?] = [0, 3, 2, 4, 1]
 private let jobs: [[Target]] = [[.master], [.brightness(0)], [.brightness(1)], [], [.builtinBrightness]]
+// The strings expected below are English, whatever language this Mac uses.
+private let english: Void = UserDefaults.standard.set("en", forKey: "language")
 
 @Test func percentRoundsAndClamps() {
     #expect(percent(0) == 0)
@@ -76,6 +78,7 @@ private struct OldProfile: Decodable, Equatable {
 // A knob with several jobs is saved so that older versions read its first one: a plain job where
 // versions before app volumes look, an app where 1.5.0 looks. This version reads them all back.
 @Test func severalJobsPerKnobAreSavedSoOlderVersionsReadTheFirst() throws {
+    _ = english
     let both = [Profile(name: "Desk", jobs: [[.master, .app("com.apple.Music")], [.app("com.google.Chrome"), .master], []])]
     let saved = try JSONEncoder().encode(both)
     #expect(try JSONDecoder().decode([Profile].self, from: saved) == both)

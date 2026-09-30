@@ -91,7 +91,7 @@ struct Shortcut: Codable, Equatable {
         case 0xF701: "↓"
         case 0xF702: "←"
         case 0xF703: "→"
-        case 0x20: "Space"
+        case 0x20: tr("space")
         case 0x0D: "↩"
         case 0x09: "⇥"
         case 0x7F: "⌫"
@@ -105,14 +105,7 @@ struct Shortcut: Codable, Equatable {
 enum Speed: String, CaseIterable {
     case slow, medium, fast, superFast
 
-    var title: String {
-        switch self {
-        case .slow: return "Slow (Recommended)"
-        case .medium: return "Medium"
-        case .fast: return "Fast"
-        case .superFast: return "Super fast"
-        }
-    }
+    var title: String { tr("speed.\(rawValue)") }
 
     // ponytail: every job but the volumes applies once a knob has been still this long; each movement
     // restarts the wait. It must stay above ~110ms, the longest wiper dropout on this board (a moving
@@ -133,7 +126,7 @@ let prefs = UserDefaults.standard
 
 struct Setup: Equatable {
     var columns: [Int?] = []
-    var profiles = [Profile(name: "Default")]
+    var profiles = [Profile(name: tr("default_profile"))]
     var active = 0
     var next: Shortcut?  // from any app, like a profile's own shortcut
     var previous: Shortcut?
@@ -246,33 +239,33 @@ func title(_ jobs: [Target]) -> String {
 
 func title(_ target: Target?) -> String {
     switch target {
-    case nil: return "Nothing"
-    case .master?: return "Master volume"
-    case .microphone?: return "Microphone volume"
-    case .builtinBrightness?: return "Built-in display brightness"
-    case .builtinContrast?: return "Built-in display contrast"
-    case .nightShift?: return "Night Shift warmth"
-    case .brightness(let ordinal)?: return "Screen \(ordinal + 1) brightness"
-    case .contrast(let ordinal)?: return "Screen \(ordinal + 1) contrast"
-    case .builtinKeyboard?: return "Built-in keyboard backlight"
-    case .externalKeyboard?: return "External keyboard backlight"
+    case nil: return tr("job.nothing")
+    case .master?: return tr("job.master")
+    case .microphone?: return tr("job.microphone")
+    case .builtinBrightness?: return tr("job.builtin_brightness")
+    case .builtinContrast?: return tr("job.builtin_contrast")
+    case .nightShift?: return tr("job.night_shift")
+    case .brightness(let ordinal)?: return tr("job.brightness", ["n": ordinal + 1])
+    case .contrast(let ordinal)?: return tr("job.contrast", ["n": ordinal + 1])
+    case .builtinKeyboard?: return tr("job.builtin_keyboard")
+    case .externalKeyboard?: return tr("job.external_keyboard")
     case .app(let id)?: return appName(id)
     }
 }
 
 func section(_ target: Target) -> String {
-    ["Volume", "Brightness", "Contrast", "Night Shift", "Keyboard backlight", "Apps"][rank(target) / 100]
+    tr("section." + ["volume", "brightness", "contrast", "night_shift", "keyboard", "apps"][rank(target) / 100])
 }
 
 // A job's name under its section's header, which says the rest of title().
 func shortTitle(_ target: Target) -> String {
     switch target {
     case .master, .microphone: return title(target)
-    case .builtinBrightness, .builtinContrast: return "Built-in display"
-    case .brightness(let ordinal), .contrast(let ordinal): return "Screen \(ordinal + 1)"
-    case .nightShift: return "Warmth"
-    case .builtinKeyboard: return "Built-in"
-    case .externalKeyboard: return "External"
+    case .builtinBrightness, .builtinContrast: return tr("short.builtin_display")
+    case .brightness(let ordinal), .contrast(let ordinal): return tr("short.screen", ["n": ordinal + 1])
+    case .nightShift: return tr("short.warmth")
+    case .builtinKeyboard: return tr("short.builtin")
+    case .externalKeyboard: return tr("short.external")
     case .app: return title(target)
     }
 }

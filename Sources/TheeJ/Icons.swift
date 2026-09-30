@@ -4,13 +4,7 @@ import AppKit
 enum IconStyle: String, CaseIterable {
     case mixer, dial, app
 
-    var title: String {
-        switch self {
-        case .mixer: return "Mixer"
-        case .dial: return "Dial"
-        case .app: return "App icon"
-        }
-    }
+    var title: String { tr("icon.\(rawValue)") }
 }
 
 // Parked means disconnected: the mixer's knobs drop to the bottom and the dial's pointer to its minimum.

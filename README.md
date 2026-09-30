@@ -69,8 +69,8 @@ and the app icon by `makeAppIcon`.
 
 Clicking it, with either button, opens a menu: Show data below first, on by default, with the live
 value of every knob's jobs under it, one job per line in knob order, an app's with its icon, then
-the profiles, with a check by the active one and each one's shortcut, then Settings and Calibrate,
-then the current port with Reconnect under it, then Launch at login and Keep in Dock, About TheeJ,
+the profiles, with a check by the active one and each one's shortcut, then Settings, Calibrate and
+Language, then the current port with Reconnect under it, then Launch at login and Keep in Dock, About TheeJ,
 which opens the About tab of Settings, Check for updates… with Check automatically (daily, weekly by
 default, or never), and Quit TheeJ. Settings can leave the profiles out.
 
@@ -88,10 +88,18 @@ quits, so two copies never share the serial port. `./run.sh` quits the running o
 TheeJ lives in the menu bar and stays out of the Dock and Cmd+Tab, except while Settings is open. **Keep in Dock** pins a shortcut to it in the Dock, as the Dock's own Keep in Dock does; clicking it opens Settings. When run from a terminal it also prints live slider values, so you can see
 which physical slider is which index.
 
+## Languages
+
+TheeJ speaks 12 languages: Deutsch, English, Español, Français, Italiano, Polski, Português, Русский,
+Українська, 中文, 日本語 and 한국어. The first time it opens, before anything else, it asks which one
+to use, starting from the Mac's language (English when the Mac uses none of those). **Language** in
+the menu and at the top of App settings changes it at once, open windows included. The text of each
+language is in [Strings](Sources/TheeJ/Strings), one file per language.
+
 ## Settings and calibration
 
 **Settings** has three tabs, laid out in groups as System Settings is: **General** for the profile
-and its knobs, **App settings** for shortcuts, the menu bar and sensitivity, and **About**. A tab
+and its knobs, **App settings** for the language, shortcuts, the menu bar and sensitivity, and **About**. A tab
 too tall for the screen scrolls. General lists every knob by the letter on the box with a menu for
 what it does: nothing, or any of the jobs under [What a knob can do](#what-a-knob-can-do). Clicking
 a job ticks it and clicking it again unticks it, so one knob can do several at once, of any kind:

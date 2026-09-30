@@ -39,6 +39,10 @@ if NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bu
     exit(0)
 }
 
+app.setActivationPolicy(.accessory)  // menu bar only; a regular app only while Settings is open
+// Before anything else opens and before the setup loads, which names a new install's first profile.
+if prefs.string(forKey: "language") == nil { LanguagePrompt().run() }
+
 let saved = shared.config().setup
 print("\(appName): profile \(saved.profile.name)")
 for (index, column) in saved.columns.enumerated() {
@@ -61,7 +65,6 @@ if keyboardLight == nil {
     fputs("CoreBrightness unavailable, the built-in keyboard backlight is disabled.\n", stderr)
 }
 
-app.setActivationPolicy(.accessory)  // menu bar only; a regular app only while Settings is open
 menuBar = MenuBar()
 app.delegate = menuBar
 UNUserNotificationCenter.current().delegate = menuBar

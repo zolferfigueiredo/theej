@@ -8,9 +8,9 @@ extension NSToolbarItem.Identifier {
     static let about = Self("about")
 }
 
-// Settings' tabs in toolbar order, with their labels and SF Symbols.
+// Settings' tabs in toolbar order, with their labels' keys and SF Symbols.
 let settingsTabs: [(id: NSToolbarItem.Identifier, label: String, symbol: String)] = [
-    (.general, "General", "slider.vertical.3"), (.app, "App settings", "gearshape"), (.about, "About", "info.circle"),
+    (.general, "tab.general", "slider.vertical.3"), (.app, "tab.app", "gearshape"), (.about, "tab.about", "info.circle"),
 ]
 
 let formWidth: CGFloat = 420  // every group, heading and footnote
@@ -29,27 +29,32 @@ extension MenuBar: NSToolbarDelegate {
         settingsWindow?.makeFirstResponder(nil)  // else the name field opens with its text selected
     }
 
-    // Three tabs of System Settings groups. Built once; after that only the rows and values change.
+    // Three tabs of System Settings groups. Built once, and again in a new language; in between only the
+    // rows and values change.
     func showSettings() {
         if settingsWindow != nil {
             reloadDraft()
             fitSettings()
         } else {
-            setUpEdit(profileEdit, "Add a profile", "Remove this profile", #selector(editProfiles))
-            setUpEdit(knobEdit, "Add a knob", "Remove the last knob", #selector(editKnobs))
+            shortcutButtons = []
+            removeShortcutButtons = []
+            setUpEdit(profileEdit, tr("add_profile"), tr("remove_profile"), #selector(editProfiles))
+            setUpEdit(knobEdit, tr("add_knob"), tr("remove_knob"), #selector(editKnobs))
             profilePicker.target = self
             profilePicker.action = #selector(pickDraftProfile)
-            // Whatever the name, + and - stay in the window.
-            profilePicker.widthAnchor.constraint(lessThanOrEqualToConstant: 240).isActive = true
+            if profileName.delegate == nil {  // the first time only
+                // Whatever the name, + and - stay in the window.
+                profilePicker.widthAnchor.constraint(lessThanOrEqualToConstant: 240).isActive = true
+                profileName.widthAnchor.constraint(equalToConstant: 180).isActive = true
+            }
             profileName.delegate = self
-            profileName.widthAnchor.constraint(equalToConstant: 180).isActive = true
             profileName.bezelStyle = .roundedBezel
             let profileGroup = group(profileRows)
-            setRows(profileRows, [row([NSTextField(labelWithString: "Name")], profileName), shortcutRow("Shortcut")])
+            setRows(profileRows, [row([NSTextField(labelWithString: tr("name"))], profileName), shortcutRow(tr("shortcut"))])
             let knobGroup = group(knobRows)
             let stepRows = NSStackView()
             let stepGroup = group(stepRows)
-            setRows(stepRows, [shortcutRow("Next profile"), shortcutRow("Previous profile")])
+            setRows(stepRows, [shortcutRow(tr("next_profile")), shortcutRow(tr("previous_profile"))])
             let profileShortcutGroup = group(profileShortcutRows)
 
             for control: NSControl in [invertKnobs, showName, hideIcon, iconPicker, showProfiles, speedPicker] {
@@ -58,34 +63,49 @@ extension MenuBar: NSToolbarDelegate {
             }
             for toggle in [invertKnobs, showName, hideIcon, showProfiles] { toggle.controlSize = .mini }
             iconPicker.isBordered = false
+            iconPicker.removeAllItems()
             for style in IconStyle.allCases {
                 iconPicker.addItem(withTitle: style.title)
                 iconPicker.lastItem?.image = makeIcon(style, parked: false, side: 16)
             }
             speedPicker.isBordered = false
+            speedPicker.removeAllItems()
             for speed in Speed.allCases { speedPicker.addItem(withTitle: speed.title) }
+            // Each language is named in itself, so it can always be found.
+            languagePicker.isBordered = false
+            languagePicker.removeAllItems()
+            for language in Language.allCases { languagePicker.addItem(withTitle: "\(language.flag) \(language.name)") }
+            languagePicker.selectItem(at: Language.allCases.firstIndex(of: .current) ?? 0)
+            languagePicker.target = self
+            languagePicker.action = #selector(pickLanguage)
+            let languageRows = NSStackView()
+            let languageGroup = group(languageRows)
+            setRows(languageRows, [row([label(tr("language"))], languagePicker)])
             let speedRows = NSStackView()
             let speedGroup = group(speedRows)
-            setRows(speedRows, [row([label("Speed", note: "How soon a change lands after a turn.")], speedPicker)])
+            setRows(speedRows, [row([label(tr("speed"), note: tr("speed_note"))], speedPicker)])
             let optionRows = NSStackView()
             let optionGroup = group(optionRows)
-            setRows(optionRows, [row([label("Invert knobs", note: "For pots wired the other way round.")], invertKnobs)])
+            setRows(optionRows, [row([label(tr("invert"), note: tr("invert_note"))], invertKnobs)])
             let menuBarRows = NSStackView()
             let menuBarGroup = group(menuBarRows)
-            setRows(menuBarRows, [row([label("Hide menu bar icon", note: "Open \(appName) again to get back here.")], hideIcon),
+            showNameLabel.stringValue = tr("show_name")
+            iconLabel.stringValue = tr("icon")
+            profileListLabel.stringValue = tr("profile_list")
+            setRows(menuBarRows, [row([label(tr("hide_icon"), note: tr("hide_icon_note"))], hideIcon),
                                   row([showNameLabel], showName),
                                   row([iconLabel], iconPicker),
                                   row([profileListLabel], showProfiles)])
-            let caption = footnote("Tick one or more jobs per knob, for this profile.")
-            caption.addView(NSButton(title: "Calibrate", target: self, action: #selector(calibrate)), in: .trailing)
-            let general = page([header("Profile", leading: [profilePicker], trailing: [profileEdit]), profileGroup,
-                                header("Knobs", trailing: [knobEdit]), knobGroup, caption, optionGroup, saveFooter()])
+            let caption = footnote(tr("jobs_note"))
+            caption.addView(NSButton(title: tr("calibrate"), target: self, action: #selector(calibrate)), in: .trailing)
+            let general = page([header(tr("profile"), leading: [profilePicker], trailing: [profileEdit]), profileGroup,
+                                header(tr("knobs"), trailing: [knobEdit]), knobGroup, caption, optionGroup, saveFooter()])
             general.setCustomSpacing(24, after: profileGroup)
             general.setCustomSpacing(16, after: caption)
             general.setCustomSpacing(24, after: optionGroup)
-            let app = page([header("Shortcuts"), stepGroup, profileShortcutGroup, header("Menu bar"), menuBarGroup,
-                            header("Sensitivity"), speedGroup, saveFooter()])
-            for view in [profileShortcutGroup, menuBarGroup, speedGroup] { app.setCustomSpacing(24, after: view) }
+            let app = page([languageGroup, header(tr("shortcuts")), stepGroup, profileShortcutGroup, header(tr("menu_bar")),
+                            menuBarGroup, header(tr("sensitivity")), speedGroup, saveFooter()])
+            for view in [languageGroup, profileShortcutGroup, menuBarGroup, speedGroup] { app.setCustomSpacing(24, after: view) }
             tabs = [.general: general, .app: app, .about: aboutPage()]
             reloadDraft()
             // Each page scrolls when the screen is too short for it.
@@ -121,8 +141,8 @@ extension MenuBar: NSToolbarDelegate {
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         guard let tab = settingsTabs.first(where: { $0.id == id }) else { return nil }
         let item = NSToolbarItem(itemIdentifier: id)
-        item.label = tab.label
-        item.image = NSImage(systemSymbolName: tab.symbol, accessibilityDescription: tab.label)
+        item.label = tr(tab.label)
+        item.image = NSImage(systemSymbolName: tab.symbol, accessibilityDescription: item.label)
         item.target = self
         item.action = #selector(pickTab)
         return item
@@ -134,7 +154,7 @@ extension MenuBar: NSToolbarDelegate {
         guard let window = settingsWindow, let page = tabs[id] else { return }
         reloadDraft()  // a profile renamed in General has a row in App settings too
         window.toolbar?.selectedItemIdentifier = id
-        window.title = settingsTabs.first { $0.id == id }?.label ?? ""
+        window.title = settingsTabs.first { $0.id == id }.map { tr($0.label) } ?? ""
         (window.contentView as? NSScrollView)?.documentView = page
         fitSettings(animate: window.isVisible)
     }
@@ -165,7 +185,7 @@ extension MenuBar: NSToolbarDelegate {
     }
 
     func saveFooter() -> NSStackView {
-        let save = NSButton(title: "Save", target: self, action: #selector(saveSettings))
+        let save = NSButton(title: tr("save"), target: self, action: #selector(saveSettings))
         save.keyEquivalent = "\r"
         let footer = NSStackView()
         footer.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
@@ -179,12 +199,12 @@ extension MenuBar: NSToolbarDelegate {
         icon.heightAnchor.constraint(equalToConstant: 96).isActive = true
         let name = NSTextField(labelWithString: appName)
         name.font = .boldSystemFont(ofSize: 16)
-        let version = NSTextField(labelWithString: "Version \(appVersion)")
+        let version = NSTextField(labelWithString: tr("version", ["version": appVersion]))
         version.textColor = .secondaryLabelColor
-        let check = NSButton(title: "Check for updates…", target: self, action: #selector(checkNow))
-        let website = link("Website", "https://theej.zolfer.com/")
-        let page = NSStackView(views: [icon, name, version, check, website, credit("Made by", "zolfer.com", "https://zolfer.com/"),
-                                       credit("Inspired by", "deej", "https://github.com/omriharel/deej")])
+        let check = NSButton(title: tr("check"), target: self, action: #selector(checkNow))
+        let website = link(tr("website"), "https://theej.zolfer.com/")
+        let page = NSStackView(views: [icon, name, version, check, website, credit(tr("made_by"), "zolfer.com", "https://zolfer.com/"),
+                                       credit(tr("inspired_by"), "deej", "https://github.com/omriharel/deej")])
         page.orientation = .vertical
         page.alignment = .centerX
         page.spacing = 4
@@ -268,13 +288,13 @@ extension MenuBar: NSToolbarDelegate {
     func shortcutRow(_ title: String) -> NSStackView {
         let button = NSButton(title: "", target: self, action: #selector(recordShortcut))
         button.tag = shortcutButtons.count
-        button.toolTip = "Use ⌘ or ⌃ with a key. Delete clears it, Escape cancels."
+        button.toolTip = tr("shortcut_tip")
         // With the ✕ after it, as wide as the name field: 156 + 8 + 16 = 180.
         button.widthAnchor.constraint(equalToConstant: 156).isActive = true
-        let remove = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Remove shortcut")!,
+        let remove = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: tr("remove_shortcut"))!,
                               target: self, action: #selector(removeShortcut))
         remove.tag = button.tag
-        remove.toolTip = "Remove shortcut"
+        remove.toolTip = tr("remove_shortcut")
         remove.isBordered = false
         remove.widthAnchor.constraint(equalToConstant: 16).isActive = true
         shortcutButtons.append(button)
@@ -317,7 +337,7 @@ extension MenuBar: NSToolbarDelegate {
         removeShortcutButtons.removeSubrange(3...)
         setRows(profileShortcutRows, draft.profiles.enumerated().map { index, profile in
             let name = profile.name.trimmingCharacters(in: .whitespaces)
-            return shortcutRow(name.isEmpty ? "Profile \(index + 1)" : name)
+            return shortcutRow(name.isEmpty ? tr("profile_n", ["n": index + 1]) : name)
         })
         stopRecording()
         profilePicker.removeAllItems()
@@ -374,26 +394,26 @@ extension MenuBar: NSToolbarDelegate {
                 item?.image = menuIcon(choice)
             }
             if appsAvailable {
-                popup.menu?.addItem(apps.isEmpty ? .sectionHeader(title: "Apps") : .separator())
-                popup.menu?.addItem(withTitle: "Other…", action: nil, keyEquivalent: "").representedObject = otherApp
+                popup.menu?.addItem(apps.isEmpty ? .sectionHeader(title: tr("section.apps")) : .separator())
+                popup.menu?.addItem(withTitle: tr("other"), action: nil, keyEquivalent: "").representedObject = otherApp
             }
             popup.tag = index
             tickJobs(popup)
             popup.target = self
             popup.action = #selector(pick)
-            popup.setAccessibilityLabel("Knob \(letter(index))")
+            popup.setAccessibilityLabel(tr("knob", ["letter": letter(index)]))
             let jobs = draft.profile.jobs(of: index)
             popup.setAccessibilityValue(title(jobs))
-            let note = draft.columns[index] == nil ? "Needs calibration" : nil
+            let note = draft.columns[index] == nil ? tr("needs_calibration") : nil
             let list = jobList(jobs, opens: popup)
-            let knob = row([label("Knob \(letter(index))", note: note, noteColor: .systemRed)], list, popup)
+            let knob = row([label(tr("knob", ["letter": letter(index)]), note: note, noteColor: .systemRed)], list, popup)
             // The row centres the list without keeping its own padding round it, so a tall one needs it spelt out.
             list.topAnchor.constraint(greaterThanOrEqualTo: knob.topAnchor, constant: 8).isActive = true
             list.bottomAnchor.constraint(lessThanOrEqualTo: knob.bottomAnchor, constant: -8).isActive = true
             return knob
         }
         if rows.isEmpty {
-            let empty = NSTextField(labelWithString: "No knobs. Calibrate finds them, or press + to add one.")
+            let empty = NSTextField(labelWithString: tr("no_knobs"))
             empty.textColor = .secondaryLabelColor
             let row = NSStackView()
             row.edgeInsets = NSEdgeInsets(top: 14, left: 12, bottom: 14, right: 12)
@@ -415,21 +435,21 @@ extension MenuBar: NSToolbarDelegate {
         let alert = NSAlert()
         alert.messageText = message
         alert.informativeText = info
-        alert.addButton(withTitle: "Remove").hasDestructiveAction = true
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: tr("remove")).hasDestructiveAction = true
+        alert.addButton(withTitle: tr("cancel"))
         alert.beginSheetModal(for: window) { if $0 == .alertFirstButtonReturn { action() } }
     }
 
     @objc func editProfiles(_ sender: NSSegmentedControl) {
         if sender.selectedSegment == 0 {
-            draft.profiles.append(Profile(name: "Profile \(draft.profiles.count + 1)"))
+            draft.profiles.append(Profile(name: tr("profile_n", ["n": draft.profiles.count + 1])))
             draft.active = draft.profiles.count - 1
             showSettings()
             settingsWindow?.makeFirstResponder(profileName)
         } else if draft.profiles.count > 1 {
             let name = draft.profile.name.trimmingCharacters(in: .whitespaces)
-            confirm("Remove \(name.isEmpty ? "this profile" : "“\(name)”")?",
-                    "Its knob choices and shortcut go with it.") { [self] in
+            confirm(name.isEmpty ? tr("remove_this_profile") : tr("remove_named", ["name": name]),
+                    tr("remove_profile_info")) { [self] in
                 draft.profiles.remove(at: draft.active)
                 draft.active = min(draft.active, draft.profiles.count - 1)
                 showSettings()
@@ -476,7 +496,7 @@ extension MenuBar: NSToolbarDelegate {
         let panel = NSOpenPanel()
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
         panel.allowedContentTypes = [.application]
-        panel.prompt = "Choose"
+        panel.prompt = tr("choose")
         panel.beginSheetModal(for: window) { [self] response in
             let id = panel.url.flatMap { Bundle(url: $0)?.bundleIdentifier }
             let jobs = draft.profile.jobs(of: knob)
@@ -535,8 +555,8 @@ extension MenuBar: NSToolbarDelegate {
             if draft.columns.count < 26 { draft.columns.append(nil) }
             showSettings()
         } else if !draft.columns.isEmpty {
-            confirm("Remove knob \(letter(draft.columns.count - 1))?",
-                    "What it does in every profile goes with it.") { [self] in
+            confirm(tr("remove_knob_q", ["letter": letter(draft.columns.count - 1)]),
+                    tr("remove_knob_info")) { [self] in
                 draft.columns.removeLast()
                 // Else a knob added back would take up the removed knob's jobs.
                 for index in draft.profiles.indices {
@@ -573,7 +593,7 @@ extension MenuBar: NSToolbarDelegate {
         guard !again else { return }
         registerHotKeys(nil)
         recording = sender.tag
-        sender.title = "Press Shortcut"
+        sender.title = tr("press_shortcut")
         recorder = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.record(event)
             return nil
@@ -607,7 +627,7 @@ extension MenuBar: NSToolbarDelegate {
         }
         recorder = nil
         for (path, (button, remove)) in zip(shortcutPaths, zip(shortcutButtons, removeShortcutButtons)) {
-            button.title = draft[keyPath: path]?.label ?? "Record Shortcut"
+            button.title = draft[keyPath: path]?.label ?? tr("record_shortcut")
             remove.isHidden = draft[keyPath: path] == nil
         }
     }
@@ -623,17 +643,14 @@ extension MenuBar: NSToolbarDelegate {
     func askForAudioCapture() {
         guard !audioCaptureAllowed() else { return }
         requestAudioCapture { [self] granted in
-            let text = "To set an app's volume, \(appName) plays that app's sound back at the knob's level, which macOS "
-                + "counts as recording it. Allow \(appName) under Screen & System Audio Recording in Privacy & Security, "
-                + "then quit \(appName) and open it again."
-            guard !granted, alert("\(appName) can't set app volumes yet", text, "Open System Settings", "Later") else { return }
+            guard !granted, alert(tr("audio_title"), tr("audio_text"), tr("open_settings"), tr("later")) else { return }
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture")!)
         }
     }
 
     @objc func saveSettings() {
         for index in draft.profiles.indices where draft.profiles[index].name.trimmingCharacters(in: .whitespaces).isEmpty {
-            draft.profiles[index].name = "Profile \(index + 1)"
+            draft.profiles[index].name = tr("profile_n", ["n": index + 1])
         }
         shared.setSetup(draft)
         registerHotKeys(draft)
