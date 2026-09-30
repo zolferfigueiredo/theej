@@ -1,17 +1,19 @@
 # TheeJ
 
 A macOS client for an existing [deej](https://github.com/omriharel/deej) Arduino: each knob turns a
-volume, a display's brightness or contrast, Night Shift, or a keyboard backlight, with the native
-macOS HUD.
+volume, one app's volume, a display's brightness or contrast, Night Shift, or a keyboard backlight,
+with the native macOS HUD.
 
 Upstream deej is Windows-only for audio (it uses Windows Core Audio for per-app sessions). This is a
 small Swift daemon that speaks the same serial protocol and drives the macOS **output and input
-volume** through CoreAudio, **external monitors** over DDC/CI, the **built-in display**, **Night
+volume** through CoreAudio, **each app's volume** through Core Audio process taps, **external
+monitors** over DDC/CI, the **built-in display**, **Night
 Shift** and the **MacBook keyboard** through private macOS frameworks, and a **VIA keyboard's
 backlight** over USB. Arduino firmware is unchanged.
 
 - Reads the deej serial protocol at 9600 baud, however many sliders the sketch sends
-- Settings picks what each knob does: a volume, a display, Night Shift or a keyboard backlight
+- Settings picks what each knob does: a volume, an app's volume, a display, Night Shift or a keyboard
+  backlight
 - Profiles switch every knob's job at once, from the menu bar or a global keyboard shortcut
 - Calibrate finds your knobs and which input each is wired to, and sweeps each pot clean
 - Shows the real macOS HUD on the display each knob controls
@@ -92,7 +94,7 @@ which physical slider is which index.
 and its knobs, **App settings** for shortcuts, the menu bar and sensitivity, and **About**. A tab too tall for
 the screen scrolls. General lists every knob by the letter on the box with a menu for what it does:
 nothing, or one of the jobs under [What a knob can do](#what-a-knob-can-do), grouped as volumes,
-brightness, contrast, Night Shift and keyboard backlights. Monitors count left to right by their
+brightness, contrast, Night Shift, keyboard backlights and the open apps. Monitors count left to right by their
 position in System Settings. The + and - buttons beside Knobs add or remove the last knob, down to
 none at all. A knob that has not been calibrated yet shows "Needs calibration" in red under its
 name, and does nothing until it is.
@@ -151,6 +153,15 @@ never found, so click Finish when TheeJ asks for it.
 - **Master volume**: the current output device, through CoreAudio.
 - **Microphone volume**: the input volume of the current input device, the same slider as in
   System Settings, Sound.
+- **An app's volume** (macOS 14.2 or later): any open app, from silent at the bottom of the knob to
+  the app's own level at the top. macOS has no volume per app, so TheeJ captures the app's sound with
+  a Core Audio process tap and plays it back at the knob's level, about a hundredth of a second later.
+  That has three consequences. macOS must allow TheeJ under Screen & System Audio Recording, which
+  Save asks for the first time, and a TheeJ started before the answer needs reopening. macOS shows its
+  recording indicator while a turned-down app plays. And a sound can lose its first tenth of a second.
+  At the top of the knob there is no capture at all. The app is back to its own level when TheeJ
+  quits, or when no profile gives it a knob. It needs a TheeJ signed with a certificate, as the
+  release is: macOS gives an ad hoc build silence without asking.
 - **Built-in display brightness**: the Retina panel, through DisplayServices.
 - **Built-in display contrast**: the Accessibility "Display contrast" setting, normal at the bottom
   of the knob and maximum at the top. External monitors ignore it.
@@ -178,8 +189,8 @@ asks for it directly over XPC to `com.apple.OSDUIHelper`.
 The HUD tracks the knob live. Everything but the volumes only changes once the knob has been still
 for a moment, so a turn lands as one clean change when you let go instead of flickering the panel
 through every position on the way. The volumes follow the knob immediately. macOS has no icon
-for a microphone, contrast or Night Shift, so for those TheeJ draws the same square itself, with a
-microphone, a half-filled circle and a moon from SF Symbols. If the HUD ever
+for a microphone, contrast, Night Shift or an app, so for those TheeJ draws the same square itself,
+with a microphone, a half-filled circle and a moon from SF Symbols, and the app's own icon. If the HUD ever
 stops working it is ignored: the change itself still happens.
 
 ## Jumpy knobs
@@ -263,11 +274,6 @@ Constants in [Dispatch.swift](Sources/TheeJ/Dispatch.swift), [Setup.swift](Sourc
 
 Turning a brightness knob fully down sets the backlight to 0 and the panel goes black, and a monitor
 contrast knob at 0 leaves it close to black too. The knob is the way back.
-
-## Not included
-
-Per-app volume. That needs a virtual audio device (BlackHole / Background Music) and process-tap
-plumbing; this deliberately only does master.
 
 ## License
 

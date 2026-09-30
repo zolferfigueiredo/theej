@@ -343,8 +343,16 @@ extension MenuBar: NSToolbarDelegate {
         // Includes an assigned monitor that is unplugged right now, so Save cannot drop it.
         let monitors: [Target] = (0..<max(2, externalDisplays().count, assigned))
             .flatMap { [.brightness($0), .contrast($0)] }
+        // The open apps, and any app a profile already uses, so Save cannot drop one that isn't open.
+        var apps: [Target] = []
+        if #available(macOS 14.2, *) {
+            let open = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
+                .compactMap(\.bundleIdentifier)
+            apps = draft.apps.union(open).subtracting([Bundle.main.bundleIdentifier ?? ""]).map(Target.app)
+                .sorted { title($0).localizedStandardCompare(title($1)) == .orderedAscending }
+        }
         let choices = ([Target.master, .microphone, .builtinBrightness, .builtinContrast, .nightShift,
-                        .builtinKeyboard, .externalKeyboard] + monitors).sorted { rank($0) < rank($1) }
+                        .builtinKeyboard, .externalKeyboard] + monitors).sorted { rank($0) < rank($1) } + apps
 
         var rows = draft.columns.indices.map { index -> NSStackView in
             let popup = NSPopUpButton()
@@ -352,9 +360,15 @@ extension MenuBar: NSToolbarDelegate {
             popup.addItem(withTitle: title(nil))
             for (i, choice) in choices.enumerated() {
                 if i == 0 || rank(choice) / 100 != rank(choices[i - 1]) / 100 { popup.menu?.addItem(.separator()) }
-                popup.addItem(withTitle: title(choice))
-                popup.lastItem?.representedObject = choice
-                if choice == draft.profile.target(index) { popup.select(popup.lastItem) }
+                // Not addItem(withTitle:), which drops a second app with the same name.
+                let item = NSMenuItem(title: title(choice), action: nil, keyEquivalent: "")
+                item.representedObject = choice
+                if case .app(let id) = choice, let icon = appIcon(id)?.copy() as? NSImage {
+                    icon.size = NSSize(width: 16, height: 16)
+                    item.image = icon
+                }
+                popup.menu?.addItem(item)
+                if choice == draft.profile.target(index) { popup.select(item) }
             }
             popup.tag = index
             popup.target = self
@@ -508,6 +522,19 @@ extension MenuBar: NSToolbarDelegate {
         stopRecording()
     }
 
+    // An app's volume is set by capturing its audio, which macOS has to allow. It asks the first time,
+    // and the answer only reaches a TheeJ started after it.
+    func askForAudioCapture() {
+        guard !audioCaptureAllowed() else { return }
+        requestAudioCapture { [self] granted in
+            let text = "To set an app's volume, \(appName) plays that app's sound back at the knob's level, which macOS "
+                + "counts as recording it. Allow \(appName) under Screen & System Audio Recording in Privacy & Security, "
+                + "then quit \(appName) and open it again."
+            guard !granted, alert("\(appName) can't set app volumes yet", text, "Open System Settings", "Later") else { return }
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture")!)
+        }
+    }
+
     @objc func saveSettings() {
         for index in draft.profiles.indices where draft.profiles[index].name.trimmingCharacters(in: .whitespaces).isEmpty {
             draft.profiles[index].name = "Profile \(index + 1)"
@@ -516,6 +543,8 @@ extension MenuBar: NSToolbarDelegate {
         registerHotKeys(draft)
         refresh()
         reloadDraft()
+        keepAppVolumes(for: draft.apps)
+        if !draft.apps.isEmpty { askForAudioCapture() }
         if draft.columns.contains(nil) { startCalibration(onlyNew: true) }  // a knob added with + has no input yet
     }
 }

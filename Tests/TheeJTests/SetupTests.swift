@@ -29,7 +29,7 @@ private let jobs: [Target?] = [.master, .brightness(0), .brightness(1), nil, .bu
 
 // The rank bands must stay distinct as target kinds are added.
 private let every: [Target] = [.master, .microphone, .builtinBrightness, .builtinContrast, .nightShift]
-    + (0..<16).flatMap { [.brightness($0), .contrast($0)] } + [.builtinKeyboard, .externalKeyboard]
+    + (0..<16).flatMap { [.brightness($0), .contrast($0)] } + [.builtinKeyboard, .externalKeyboard, .app("com.apple.Music")]
 
 @Test func everyTargetHasItsOwnRank() {
     #expect(Set(every.map(rank)).count == every.count)
@@ -44,6 +44,40 @@ private let every: [Target] = [.master, .microphone, .builtinBrightness, .builti
     let saved = #"[{"target":{"master":{}},"column":0},{"target":{"brightness":{"_0":0}},"column":3},"#
         + #"{"target":{"brightness":{"_0":1}},"column":2},{"column":4},{"target":{"builtinBrightness":{}},"column":1}]"#
     #expect(try JSONDecoder().decode([Knob].self, from: Data(saved.utf8)) == zip(columns, jobs).map { Knob(column: $0, target: $1) })
+}
+
+// What a TheeJ from before app volumes reads: only the jobs it knew, and it fails on any other.
+private enum OldTarget: Decodable, Equatable { case master }
+private struct OldProfile: Decodable, Equatable {
+    var name: String
+    var targets: [OldTarget?]
+}
+
+// An app job is saved apart from the others, so an older TheeJ still reads every profile, with that
+// knob doing nothing, instead of failing on the list and overwriting it.
+@Test func appJobsAreSavedWhereOlderVersionsDoNotLook() throws {
+    let music = [Profile(name: "Music", targets: [.master, .app("com.spotify.client"), nil])]
+    let saved = try JSONEncoder().encode(music)
+    #expect(try JSONDecoder().decode([Profile].self, from: saved) == music)
+    #expect(try JSONDecoder().decode([OldProfile].self, from: saved) == [OldProfile(name: "Music", targets: [.master, nil, nil])])
+    let before = #"[{"name":"Default","targets":[{"master":{}},null]}]"#
+    #expect(try JSONDecoder().decode([Profile].self, from: Data(before.utf8)) == [Profile(name: "Default", targets: [.master, nil])])
+    #expect(Setup(profiles: music + [Profile(name: "Calls", targets: [.app("us.zoom.xos")])]).apps == ["com.spotify.client", "us.zoom.xos"])
+}
+
+// A helper belongs to the app that answers for it, which keeps Chrome Canary out of Chrome's knob.
+@Test func audioProcessesBelongToTheirApp() {
+    #expect(belongs(bundle: "com.google.Chrome", owner: "com.google.Chrome", to: "com.google.Chrome"))
+    #expect(belongs(bundle: "com.google.Chrome.helper", owner: "com.google.Chrome", to: "com.google.Chrome"))
+    #expect(belongs(bundle: "com.apple.WebKit.GPU", owner: "com.apple.Safari", to: "com.apple.Safari"))
+    #expect(belongs(bundle: "com.google.Chrome.helper", owner: nil, to: "com.google.Chrome"))
+    #expect(!belongs(bundle: "com.google.Chrome.canary", owner: "com.google.Chrome.canary", to: "com.google.Chrome"))
+    #expect(!belongs(bundle: "com.apple.WebKit.GPU", owner: "com.apple.mail", to: "com.apple.Safari"))
+}
+
+// Silent at the bottom, the app's own level at the top, and quieter than linear in between.
+@Test func appGainCurve() {
+    #expect(appGain(0) == 0 && appGain(1) == 1 && appGain(0.5) == 0.125)
 }
 
 @Test func longNamesAreClipped() {

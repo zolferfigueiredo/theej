@@ -12,6 +12,7 @@ enum Target: Hashable, Codable {
     case contrast(Int)
     case builtinKeyboard
     case externalKeyboard
+    case app(String)  // one app's volume, by bundle identifier
 }
 
 // Knobs as saved before profiles, each with its own job. Only read, to make the first profile.
@@ -27,6 +28,38 @@ struct Profile: Codable, Equatable {
     var shortcut: Shortcut?
 
     func target(_ knob: Int) -> Target? { knob < targets.count ? targets[knob] : nil }
+
+    init(name: String, targets: [Target?] = [], shortcut: Shortcut? = nil) {
+        (self.name, self.targets, self.shortcut) = (name, targets, shortcut)
+    }
+
+    // App jobs are saved apart, under "apps", with nothing in their place in "targets". A TheeJ from
+    // before 1.5.0 can't read a job it doesn't know: it would fail on the whole profile list, fall back to
+    // none, and overwrite them all at its next save. This way it reads every profile, less the app jobs.
+    enum CodingKeys: String, CodingKey { case name, targets, shortcut, apps }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        name = try values.decode(String.self, forKey: .name)
+        targets = try values.decode([Target?].self, forKey: .targets)
+        shortcut = try values.decodeIfPresent(Shortcut.self, forKey: .shortcut)
+        let apps = try values.decodeIfPresent([String?].self, forKey: .apps) ?? []
+        for (knob, app) in apps.enumerated() where knob < targets.count {
+            if let app { targets[knob] = .app(app) }
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        let apps = targets.map { target -> String? in
+            if case .app(let id)? = target { return id }
+            return nil
+        }
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(name, forKey: .name)
+        try values.encode(zip(targets, apps).map { $1 == nil ? $0 : nil }, forKey: .targets)
+        try values.encodeIfPresent(shortcut, forKey: .shortcut)
+        if apps.contains(where: { $0 != nil }) { try values.encode(apps, forKey: .apps) }
+    }
 }
 
 // keyCode is what Carbon registers. key is what that key types with no modifiers, which a menu
@@ -108,6 +141,14 @@ struct Setup: Equatable {
 
     var mapping: [Int: Target] { targets(columns, profile.targets) }
 
+    // Every app a knob sets the volume of, in any profile.
+    var apps: Set<String> {
+        Set(profiles.flatMap(\.targets).compactMap { target in
+            if case .app(let id)? = target { return id }
+            return nil
+        })
+    }
+
     // The profile `by` steps away from the active one, wrapping round at either end.
     func stepped(_ by: Int) -> Int { ((active + by) % profiles.count + profiles.count) % profiles.count }
 
@@ -178,6 +219,7 @@ func rank(_ target: Target) -> Int {
     case .nightShift: return 300
     case .builtinKeyboard: return 400
     case .externalKeyboard: return 401
+    case .app: return 500  // all the same: Settings lists them by name
     }
 }
 
@@ -199,6 +241,7 @@ func title(_ target: Target?) -> String {
     case .contrast(let ordinal)?: return "Monitor \(ordinal + 1) contrast"
     case .builtinKeyboard?: return "Built-in keyboard backlight"
     case .externalKeyboard?: return "External keyboard backlight"
+    case .app(let id)?: return appName(id)
     }
 }
 
