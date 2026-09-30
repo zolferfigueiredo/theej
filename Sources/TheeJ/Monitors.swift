@@ -32,7 +32,7 @@ struct Display {
 
 // Split out from activeDisplays() so the ordering rule is testable without hardware. The
 // built-in is dropped rather than sorted: it sits at a negative x on this machine, so
-// leaving it in would silently make it "monitor 1".
+// leaving it in would silently make it "screen 1".
 func orderExternals(_ displays: [Display]) -> [Display] {
     displays.filter { !$0.builtin }.sorted { $0.x < $1.x }
 }

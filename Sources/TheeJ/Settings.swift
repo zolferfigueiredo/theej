@@ -368,7 +368,7 @@ extension MenuBar: NSToolbarDelegate {
                 if i == 0 || rank(choice) / 100 != rank(choices[i - 1]) / 100 {
                     popup.menu?.addItem(.sectionHeader(title: section(choice)))
                 }
-                // Not addItem(withTitle:), which drops the Monitor 1 under Brightness for the one under Contrast.
+                // Not addItem(withTitle:), which drops the Screen 1 under Brightness for the one under Contrast.
                 let item = popup.menu?.addItem(withTitle: shortTitle(choice), action: nil, keyEquivalent: "")
                 item?.representedObject = choice
                 item?.image = menuIcon(choice)
