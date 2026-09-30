@@ -100,6 +100,10 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         menu.addItem(.separator())
         let check = entry("Check for updates…", #selector(checkNow), "", symbol: "arrow.down.circle")
         check.isEnabled = !checking
+        if let version = availableUpdate() {
+            check.attributedTitle = updateAvailableTitle(version)
+            check.image = updateAvailableIcon()
+        }
         menu.addItem(check)
         let every = NSMenu()
         for (seconds, title) in [(86400, "Daily"), (604800, "Weekly"), (0, "Never")] {
