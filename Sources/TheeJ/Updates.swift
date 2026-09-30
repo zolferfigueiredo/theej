@@ -94,12 +94,15 @@ final class UpdateProgress: NSObject {
         buttons.widthAnchor.constraint(equalTo: bar.widthAnchor).isActive = true
         status.widthAnchor.constraint(equalTo: bar.widthAnchor).isActive = true
         let icon = NSImageView(image: NSApp.applicationIconImage)
+        icon.imageScaling = .scaleProportionallyUpOrDown  // fill the 64 pt box whatever size the image says it is
         icon.widthAnchor.constraint(equalToConstant: 64).isActive = true
         icon.heightAnchor.constraint(equalToConstant: 64).isActive = true
         let row = NSStackView(views: [icon, text])
         row.alignment = .top
         row.spacing = 16
         row.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+        /// The stack only applies its inset on the edge it aligns (the top), so the bottom margin is pinned here.
+        row.bottomAnchor.constraint(greaterThanOrEqualTo: text.bottomAnchor, constant: 20).isActive = true
         window.contentView = row
         window.setContentSize(row.fittingSize)
         window.isReleasedWhenClosed = false
