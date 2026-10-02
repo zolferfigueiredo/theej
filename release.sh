@@ -1,5 +1,7 @@
 #!/bin/bash
-# One-time setup, shared with BiHan Brightness:
+# Set appVersion in Sources/TheeJ/Version.swift first. Builds dist/TheeJ-<version>.dmg, signs and notarizes it with Developer ID,
+# then publishes it as a GitHub release of the current commit, which must be pushed. The website repo's release script puts it on the site.
+# One-time setup, shared with BeeHan Brightness:
 # xcrun notarytool store-credentials bihan --key <AuthKey.p8> --key-id <id> --issuer <issuer-id>
 set -e
 cd "$(dirname "$0")"
@@ -75,3 +77,7 @@ echo "Release ready: $DMG"
   loc=$(curl -fsS -o /dev/null -w '%{redirect_url}' --data-urlencode "url=https://theej.zolfer.com/$NAME-$VERSION.dmg" https://url.zolfer.com/dmg)
   echo "Download link: https://url.zolfer.com/${loc##*c=}"
 }
+# Casks/theej.rb always installs releases/latest/download/TheeJ.dmg, so every release carries a copy under that name.
+cp "$DMG" "dist/$NAME.dmg"
+gh release view "v$VERSION" -R zolferfigueiredo/theej >/dev/null 2>&1 ||
+  gh release create "v$VERSION" "$DMG" "dist/$NAME.dmg" -R zolferfigueiredo/theej --target "$(git rev-parse HEAD)" --title "$NAME $VERSION" --generate-notes
