@@ -30,7 +30,7 @@ Download the DMG from [theej.zolfer.com](https://theej.zolfer.com/), open it and
 Applications. Or install it with [Homebrew](https://brew.sh/):
 
 ```bash
-brew install --cask zolferfigueiredo/tap/theej
+brew install --cask zolferfigueiredo/app/theej
 ```
 
 ## Build and run
