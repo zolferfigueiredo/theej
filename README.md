@@ -24,6 +24,15 @@ backlight** over USB. Arduino firmware is unchanged.
   identical panels stay left and right across sleep and replug
 - Auto-detects the serial port and reconnects when the board is unplugged
 
+## Install
+
+Download the DMG from [theej.zolfer.com](https://theej.zolfer.com/), open it and drag TheeJ to
+Applications. Or install it with [Homebrew](https://brew.sh/):
+
+```bash
+brew install --cask zolferfigueiredo/tap/theej
+```
+
 ## Build and run
 
 Needs Xcode command line tools (`xcode-select --install`).
