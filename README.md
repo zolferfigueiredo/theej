@@ -1,67 +1,126 @@
-# TheeJ
+<p align="center">
+  <img src="Icon/icon.png" width="128" height="128" alt="TheeJ icon">
+</p>
 
-A macOS client for an existing [deej](https://github.com/omriharel/deej) Arduino: each knob turns a
-volume, one app's volume, a display's brightness or contrast, Night Shift, or a keyboard backlight,
-with the native macOS HUD.
+<h1 align="center">TheeJ</h1>
 
-Upstream deej is Windows-only for audio (it uses Windows Core Audio for per-app sessions). This is a
-small Swift daemon that speaks the same serial protocol and drives the macOS **output and input
-volume** through CoreAudio, **each app's volume** through Core Audio process taps, **external
-screens** over DDC/CI, the **built-in display**, **Night
-Shift** and the **MacBook keyboard** through private macOS frameworks, and a **VIA keyboard's
-backlight** over USB. Arduino firmware is unchanged.
+<h3 align="center">Real knobs for your Mac.</h3>
 
-- Reads the deej serial protocol at 9600 baud, however many sliders the sketch sends
-- Settings picks what each knob does: a volume, an app's volume, a display, Night Shift or a keyboard
-  backlight
-- Profiles switch every knob's job at once, from the menu bar or a global keyboard shortcut
-- Calibrate finds your knobs and which input each is wired to, and sweeps each pot clean
-- Shows the real macOS HUD on the display each knob controls
-- Menu bar icon showing connected or disconnected at a glance
-- Sets volume in-process via CoreAudio, with no `osascript`
-- Follows whichever output and input devices are current, so Bluetooth headphones just work
-- Identifies screens by their CoreGraphics UUID and orders them by on-screen position, so two
-  identical panels stay left and right across sleep and replug
-- Auto-detects the serial port and reconnects when the board is unplugged
+<p align="center">
+  The Mac client for <a href="https://github.com/omriharel/deej">deej</a>. Volume for your Mac and your apps, brightness and more,<br>
+  straight from the Arduino mixer on your desk.
+</p>
+
+<p align="center">
+  <a href="https://github.com/zolferfigueiredo/theej/releases/latest"><img src="https://img.shields.io/github/v/release/zolferfigueiredo/theej" alt="Latest release"></a>
+  <a href="https://www.swift.org"><img src="https://img.shields.io/badge/Swift-6.0-orange" alt="Swift 6.0"></a>
+  <img src="https://img.shields.io/badge/Platform-macOS%2014%2B-blue" alt="macOS 14 or later">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow" alt="MIT license"></a>
+  <a href="https://github.com/zolferfigueiredo/theej/actions/workflows/ci.yml"><img src="https://github.com/zolferfigueiredo/theej/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/zolferfigueiredo/theej/releases/latest"><b>Download for macOS</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://theej.zolfer.com">Try the mixer in your browser</a>
+</p>
 
 ## Install
 
-Download the DMG from [theej.zolfer.com](https://theej.zolfer.com/), open it and drag TheeJ to
-Applications. Or install it with [Homebrew](https://brew.sh/):
+1. [Download the DMG](https://github.com/zolferfigueiredo/theej/releases/latest), open it and drag TheeJ to Applications.
+2. Open TheeJ. It's signed and notarized by Apple, so macOS only asks you to confirm the first time. It then asks which language to use, starting from your Mac's.
+3. Plug in your deej board. Calibrate opens on its own: move each knob from end to end, and Settings opens to choose what each one does.
+
+Or install it with [Homebrew](https://brew.sh/):
 
 ```bash
-brew install --cask zolferfigueiredo/app/theej
+brew tap zolferfigueiredo/theej https://github.com/zolferfigueiredo/theej
+brew install --cask theej
 ```
 
-## Build and run
+You need:
 
-Needs Xcode command line tools (`xcode-select --install`).
+- macOS 14 or later, on Apple silicon or Intel
+- Any deej board, over USB. Your Arduino sketch stays as it is.
+- For external screens: Apple silicon and [m1ddc](https://github.com/waydabber/m1ddc) (`brew install m1ddc`)
+- For one app's volume: macOS 14.2 or later
+- TheeJ in Applications, for launch at login and updates
 
-External screen brightness and contrast additionally need
-[m1ddc](https://github.com/waydabber/m1ddc), a small standalone binary. Apple Silicon only, so on
-an Intel Mac external screens are not available. Everything else works without it. On Apple Silicon,
-the General tab of Settings shows whether m1ddc is installed, and its Install button runs the
-command below in Terminal.
+**Quit MonitorControl, BetterDisplay or any similar app first.** Two apps writing the same screen over I2C fight over the value.
 
-```bash
-brew install m1ddc
-./run.sh
-```
+## Features
 
-`run.sh` quits any running TheeJ, builds with `build.sh` and runs the new build in the terminal. Its first run also
-turns on the repository's git hook, which refuses commits made directly on `main`.
-`build.sh` runs the tests (`swift test`), then produces `.build/TheeJ.app`, a real app bundle, so macOS has an icon to show in System
-Settings, Activity Monitor and Finder. It is a universal app for Apple Silicon and Intel, macOS 14
-or later, and signed with your Apple Development certificate when you have one, so Login Items
-shows TheeJ by name and icon rather than as an unidentified developer. Without one it is signed ad
-hoc.
+- **One knob, several jobs.** The volume of your Mac, your mic or a single app, a screen's brightness or contrast, Night Shift, a keyboard backlight. Tick several, of any kind, and they all follow the knob.
+- **The real macOS HUD.** It shows up on the display the knob controls, with the app's own icon for an app's volume.
+- **Finds your knobs by itself.** Calibrate opens when your board first connects, works out how many knobs you have and which input each is on, then sweeps a jumpy pot clean.
+- **Profiles on a shortcut.** Switch every knob's jobs at once, from the menu bar or any app.
+- **No jumps.** A knob takes up a new job the next time you move it, so switching profiles never jumps the volume or a screen.
+- **Every level at a glance.** The menu lists each job with its level, one per line, each app with its icon.
+- **Follows your audio device.** Switch outputs or inputs, Bluetooth headphones included, and the knobs follow.
+- **Twin screens stay put.** Identical panels stay left and right across sleep and replug.
+- **Any number of knobs.** As many as your sketch sends, up to 26. One switch inverts them all for pots wired the other way round.
+- **Same firmware.** Speaks the deej serial protocol, unchanged.
+- **Few permissions.** Shortcuts need no Accessibility or Input Monitoring access. App volume asks macOS for audio recording access, once.
+- **Speaks 12 languages.** Deutsch, English, Español, Français, Italiano, Polski, Português, Русский, Українська, 中文, 日本語 and 한국어. **Language** in the menu and at the top of App settings changes it at once, open windows included.
+- **Lives in the menu bar.** Out of the Dock and Cmd+Tab unless Settings is open or you keep it in the Dock. Reconnects on its own, can launch at login, and installs updates in one click.
 
-**Quit MonitorControl, BetterDisplay or any similar app first.** Two processes writing the same
-screen over I2C will fight over the value.
+## What a knob can do
 
-It prints live slider values so you can see which physical slider is which index.
+- **Master volume**: the current output device, through CoreAudio.
+- **Microphone volume**: the input volume of the current input device, the same slider as in
+  System Settings, Sound.
+- **An app's volume** (macOS 14.2 or later): an app picked under Apps, from silent at the bottom of
+  the knob to the app's own level at the top. macOS has no volume per app, so TheeJ captures the
+  app's sound with a Core Audio process tap and plays it back at the knob's level, about a hundredth
+  of a second later. That has three consequences. macOS must allow TheeJ under Screen & System Audio
+  Recording, which Save asks for the first time, and a TheeJ started before the answer needs
+  reopening. macOS shows its recording indicator while a turned-down app plays. And a sound can lose
+  its first tenth of a second. At the top of the knob there is no capture at all. The app is back to
+  its own level when TheeJ quits, or when no profile gives it a knob. It needs a TheeJ signed with a
+  certificate, as the release is: macOS gives an ad hoc build silence without asking.
+- **Built-in display brightness**: the Retina panel, through DisplayServices.
+- **Built-in display contrast**: the Accessibility "Display contrast" setting, normal at the bottom
+  of the knob and maximum at the top. External screens ignore it.
+- **Night Shift warmth**: off at the bottom of the knob, then from least to most warm, on every
+  screen. It is macOS's own Night Shift, so a schedule still switches it on and off at its set
+  times.
+- **Screen brightness** and **Screen contrast**: each external screen over DDC/CI, through
+  m1ddc.
+- **Built-in keyboard backlight**: the MacBook keyboard. macOS still turns it off when the keyboard
+  sits idle or the room is bright, and brings it back at the knob's level.
+- **External keyboard backlight**: a QMK keyboard with VIA, such as a Keychron K8 Pro, on its USB
+  cable (not Bluetooth). No permission is needed. Nothing is saved to the keyboard, so unplugging it
+  brings back its own level. The knob sets brightness only: a light switched off on the keyboard
+  has to be switched back on there.
 
-## Menu bar
+The volumes follow the knob as it turns. Everything else waits for the knob to settle, as described
+under On-screen feedback.
+
+## How it works
+
+Upstream deej is Windows-only for audio (it uses Windows Core Audio for per-app sessions). TheeJ is a
+small Swift app that speaks the same serial protocol and drives macOS instead.
+
+- It reads the deej serial protocol at 9600 baud, however many sliders the sketch sends. It finds the
+  serial port by itself and reconnects when the board is unplugged.
+- The **output and input volume** go through CoreAudio, in-process, with no `osascript`, and follow
+  whichever devices are current.
+- **Each app's volume** goes through Core Audio process taps (macOS 14.2).
+- **External screens** go over DDC/CI through m1ddc. Screens are identified by their CoreGraphics
+  UUID and ordered by on-screen position, so two identical panels stay left and right.
+- The **built-in display**, **Night Shift** and the **MacBook keyboard** go through private macOS
+  frameworks, so a future macOS update could break them. A **VIA keyboard's backlight** goes over USB.
+- The HUD is macOS's own, asked for over XPC to `com.apple.OSDUIHelper`.
+- **Check for updates…** downloads `latest.json` from theej.zolfer.com and sends nothing about you.
+  An update installs only if it's signed by the same developer, and only into the copy in
+  Applications. While it installs, a window shows each step under a loading bar; **Reopen** then
+  starts the new version. When an automatic check finds a new version, a notification says so once;
+  clicking it offers Update Now.
+- Only one copy runs at a time. Opening TheeJ again while it runs, from Finder, Spotlight or `open`,
+  brings up Settings, which is the way back with the menu bar icon hidden.
+
+<details>
+<summary><b>The menu bar</b></summary>
 
 An icon in the menu bar shows whether the Arduino is connected. Settings offers three looks:
 
@@ -72,57 +131,40 @@ An icon in the menu bar shows whether the Arduino is connected. Settings offers 
 - **App icon**: the app icon itself, the same whether connected or not.
 
 Mixer and Dial follow light and dark menu bars, and on the menu bars of the displays you are not
-using they stay as bright as macOS's own icons.
-
-The app icon, also shown in the About window, is the mixer from
-[theej.zolfer.com](https://theej.zolfer.com/): three faders and an orange LED on a cream plate. Both
-icons are drawn in code in [Icons.swift](Sources/TheeJ/Icons.swift), the menu bar one by `makeIcon`
-and the app icon by `makeAppIcon`.
+using they stay as bright as macOS's own icons. Both icons are drawn in code in
+[Icons.swift](Sources/TheeJ/Icons.swift), the menu bar one by `makeIcon` and the app icon by
+`makeAppIcon`.
 
 Clicking it, with either button, opens a menu: Show data below first, on by default, with the live
 value of every knob's jobs under it, one job per line in knob order, an app's with its icon, then
 the profiles, with a check by the active one and each one's shortcut, then Settings, Calibrate and
-Language, then the current port with Reconnect under it, then Launch at login and Keep in Dock, About TheeJ,
-which opens the About tab of Settings, Check for updates… with Check automatically (daily, weekly by
-default, or never), and Quit TheeJ. Settings can leave the profiles out.
+Language, then the current port with Reconnect under it, then Launch at login and Keep in Dock,
+About TheeJ, which opens the About tab of Settings, Check for updates… with Check automatically
+(daily, weekly by default, or never), and Quit TheeJ. Settings can leave the profiles out.
 
-**Check for updates…** asks theej.zolfer.com for `latest.json`, a plain download that sends nothing
-about you. When there is a newer version, **Update Now** downloads it, checks it is signed by you
-and replaces the copy in Applications, showing each step and a loading bar; **Reopen** then starts
-the new version. When an automatic check finds a new version, a notification says so once; clicking
-it offers Update Now.
+Settings can show the active profile's name beside the icon, or hide the icon altogether. **Keep in
+Dock** pins a shortcut to TheeJ in the Dock, as the Dock's own Keep in Dock does; clicking it opens
+Settings.
 
-Settings can show the active profile's name beside the icon, or hide the icon altogether. Opening
-TheeJ again while it runs, from Finder, Spotlight or `open`, brings up Settings, which is the way
-back with the icon hidden. A second copy started directly asks the running one to show Settings and
-quits, so two copies never share the serial port. `./run.sh` quits the running one first instead.
+</details>
 
-TheeJ lives in the menu bar and stays out of the Dock and Cmd+Tab, except while Settings is open. **Keep in Dock** pins a shortcut to it in the Dock, as the Dock's own Keep in Dock does; clicking it opens Settings. When run from a terminal it also prints live slider values, so you can see
-which physical slider is which index.
-
-## Languages
-
-TheeJ speaks 12 languages: Deutsch, English, Español, Français, Italiano, Polski, Português, Русский,
-Українська, 中文, 日本語 and 한국어. The first time it opens, before anything else, it asks which one
-to use, starting from the Mac's language (English when the Mac uses none of those). **Language** in
-the menu and at the top of App settings changes it at once, open windows included. The text of each
-language is in [Strings](Sources/TheeJ/Strings), one file per language.
-
-## Settings and calibration
+<details>
+<summary><b>Settings and calibration</b></summary>
 
 **Settings** has three tabs, laid out in groups as System Settings is: **General** for the profile
-and its knobs, **App settings** for the language, shortcuts, the menu bar and sensitivity, and **About**. A tab
-too tall for the screen scrolls. General lists every knob by the letter on the box with a menu for
-what it does: nothing, or any of the jobs under [What a knob can do](#what-a-knob-can-do). Clicking
-a job ticks it and clicking it again unticks it, so one knob can do several at once, of any kind:
-two screens' brightness, or an app's volume and a keyboard backlight. They all take the knob's
-position, and the row lists them one under the other, an app with its icon. Each job sits under the
-header of its section: Volume, Brightness, Contrast, Night Shift, Keyboard backlight or Apps. Apps
-lists the apps that make sound: the ones playing right now, the well-known players, browsers and
-call apps you have installed, open or not, and any app already on a knob. Other… at its end picks
-any app from Applications. Screens count left to right by their position in System Settings. The +
-and - buttons beside Knobs add or remove the last knob, down to none at all. A knob that has not
-been calibrated yet shows "Needs calibration" in red under its name, and does nothing until it is.
+and its knobs, **App settings** for the language, shortcuts, the menu bar and sensitivity, and
+**About**. A tab too tall for the screen scrolls. General lists every knob by the letter on the box
+with a menu for what it does: nothing, or any of the jobs under
+[What a knob can do](#what-a-knob-can-do). Clicking a job ticks it and clicking it again unticks it,
+so one knob can do several at once, of any kind: two screens' brightness, or an app's volume and a
+keyboard backlight. They all take the knob's position, and the row lists them one under the other,
+an app with its icon. Each job sits under the header of its section: Volume, Brightness, Contrast,
+Night Shift, Keyboard backlight or Apps. Apps lists the apps that make sound: the ones playing right
+now, the well-known players, browsers and call apps you have installed, open or not, and any app
+already on a knob. Other… at its end picks any app from Applications. Screens count left to right
+by their position in System Settings. The + and - buttons beside Knobs add or remove the last knob,
+down to none at all. A knob that has not been calibrated yet shows "Needs calibration" in red under
+its name, and does nothing until it is.
 
 Those jobs belong to a **profile**: a name, the jobs of every knob, and an optional keyboard
 shortcut. The menu at the top picks the profile you are editing, + adds one with every knob doing
@@ -173,53 +215,27 @@ a knob; - beside Knobs in Settings does.
 A knob only shows up once the Arduino sketch sends its value. A knob the sketch does not send is
 never found, so click Finish when TheeJ asks for it.
 
-## What a knob can do
+</details>
 
-- **Master volume**: the current output device, through CoreAudio.
-- **Microphone volume**: the input volume of the current input device, the same slider as in
-  System Settings, Sound.
-- **An app's volume** (macOS 14.2 or later): an app picked under Apps, from silent at the bottom of
-  the knob to the app's own level at the top. macOS has no volume per app, so TheeJ captures the
-  app's sound with a Core Audio process tap and plays it back at the knob's level, about a hundredth
-  of a second later. That has three consequences. macOS must allow TheeJ under Screen & System Audio
-  Recording, which Save asks for the first time, and a TheeJ started before the answer needs
-  reopening. macOS shows its recording indicator while a turned-down app plays. And a sound can lose
-  its first tenth of a second. At the top of the knob there is no capture at all. The app is back to
-  its own level when TheeJ quits, or when no profile gives it a knob. It needs a TheeJ signed with a
-  certificate, as the release is: macOS gives an ad hoc build silence without asking.
-- **Built-in display brightness**: the Retina panel, through DisplayServices.
-- **Built-in display contrast**: the Accessibility "Display contrast" setting, normal at the bottom
-  of the knob and maximum at the top. External screens ignore it.
-- **Night Shift warmth**: off at the bottom of the knob, then from least to most warm, on every
-  screen. It is macOS's own Night Shift, so a schedule still switches it on and off at its set
-  times.
-- **Screen brightness** and **Screen contrast**: each external screen over DDC/CI, through
-  m1ddc.
-- **Built-in keyboard backlight**: the MacBook keyboard. macOS still turns it off when the keyboard
-  sits idle or the room is bright, and brings it back at the knob's level.
-- **External keyboard backlight**: a QMK keyboard with VIA, such as a Keychron K8 Pro, on its USB
-  cable (not Bluetooth). No permission is needed. Nothing is saved to the keyboard, so unplugging it
-  brings back its own level. The knob sets brightness only: a light switched off on the keyboard
-  has to be switched back on there.
-
-The volumes follow the knob as it turns. Everything else waits for the knob to settle, as described
-under On-screen feedback.
-
-## On-screen feedback
+<details>
+<summary><b>On-screen feedback</b></summary>
 
 Turning a knob shows the same HUD macOS shows for its own brightness and volume keys, on the display
 that knob controls. A knob with several jobs shows one HUD per display, its first job's there. macOS
-only raises that HUD from its media key handler, so the daemon asks for it directly over XPC to
+only raises that HUD from its media key handler, so TheeJ asks for it directly over XPC to
 `com.apple.OSDUIHelper`.
 
 The HUD tracks the knob live. Everything but the volumes only changes once the knob has been still
 for a moment, so a turn lands as one clean change when you let go instead of flickering the panel
 through every position on the way. The volumes follow the knob immediately. macOS has no icon
 for a microphone, contrast, Night Shift or an app, so for those TheeJ draws the same square itself,
-with a microphone, a half-filled circle and a moon from SF Symbols, and the app's own icon. If the HUD ever
-stops working it is ignored: the change itself still happens.
+with a microphone, a half-filled circle and a moon from SF Symbols, and the app's own icon. If the
+HUD ever stops working it is ignored: the change itself still happens.
 
-## Jumpy knobs
+</details>
+
+<details>
+<summary><b>Jumpy knobs</b></summary>
 
 If a knob's HUD jumps around while you turn it, the pot's track is oxidised. The wiper loses
 contact for anywhere from 15ms to a few hundred ms and the Arduino reads a stray value, often near
@@ -227,61 +243,57 @@ the ends of travel. It builds up on knobs that rarely move, which is why the vol
 clean.
 
 Sweep the knob slowly from end to end a dozen or so times. **Calibrate** in the menu walks you
-through it, one knob at a time. Recordings of this board showed a dirty
-knob reading clean within about 15 seconds of sweeping. A drop of potentiometer contact cleaner
-makes it last. The panel is protected meanwhile: everything but the volumes only applies once the
-knob settles, so a stray reading shorter than the Speed setting's wait never reaches a display or a
-light. If a panel flashes on a faster Speed, go back to Slow.
+through it, one knob at a time. Recordings of this board showed a dirty knob reading clean within
+about 15 seconds of sweeping. A drop of potentiometer contact cleaner makes it last. The panel is
+protected meanwhile: everything but the volumes only applies once the knob settles, so a stray
+reading shorter than the Speed setting's wait never reaches a display or a light. If a panel flashes
+on a faster Speed, go back to Slow.
 
-## Run at login
+</details>
 
-The app in Applications turns this on with **Launch at login** in the menu. For a build run from
-this folder, use the LaunchAgent instead:
+## Build from source
+
+Needs Xcode command line tools (`xcode-select --install`). External screens also need m1ddc on
+Apple silicon; on Apple silicon, the General tab of Settings shows whether it's installed, and its
+Install button runs the command below in Terminal.
 
 ```bash
-./install.sh
+brew install m1ddc
+./run.sh
 ```
 
-Installs a LaunchAgent that starts at login and restarts on crash. Logs to `/tmp/theej.log`
-(quiet: the status line is only printed to a terminal), and shows in Login Items as TheeJ.
-
-Quit from the menu really does quit. The agent uses `KeepAlive` with `SuccessfulExit` set to false,
-so a clean exit is left alone while a crash is still restarted.
-
-```bash
-./install.sh --uninstall
-```
-
-## Release
+`run.sh` quits any running TheeJ, builds with `build.sh` and runs the new build in the terminal,
+where it prints live slider values so you can see which physical slider is which index. Its first
+run also turns on the repository's git hook, which refuses commits made directly on `main`.
+`build.sh` runs the tests (`swift test`), then produces `.build/TheeJ.app`, a universal app for
+Apple silicon and Intel, signed with your Apple Development certificate when you have one, so Login
+Items shows TheeJ by name and icon. Without one it is signed ad hoc.
 
 ```bash
-./release.sh
-```
-
-Builds `dist/TheeJ-<version>.dmg`, taking the version from `appVersion` in
-[Version.swift](Sources/TheeJ/Version.swift). The app and the DMG are signed with Developer ID,
-notarized and stapled, and the DMG opens on a dark window with an arrow from TheeJ to Applications.
-Notarization needs a one-time `xcrun notarytool store-credentials bihan` with an App Store Connect
-API key, as the top of `release.sh` shows. BiHan Brightness uses the same profile.
-`./release.sh --url` also makes the permanent url.zolfer.com download link.
-
-## Options
-
-```bash
-./run.sh /dev/cu.usbserial-1130     # force a specific port
+./run.sh /dev/cu.usbserial-1130     # force a specific port (list them with ls /dev/cu.*)
 ./run.sh -testNotifications YES     # show the update notification, offering the next version
-./install.sh /dev/cu.usbserial-1130 # bake the port into the LaunchAgent
 swift test                          # run the tests
 ```
 
-List available ports with `ls /dev/cu.*`.
+**Run at login.** The app in Applications turns this on with **Launch at login** in the menu. For a
+build run from this folder, `./install.sh` installs a LaunchAgent that starts at login and restarts
+on crash, logging to `/tmp/theej.log`; `./install.sh /dev/cu.usbserial-1130` bakes a port into it,
+and `./install.sh --uninstall` removes it. Quit from the menu really does quit: the agent uses
+`KeepAlive` with `SuccessfulExit` set to false, so a clean exit is left alone while a crash is still
+restarted.
 
-CI runs the tests on Linux for every pull request: everything that needs AppKit is behind
-`#if canImport(AppKit)`, so Linux builds and tests the rest (the knob model and its saving,
-calibration, the serial lines, translations and versions). It also runs shellcheck on the scripts, and fails
-a pull request that changes the app without raising `appVersion` in `Sources/TheeJ/Version.swift`.
+**Release.** `./release.sh` builds `dist/TheeJ-<version>.dmg`, taking the version from `appVersion`
+in [Version.swift](Sources/TheeJ/Version.swift). The app and the DMG are signed with Developer ID,
+notarized and stapled, and the DMG is published as a GitHub release of the current commit, which
+must be pushed. Notarization needs a one-time `xcrun notarytool store-credentials bihan` with an App
+Store Connect API key, as the top of `release.sh` shows; BeeHan Brightness uses the same profile.
+`./release.sh --url` also makes the permanent url.zolfer.com download link.
 
-## Tuning
+**CI** builds and tests every pull request on macOS, counting any compiler warning as an error. It also runs shellcheck on the scripts, and fails a pull request that changes the app without
+raising `appVersion` in `Sources/TheeJ/Version.swift`.
+
+<details>
+<summary><b>Tuning</b></summary>
 
 What each knob does and which input it is on live in Settings, not in source. A fresh install has
 no knobs, and calibration finds them. They are stored as JSON in the `com.zolfer.theej`
@@ -289,7 +301,8 @@ defaults domain: `defaults read com.zolfer.theej` shows them, and `defaults dele
 com.zolfer.theej` followed by a restart clears them. Knobs saved by 1.0.2 or earlier become the
 Default profile the first time a newer TheeJ starts, and the old `knobs` key is left as it was.
 
-Constants in [Dispatch.swift](Sources/TheeJ/Dispatch.swift), [Setup.swift](Sources/TheeJ/Setup.swift) and [HUD.swift](Sources/TheeJ/HUD.swift), then rebuild:
+Constants in [Dispatch.swift](Sources/TheeJ/Dispatch.swift), [Setup.swift](Sources/TheeJ/Setup.swift)
+and [HUD.swift](Sources/TheeJ/HUD.swift), then rebuild:
 
 - `deadzone`: `0.01` (1%, about 10 ADC counts). Raise it if a value drifts while you aren't
   touching the slider, lower it if the steps feel coarse. It is also how close to an end counts as
@@ -307,7 +320,25 @@ Constants in [Dispatch.swift](Sources/TheeJ/Dispatch.swift), [Setup.swift](Sourc
 Turning a brightness knob fully down sets the backlight to 0 and the panel goes black, and a screen
 contrast knob at 0 leaves it close to black too. The knob is the way back.
 
+</details>
+
+## Disclaimer
+
+Unofficial. An independent client for the [deej](https://github.com/omriharel/deej) serial
+protocol, not affiliated with deej or with Apple, and it contains no deej code. It relies on private
+macOS frameworks that a future macOS update may change or remove.
+
 ## License
 
-MIT, see [LICENSE](LICENSE). TheeJ is an independent client for the
-[deej](https://github.com/omriharel/deej) serial protocol and contains no deej code.
+[MIT](LICENSE)
+
+---
+
+<p align="center">
+  If TheeJ is useful to you, please consider giving it a ⭐<br>
+  It helps other deej builders find it. Thank you!
+</p>
+
+<p align="center">
+  Made with ❤️ for the deej community by <a href="https://zolfer.com">zolfer.com</a>
+</p>

@@ -7,17 +7,21 @@ concurrency:  # a newer push to the same branch replaces the run
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  check:
-    runs-on: ubuntu-24.04 # macOS runners bill 10x on this private repo
-    timeout-minutes: 10
+  test:
+    name: Build and test
+    runs-on: macos-26
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the version check compares with the base branch
-      - run: shellcheck build.sh install.sh release.sh run.sh .githooks/pre-commit
-      # Everything that needs AppKit is behind #if canImport(AppKit), so Linux builds and tests the
-      # rest: the knob model and its saving, calibration, the serial lines, translations and versions.
+      - name: Shellcheck the scripts
+        run: |
+          command -v shellcheck >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install shellcheck
+          shellcheck build.sh install.sh release.sh run.sh .githooks/pre-commit
+      # Any compiler warning fails the run.
       - run: swift test -Xswiftc -warnings-as-errors
+      - run: swift build -c release -Xswiftc -warnings-as-errors
       - name: A change to the app raises its version
         if: github.event_name == 'pull_request'
         run: |
