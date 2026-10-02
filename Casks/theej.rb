@@ -4,8 +4,7 @@ cask "theej" do
   version :latest
   sha256 :no_check
 
-  url "https://github.com/zolferfigueiredo/theej/releases/latest/download/TheeJ.dmg",
-      verified: "github.com/zolferfigueiredo/theej/"
+  url "https://github.com/zolferfigueiredo/theej/releases/latest/download/TheeJ.dmg"
   name "TheeJ"
   desc "Client for deej knob boards: volume, app volume, displays and backlights"
   homepage "https://theej.zolfer.com/"
