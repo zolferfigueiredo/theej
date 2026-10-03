@@ -28,6 +28,7 @@
 <p align="center">
   <img src="docs/screenshots/theej-menu.png" width="447" alt="The TheeJ menu: each knob's job with its level, Settings, Calibrate, the Language list open, and the port">
 </p>
+<p align="center"><a href="#screenshots"><b>More screenshots</b></a></p>
 
 ## Install
 
@@ -68,17 +69,33 @@ You need:
 - **Speaks 12 languages.** Deutsch, English, Español, Français, Italiano, Polski, Português, Русский, Українська, 中文, 日本語 and 한국어. **Language** in the menu and at the top of App settings changes it at once, open windows included.
 - **Lives in the menu bar.** Out of the Dock and Cmd+Tab unless Settings is open or you keep it in the Dock. Reconnects on its own, can launch at login, and installs updates in one click.
 
+## Screenshots
+
 <p align="center">
   <img src="docs/screenshots/theej-hud-volume.png" width="200" alt="The macOS volume indicator, raised by a knob">
+  &nbsp;&nbsp;&nbsp;
   <img src="docs/screenshots/theej-hud-microphone.png" width="200" alt="TheeJ's microphone indicator">
+  &nbsp;&nbsp;&nbsp;
   <img src="docs/screenshots/theej-hud-app.png" width="200" alt="An app's volume, with the app's own icon">
 </p>
-
-## What a knob can do
+<p align="center"><sub>The indicator on the display a knob controls: the volume, the microphone, and one app's volume with its icon</sub></p>
 
 <p align="center">
   <img src="docs/screenshots/theej-settings-general.png" width="460" alt="Settings, General: a profile's knobs, one with three browsers, one with Music, one with VLC, Steam and Podcasts">
 </p>
+<p align="center"><sub>Settings, General: what each knob does. One knob can do several jobs, an app's volume with its icon</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/theej-settings-language.png" width="460" alt="Settings, App settings: the language, shortcuts, menu bar and sensitivity, with the language list open">
+</p>
+<p align="center"><sub>Settings, App settings: the language, shortcuts, menu bar and sensitivity</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/theej-calibration.png" width="400" alt="Calibration, knob A found: turn it back and forth for 20 seconds">
+</p>
+<p align="center"><sub>Calibration finds each knob, then sweeps it clean</sub></p>
+
+## What a knob can do
 
 - **Master volume**: the current output device, through CoreAudio.
 - **Microphone volume**: the input volume of the current input device, the same slider as in
@@ -165,10 +182,6 @@ Settings.
 <details>
 <summary><b>Settings and calibration</b></summary>
 
-<p align="center">
-  <img src="docs/screenshots/theej-settings-language.png" width="460" alt="Settings, App settings: the language, shortcuts, menu bar and sensitivity, with the language list open">
-</p>
-
 **Settings** has three tabs, laid out in groups as System Settings is: **General** for the profile
 and its knobs, **App settings** for the language, shortcuts, the menu bar and sensitivity, and
 **About**. A tab too tall for the screen scrolls. General lists every knob by the letter on the box
@@ -217,10 +230,6 @@ others as they are. For each knob it asks for:
 
 1. Move it from one end to the other, so TheeJ can tell which knob it is.
 2. Turn it back and forth, from one end to the other, for 20 seconds.
-
-<p align="center">
-  <img src="docs/screenshots/theej-calibration.png" width="400" alt="Calibration, knob A found: turn it back and forth for 20 seconds">
-</p>
 
 Step 2 is the cure for jumpy knobs (below). Its timer only runs while the knob turns, and when it
 stops, the window says so in orange and asks you to keep turning. A short sound marks each new step,
