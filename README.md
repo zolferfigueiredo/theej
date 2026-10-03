@@ -28,6 +28,7 @@
 <p align="center">
   <img src="docs/screenshots/theej-menu.png" width="447" alt="The TheeJ menu: each knob's job with its level, Settings, Calibrate, the Language list open, and the port">
 </p>
+<p align="center"><a href="docs/screenshots"><b>More screenshots</b></a></p>
 
 ## Install
 
