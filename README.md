@@ -73,7 +73,9 @@ You need:
 
 <p align="center">
   <img src="docs/screenshots/theej-hud-volume.png" width="200" alt="The macOS volume indicator, raised by a knob">
+  &nbsp;&nbsp;&nbsp;
   <img src="docs/screenshots/theej-hud-microphone.png" width="200" alt="TheeJ's microphone indicator">
+  &nbsp;&nbsp;&nbsp;
   <img src="docs/screenshots/theej-hud-app.png" width="200" alt="An app's volume, with the app's own icon">
 </p>
 <p align="center"><sub>The indicator on the display a knob controls: the volume, the microphone, and one app's volume with its icon</sub></p>
