@@ -81,7 +81,7 @@ You need:
 <p align="center"><sub>The indicator on the display a knob controls: the volume, the microphone, and one app's volume with its icon</sub></p>
 
 <p align="center">
-  <img src="docs/screenshots/theej-settings-general.png" width="460" alt="Settings, General: a profile's knobs, one with three browsers, one with Music, one with VLC, Steam and Podcasts">
+  <img src="docs/screenshots/theej-settings-general.png" width="460" alt="Settings, General: a profile's knobs, some doing several jobs, apps with their icons">
 </p>
 <p align="center"><sub>Settings, General: what each knob does. One knob can do several jobs, an app's volume with its icon</sub></p>
 
