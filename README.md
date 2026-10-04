@@ -147,7 +147,7 @@ small Swift app that speaks the same serial protocol and drives macOS instead.
 - The **built-in display**, **Night Shift**, the **MacBook keyboard** and **screen zoom** go through
   private macOS frameworks, so a future macOS update could break them. A **VIA keyboard's backlight** goes over USB.
 - The HUD is macOS's own, asked for over XPC to `com.apple.OSDUIHelper`.
-- **Check for updates…** downloads `latest.json` from theej.zolfer.com and sends nothing about you.
+- **Check for updates…** asks GitHub for the newest release and sends nothing about you, and an update downloads from that release.
   An update installs only if it's signed by the same developer, and only into the copy in
   Applications. While it installs, a window shows each step under a loading bar; **Reopen** then
   starts the new version. When an automatic check finds a new version, a notification says so once;

@@ -28,3 +28,8 @@ func newerVersion(remote: String, local: String, expected: Bool) {
     #expect(!updateCheckIsDue(last: now - 6 * day, every: 7 * day, now: now))
     #expect(updateCheckIsDue(last: now - 7 * day, every: 7 * day, now: now))
 }
+
+@Test func releaseTagsGiveVersions() {
+    #expect(releaseVersion("v1.2.3") == "1.2.3")
+    #expect(releaseVersion("1.2.3") == "1.2.3")
+}
