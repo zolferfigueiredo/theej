@@ -25,7 +25,10 @@ final class TopClipView: NSClipView {
 extension MenuBar: NSToolbarDelegate {
     // A second click keeps unsaved edits in an open window.
     @objc func openSettings() {
-        if settingsWindow?.isVisible != true { draft = shared.config().setup }
+        if settingsWindow?.isVisible != true {
+            draft = shared.config().setup
+            showTab(.general)  // not the tab it was closed on
+        }
         showSettings()
         settingsWindow?.makeFirstResponder(nil)  // else the name field opens with its text selected
     }
