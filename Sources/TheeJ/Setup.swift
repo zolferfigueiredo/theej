@@ -42,7 +42,7 @@ struct Profile: Codable, Equatable {
     // "targets" holds that job, or nothing when it is an app, since a version before 1.5.0 fails on the
     // whole profile list at a job it doesn't know, falls back to none, and overwrites them all at its next
     // save. "apps" holds it when it is an app, which is where 1.5.0 looks. "jobs" holds every job, and is
-    // only written once a knob has more than one. A version before 1.8.0 fails the same way on zoom in
+    // only written once a knob has more than one. A version before 1.7.5 fails the same way on zoom in
     // "targets" or "jobs", so neither holds it: "zoom" lists the knobs that have it, after their other jobs.
     enum CodingKeys: String, CodingKey { case name, targets, shortcut, apps, jobs, zoom }
 
