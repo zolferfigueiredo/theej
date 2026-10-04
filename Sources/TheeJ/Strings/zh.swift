@@ -32,6 +32,7 @@ extension Strings {
         "checking_signature": "正在检查签名…",
         "choose": "选取",
         "choose_language": "选择语言",
+        "clear": "清除",
         "click_to_update": "当前版本为 {version}。点按即可更新。",
         "close": "关闭",
         "connected": "已连接：{port}",

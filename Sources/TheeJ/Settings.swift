@@ -449,7 +449,7 @@ extension MenuBar: NSToolbarDelegate {
             popup.isBordered = false
             // A checklist, not a choice of one: the ticks are set from the knob's jobs, not by the last click.
             (popup.cell as? NSPopUpButtonCell)?.altersStateOfSelectedItem = false
-            popup.addItem(withTitle: title(nil))
+            popup.addItem(withTitle: tr("clear"))
             popup.menu?.addItem(.separator())
             for (i, choice) in choices.enumerated() {
                 if i == 0 || rank(choice) / 100 != rank(choices[i - 1]) / 100 {
@@ -458,7 +458,7 @@ extension MenuBar: NSToolbarDelegate {
                 // Not addItem(withTitle:), which drops the Screen 1 under Brightness for the one under Contrast.
                 let item = popup.menu?.addItem(withTitle: shortTitle(choice), action: nil, keyEquivalent: "")
                 item?.representedObject = choice
-                item?.image = menuIcon(choice)
+                item?.image = jobIcon(choice)
             }
             if appsAvailable {
                 popup.menu?.addItem(apps.isEmpty ? .sectionHeader(title: tr("section.apps")) : .separator())
@@ -534,7 +534,7 @@ extension MenuBar: NSToolbarDelegate {
             chooseApp(forKnob: sender.tag)
             return
         }
-        // A click ticks a job or unticks it, and Nothing unticks them all.
+        // A click ticks a job or unticks it, and Clear unticks them all.
         var jobs = draft.profile.jobs(of: sender.tag)
         if let job = sender.selectedItem?.representedObject as? Target {
             if let ticked = jobs.firstIndex(of: job) { jobs.remove(at: ticked) } else { jobs.append(job) }
@@ -574,29 +574,25 @@ extension MenuBar: NSToolbarDelegate {
         }
     }
 
-    // Ticks the knob's jobs in its menu, Nothing when it has none. The popup itself shows only its
-    // arrows: a popup draws one line, and the jobs are listed beside it, one under the other.
+    // Ticks the knob's jobs in its menu. The popup itself shows only its arrows: a popup draws one line,
+    // and the jobs are listed beside it, one under the other.
     func tickJobs(_ popup: NSPopUpButton) {
         let jobs = draft.profile.jobs(of: popup.tag)
-        for item in popup.itemArray where !item.isSeparatorItem && !item.isSectionHeader {
-            if let job = item.representedObject as? Target {
-                item.state = jobs.contains(job) ? .on : .off
-            } else if item.representedObject == nil {
-                item.state = jobs.isEmpty ? .on : .off
-            }
+        for item in popup.itemArray {
+            if let job = item.representedObject as? Target { item.state = jobs.contains(job) ? .on : .off }
         }
         let cell = popup.cell as? NSPopUpButtonCell
         cell?.usesItemFromMenu = false
         cell?.menuItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     }
 
-    // A knob's jobs in full, one under the other, an app's with its icon. A click on them opens the menu.
+    // A knob's jobs in full, one under the other, each with its icon. A click on them opens the menu.
     // One label with the icons in its text: the row lays that out as it does any other label.
     func jobList(_ jobs: [Target], opens popup: NSPopUpButton) -> NSTextField {
         let text = NSMutableAttributedString()
         for job in jobs.isEmpty ? [nil] : jobs.map(Optional.some) {
             if text.length > 0 { text.append(NSAttributedString(string: "\n")) }
-            if let icon = menuIcon(job) {
+            if let icon = job.flatMap({ jobIcon($0, tint: .labelColor) }) {
                 let attachment = NSTextAttachment()
                 attachment.image = icon
                 attachment.bounds = NSRect(x: 0, y: -3, width: 16, height: 16)  // centred on the text, not on its baseline

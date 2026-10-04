@@ -32,6 +32,7 @@ extension Strings {
         "checking_signature": "署名を確認中…",
         "choose": "選択",
         "choose_language": "言語を選択",
+        "clear": "クリア",
         "click_to_update": "現在は {version} です。クリックしてアップデート。",
         "close": "閉じる",
         "connected": "接続済み: {port}",

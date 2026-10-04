@@ -115,7 +115,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             menu.addItem(.separator())
         }
         menu.addItem(entry(tr("settings"), #selector(openSettings), ","))
-        let calibrateItem = entry(tr("calibrate"), #selector(calibrate), "")
+        let calibrateItem = entry(tr("calibrate"), #selector(calibrate), "", symbol: "wrench.and.screwdriver")
         calibrateItem.isEnabled = state.connected
         menu.addItem(calibrateItem)
         // The globe is the website's language picker. Each language is named in itself, so it can always be found.

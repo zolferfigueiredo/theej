@@ -32,6 +32,7 @@ extension Strings {
         "checking_signature": "Перевірка підпису…",
         "choose": "Вибрати",
         "choose_language": "Виберіть мову",
+        "clear": "Очистити",
         "click_to_update": "У вас {version}. Натисніть, щоб оновити.",
         "close": "Закрити",
         "connected": "Під’єднано: {port}",

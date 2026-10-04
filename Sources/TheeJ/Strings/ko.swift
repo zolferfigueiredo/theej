@@ -32,6 +32,7 @@ extension Strings {
         "checking_signature": "서명 확인 중…",
         "choose": "선택",
         "choose_language": "언어 선택",
+        "clear": "지우기",
         "click_to_update": "현재 {version}입니다. 클릭하여 업데이트하세요.",
         "close": "닫기",
         "connected": "연결됨: {port}",
