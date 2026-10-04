@@ -190,11 +190,10 @@ Settings.
 **Settings** has three tabs, laid out in groups as System Settings is: **General** for the profile
 and its knobs, **App settings** for the language, shortcuts, the menu bar and sensitivity, and
 **About**. A tab too tall for the screen scrolls. General lists every knob by the letter on the box
-with a menu for what it does: nothing, or any of the jobs under
-[What a knob can do](#what-a-knob-can-do). Clicking a job ticks it and clicking it again unticks it,
-so one knob can do several at once, of any kind: two screens' brightness, or an app's volume and a
+with a menu for what it does: any of the jobs under [What a knob can do](#what-a-knob-can-do), each
+with the icon its HUD shows. Clicking a job ticks it and clicking it again unticks it, so one knob can do several at once, of any kind: two screens' brightness, or an app's volume and a
 keyboard backlight. They all take the knob's position, and the row lists them one under the other,
-an app with its icon. Each job sits under the header of its section: Volume, Brightness, Contrast,
+each with its icon. Clear, at the top of the menu, unticks them all. Each job sits under the header of its section: Volume, Brightness, Contrast,
 Night Shift, Keyboard backlight, Zoom or Apps. Apps lists the apps that make sound: the ones playing right
 now, the well-known players, browsers and call apps you have installed, open or not, and any app
 already on a knob. Other… at its end picks any app from Applications. Screens count left to right

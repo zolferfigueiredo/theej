@@ -19,6 +19,39 @@ let hudMicrophone = "mic.fill"
 let hudContrast = "circle.lefthalf.filled"
 let hudNightShift = "moon.fill"
 let hudZoom = "plus.magnifyingglass"
+
+// A job's HUD graphic at a menu item's size, for a knob's menu and its list of jobs: the app's icon for
+// an app, and for the sun, speaker and keyboard light that OSDUIHelper draws, the nearest SF Symbol. A
+// menu draws a symbol in its text colour, but a label's text attachment draws it black whatever the
+// appearance, so a label passes its colour as tint.
+func jobIcon(_ target: Target, tint: NSColor? = nil) -> NSImage? {
+    let name: String
+    switch target {
+    case .app: return menuIcon(target)
+    case .master: name = "speaker.wave.3.fill"
+    case .microphone: name = hudMicrophone
+    case .builtinBrightness, .brightness: name = "sun.max.fill"
+    case .builtinContrast, .contrast: name = hudContrast
+    case .nightShift: name = hudNightShift
+    case .builtinKeyboard, .externalKeyboard: name = "light.max"
+    case .zoom: name = hudZoom
+    }
+    guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil) else { return nil }
+    // Centred in the square an app's icon takes, so every option's name starts at the same place.
+    let fit = min(14 / symbol.size.width, 14 / symbol.size.height)
+    let icon = NSImage(size: NSSize(width: 16, height: 16), flipped: false) { square in
+        let size = NSSize(width: symbol.size.width * fit, height: symbol.size.height * fit)
+        symbol.draw(in: NSRect(x: square.midX - size.width / 2, y: square.midY - size.height / 2,
+                               width: size.width, height: size.height))
+        if let tint {
+            tint.set()  // resolved as it draws, so a dynamic colour follows light and dark
+            square.fill(using: .sourceAtop)
+        }
+        return true
+    }
+    icon.isTemplate = tint == nil
+    return icon
+}
 let osdChiclets: UInt32 = 100
 let osdFadeMsec: UInt32 = 1000
 

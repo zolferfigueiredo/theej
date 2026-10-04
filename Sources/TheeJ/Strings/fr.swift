@@ -32,6 +32,7 @@ extension Strings {
         "checking_signature": "Vérification de la signature…",
         "choose": "Choisir",
         "choose_language": "Choisissez votre langue",
+        "clear": "Effacer",
         "click_to_update": "Vous avez la {version}. Cliquez pour mettre à jour.",
         "close": "Fermer",
         "connected": "Connecté : {port}",
