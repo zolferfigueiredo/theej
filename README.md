@@ -55,7 +55,7 @@ You need:
 
 ## Features
 
-- **One knob, several jobs.** The volume of your Mac, your mic or a single app, a screen's brightness or contrast, Night Shift, a keyboard backlight. Tick several, of any kind, and they all follow the knob.
+- **One knob, several jobs.** The volume of your Mac, your mic or a single app, a screen's brightness or contrast, Night Shift, a keyboard backlight, screen zoom. Tick several, of any kind, and they all follow the knob.
 - **The real macOS HUD.** It shows up on the display the knob controls, with the app's own icon for an app's volume.
 - **Finds your knobs by itself.** Calibrate opens when your board first connects, works out how many knobs you have and which input each is on, then sweeps a jumpy pot clean.
 - **Profiles on a shortcut.** Switch every knob's jobs at once, from the menu bar or any app.
@@ -123,6 +123,11 @@ You need:
   cable (not Bluetooth). No permission is needed. Nothing is saved to the keyboard, so unplugging it
   brings back its own level. The knob sets brightness only: a light switched off on the keyboard
   has to be switched back on there.
+- **Screen zoom**: 1x at the bottom of the knob, up to 10x at the top, with the pointer kept in the
+  middle of the view as it moves. No permission is needed. TheeJ sets the zoom in WindowServer, as
+  Accessibility Zoom does, and follows the pointer itself, because Zoom can't be set to a level from
+  outside. Several displays zoom as one picture. Quitting TheeJ zooms back out. Use it or
+  Accessibility Zoom, not both at once.
 
 The volumes follow the knob as it turns. Everything else waits for the knob to settle, as described
 under On-screen feedback.
@@ -139,8 +144,8 @@ small Swift app that speaks the same serial protocol and drives macOS instead.
 - **Each app's volume** goes through Core Audio process taps (macOS 14.2).
 - **External screens** go over DDC/CI through m1ddc. Screens are identified by their CoreGraphics
   UUID and ordered by on-screen position, so two identical panels stay left and right.
-- The **built-in display**, **Night Shift** and the **MacBook keyboard** go through private macOS
-  frameworks, so a future macOS update could break them. A **VIA keyboard's backlight** goes over USB.
+- The **built-in display**, **Night Shift**, the **MacBook keyboard** and **screen zoom** go through
+  private macOS frameworks, so a future macOS update could break them. A **VIA keyboard's backlight** goes over USB.
 - The HUD is macOS's own, asked for over XPC to `com.apple.OSDUIHelper`.
 - **Check for updates…** downloads `latest.json` from theej.zolfer.com and sends nothing about you.
   An update installs only if it's signed by the same developer, and only into the copy in
@@ -190,7 +195,7 @@ with a menu for what it does: nothing, or any of the jobs under
 so one knob can do several at once, of any kind: two screens' brightness, or an app's volume and a
 keyboard backlight. They all take the knob's position, and the row lists them one under the other,
 an app with its icon. Each job sits under the header of its section: Volume, Brightness, Contrast,
-Night Shift, Keyboard backlight or Apps. Apps lists the apps that make sound: the ones playing right
+Night Shift, Keyboard backlight, Zoom or Apps. Apps lists the apps that make sound: the ones playing right
 now, the well-known players, browsers and call apps you have installed, open or not, and any app
 already on a knob. Other… at its end picks any app from Applications. Screens count left to right
 by their position in System Settings. The + and - buttons beside Knobs add or remove the last knob,
@@ -259,8 +264,9 @@ only raises that HUD from its media key handler, so TheeJ asks for it directly o
 The HUD tracks the knob live. Everything but the volumes only changes once the knob has been still
 for a moment, so a turn lands as one clean change when you let go instead of flickering the panel
 through every position on the way. The volumes follow the knob immediately. macOS has no icon
-for a microphone, contrast, Night Shift or an app, so for those TheeJ draws the same square itself,
-with a microphone, a half-filled circle and a moon from SF Symbols, and the app's own icon. If the
+for a microphone, contrast, Night Shift, zoom or an app, so for those TheeJ draws the same square
+itself, with a microphone, a half-filled circle, a moon and a magnifying glass from SF Symbols, and
+the app's own icon. If the
 HUD ever stops working it is ignored: the change itself still happens.
 
 </details>

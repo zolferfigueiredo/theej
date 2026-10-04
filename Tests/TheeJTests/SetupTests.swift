@@ -37,7 +37,7 @@ private let english: Void = UserDefaults.standard.set("en", forKey: "language")
 
 // The rank bands must stay distinct as target kinds are added.
 private let every: [Target] = [.master, .microphone, .builtinBrightness, .builtinContrast, .nightShift]
-    + (0..<16).flatMap { [.brightness($0), .contrast($0)] } + [.builtinKeyboard, .externalKeyboard, .app("com.apple.Music")]
+    + (0..<16).flatMap { [.brightness($0), .contrast($0)] } + [.builtinKeyboard, .externalKeyboard, .zoom, .app("com.apple.Music")]
 
 @Test func everyTargetHasItsOwnRank() {
     #expect(Set(every.map(rank)).count == every.count)
@@ -142,3 +142,22 @@ private struct OldProfile: Decodable, Equatable {
     #expect(f1.label == "⌘F1")
 }
 #endif
+
+// What a TheeJ from 1.6.0 to 1.7.4 reads: every job, from "jobs" once a knob has several, and it fails on zoom.
+private enum JobsTarget: Decodable, Equatable { case master, microphone }
+private struct JobsProfile: Decodable, Equatable {
+    var name: String
+    var targets: [JobsTarget?]
+    var jobs: [[JobsTarget]]?
+}
+
+// Zoom is saved apart, like an app, so an older TheeJ still reads every profile, with zoom left off.
+@Test func zoomIsSavedWhereOlderVersionsDoNotLook() throws {
+    let reading = [Profile(name: "Reading", jobs: [[.master, .microphone, .zoom], [.zoom], []])]
+    let saved = try JSONEncoder().encode(reading)
+    #expect(try JSONDecoder().decode([Profile].self, from: saved) == reading)
+    #expect(try JSONDecoder().decode([JobsProfile].self, from: saved)
+        == [JobsProfile(name: "Reading", targets: [.master, nil, nil], jobs: [[.master, .microphone], [], []])])
+    #expect(try JSONDecoder().decode([OldProfile].self, from: JSONEncoder().encode([Profile(name: "Zoom", jobs: [[.zoom]])]))
+        == [OldProfile(name: "Zoom", targets: [nil])])
+}

@@ -442,7 +442,7 @@ extension MenuBar: NSToolbarDelegate {
                 .map(Target.app).sorted { title($0).localizedStandardCompare(title($1)) == .orderedAscending }
         }
         let choices = ([Target.master, .microphone, .builtinBrightness, .builtinContrast, .nightShift,
-                        .builtinKeyboard, .externalKeyboard] + monitors).sorted { rank($0) < rank($1) } + apps
+                        .builtinKeyboard, .externalKeyboard, .zoom] + monitors).sorted { rank($0) < rank($1) } + apps
 
         var rows = draft.columns.indices.map { index -> NSStackView in
             let popup = NSPopUpButton()
