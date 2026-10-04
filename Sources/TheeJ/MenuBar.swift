@@ -2,6 +2,22 @@
 import AppKit
 import ServiceManagement
 
+// A text field takes ⌘A, ⌘C, ⌘V and ⌘X from the Edit menu, and TheeJ has no menus in the menu bar, so
+// its windows match those keys themselves. By the typed letter, or on a layout that types no Latin
+// letter, by the key where A, C, V and X sit, as the menus do.
+final class EditingWindow: NSWindow {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let byLetter: [String: Selector] = ["a": #selector(NSText.selectAll(_:)), "c": #selector(NSText.copy(_:)),
+                                            "v": #selector(NSText.paste(_:)), "x": #selector(NSText.cut(_:))]
+        let byKey: [UInt16: String] = [0: "a", 8: "c", 9: "v", 7: "x"]
+        let typed = event.charactersIgnoringModifiers?.lowercased() ?? ""
+        let letter = typed.allSatisfy(\.isASCII) ? typed : byKey[event.keyCode] ?? ""
+        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command, let action = byLetter[letter],
+           NSApp.sendAction(action, to: nil, from: self) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
+}
+
 final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate, NSTextFieldDelegate {
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     // An update check or install is running. About's Check for updates… goes off with it, and stays off
@@ -183,7 +199,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     }
 
     func makeWindow(_ title: String, _ content: NSView) -> NSWindow {
-        let window = NSWindow(contentRect: .zero, styleMask: [.titled, .closable],
+        let window = EditingWindow(contentRect: .zero, styleMask: [.titled, .closable],
                               backing: .buffered, defer: false)
         window.title = title
         window.contentView = content

@@ -65,6 +65,15 @@ func externalDisplays() -> [Display] { orderExternals(activeDisplays()) }
 
 func builtinDisplayID() -> CGDirectDisplayID? { activeDisplays().first { $0.builtin }?.id }
 
+// The display the pointer is on, or the main one, the display with the menu bar, if it is on none.
+func pointerDisplayID() -> CGDirectDisplayID {
+    var display: CGDirectDisplayID = 0
+    var count: UInt32 = 0
+    guard let pointer = CGEvent(source: nil)?.location,
+          CGGetDisplaysWithPoint(pointer, 1, &display, &count) == .success, count > 0 else { return CGMainDisplayID() }
+    return display
+}
+
 // Serial so two DDC writes never overlap. A write blocks for ~77ms, so it must never run on the
 // serial thread: lines would back up behind it and stall the volume knob too.
 let ddcQueue = DispatchQueue(label: "theej.ddc")

@@ -56,7 +56,7 @@ You need:
 ## Features
 
 - **One knob, several jobs.** The volume of your Mac, your mic or a single app, a screen's brightness or contrast, Night Shift, a keyboard backlight, screen zoom. Tick several, of any kind, and they all follow the knob.
-- **The real macOS HUD.** It shows up on the display the knob controls, with the app's own icon for an app's volume.
+- **The real macOS HUD.** It shows up on the display the knob controls, or for screen zoom the one with the pointer, with the app's own icon for an app's volume.
 - **Finds your knobs by itself.** Calibrate opens when your board first connects, works out how many knobs you have and which input each is on, then sweeps a jumpy pot clean.
 - **Profiles on a shortcut.** Switch every knob's jobs at once, from the menu bar or any app.
 - **No jumps.** A knob takes up a new job the next time you move it, so switching profiles never jumps the volume or a screen.

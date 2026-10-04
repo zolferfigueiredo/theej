@@ -118,7 +118,9 @@ func handle(_ values: [Int]) {
                 once(on: CGMainDisplayID()) { showOSD(osdKeyboardImage, on: CGMainDisplayID(), scalar) }
             case .zoom:
                 debounce(target, on: .main, after: settle) { setZoom(scalar) }
-                once(on: CGMainDisplayID()) { showHUD(hudZoom, on: CGMainDisplayID(), scalar) }
+                // The zoom spans every display, so its HUD goes where the eye is: the pointer's display.
+                let display = pointerDisplayID()
+                once(on: display) { showHUD(hudZoom, on: display, scalar) }
             case .app(let id):
                 setAppVolume(id, scalar)
                 once(on: CGMainDisplayID()) { showHUD(on: CGMainDisplayID(), scalar) { appIcon(id) } }
