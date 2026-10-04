@@ -59,7 +59,11 @@ func handle(_ values: [Int]) {
             lastApplied[index] = scalar
             continue
         }
-        let previous = lastApplied[index] ?? -1
+        // The first reading after open or reconnect is only a baseline, so nothing changes until a turn.
+        guard let previous = lastApplied[index] else {
+            lastApplied[index] = scalar
+            continue
+        }
         let extreme = scalar <= 0 || scalar >= 1
         guard scalar != previous, extreme || abs(scalar - previous) >= deadzone else { continue }
         lastApplied[index] = scalar
