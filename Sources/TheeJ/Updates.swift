@@ -4,9 +4,6 @@ func isNewer(_ remote: String, than local: String) -> Bool {
     remote.compare(local, options: .numeric) == .orderedDescending
 }
 
-/// "v1.2.3", a release's tag, gives "1.2.3".
-func releaseVersion(_ tag: String) -> String { tag.hasPrefix("v") ? String(tag.dropFirst()) : tag }
-
 /// "1.7.0" gives "1.7.1": the version the test notification offers, so it reads like a real one.
 func nextPatch(_ version: String) -> String {
     var parts = version.split(separator: ".", omittingEmptySubsequences: false).map { Int($0) ?? 0 }
@@ -34,16 +31,14 @@ func dmgURL(_ version: String) -> URL {
         ?? releases.appending(path: "download/v\(version)/TheeJ-\(version).dmg")
 }
 
-/// The newest release's version, or nil when it can't be reached. GitHub's API leaves out drafts and pre-releases.
+/// The version in the newest release's latest.json, or nil when it can't be reached. Drafts and pre-releases never count as latest.
 func latestVersion() async -> String? {
-    let url = testSite?.appending(path: "latest.json")
-        ?? URL(string: "https://api.github.com/repos/zolferfigueiredo/theej/releases/latest")!
-    var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
-    request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+    let url = (testSite ?? releases.appending(path: "latest/download")).appending(path: "latest.json")
+    let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
     guard let (data, response) = try? await URLSession.shared.data(for: request),
           (response as? HTTPURLResponse)?.statusCode == 200,
           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-    return (json["tag_name"] as? String).map(releaseVersion) ?? json["version"] as? String
+    return json["version"] as? String
 }
 
 struct UpdateError: LocalizedError {
