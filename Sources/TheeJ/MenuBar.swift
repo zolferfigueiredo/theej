@@ -261,6 +261,11 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         return false
     }
 
+    // Only TheeJ's own zoom, so quitting leaves one from Accessibility Zoom alone.
+    func applicationWillTerminate(_ notification: Notification) {
+        if zoomTracker != nil { setZoom(0) }
+    }
+
     @objc func reconnect() {
         shared.requestReconnect()
     }

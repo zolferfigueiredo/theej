@@ -66,6 +66,9 @@ if blueLight == nil {
 if keyboardLight == nil {
     fputs("CoreBrightness unavailable, the built-in keyboard backlight is disabled.\n", stderr)
 }
+if zoomServices == nil {
+    fputs("CGSSetZoomParameters unavailable, screen zoom is disabled.\n", stderr)
+}
 
 menuBar = MenuBar()
 app.delegate = menuBar

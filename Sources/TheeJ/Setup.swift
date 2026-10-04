@@ -15,6 +15,7 @@ enum Target: Hashable, Codable {
     case contrast(Int)
     case builtinKeyboard
     case externalKeyboard
+    case zoom  // the whole screen's magnification
     case app(String)  // one app's volume, by bundle identifier
 }
 
@@ -41,8 +42,9 @@ struct Profile: Codable, Equatable {
     // "targets" holds that job, or nothing when it is an app, since a version before 1.5.0 fails on the
     // whole profile list at a job it doesn't know, falls back to none, and overwrites them all at its next
     // save. "apps" holds it when it is an app, which is where 1.5.0 looks. "jobs" holds every job, and is
-    // only written once a knob has more than one.
-    enum CodingKeys: String, CodingKey { case name, targets, shortcut, apps, jobs }
+    // only written once a knob has more than one. A version before 1.7.5 fails the same way on zoom in
+    // "targets" or "jobs", so neither holds it: "zoom" lists the knobs that have it, after their other jobs.
+    enum CodingKeys: String, CodingKey { case name, targets, shortcut, apps, jobs, zoom }
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -50,17 +52,22 @@ struct Profile: Codable, Equatable {
         shortcut = try values.decodeIfPresent(Shortcut.self, forKey: .shortcut)
         if let every = try values.decodeIfPresent([[Target]].self, forKey: .jobs) {
             jobs = every
-            return
+        } else {
+            var first = try values.decode([Target?].self, forKey: .targets)
+            let apps = try values.decodeIfPresent([String?].self, forKey: .apps) ?? []
+            for (knob, app) in apps.enumerated() where knob < first.count {
+                if let app { first[knob] = .app(app) }
+            }
+            jobs = first.map { $0.map { [$0] } ?? [] }
         }
-        var first = try values.decode([Target?].self, forKey: .targets)
-        let apps = try values.decodeIfPresent([String?].self, forKey: .apps) ?? []
-        for (knob, app) in apps.enumerated() where knob < first.count {
-            if let app { first[knob] = .app(app) }
+        for knob in try values.decodeIfPresent([Int].self, forKey: .zoom) ?? [] where jobs.indices.contains(knob) {
+            jobs[knob].append(.zoom)
         }
-        jobs = first.map { $0.map { [$0] } ?? [] }
     }
 
     func encode(to encoder: Encoder) throws {
+        let jobs = self.jobs.map { $0.filter { $0 != .zoom } }
+        let zoomed = self.jobs.indices.filter { self.jobs[$0].contains(.zoom) }
         let first = jobs.map(\.first)
         let apps = first.map { job -> String? in
             if case .app(let id)? = job { return id }
@@ -72,6 +79,7 @@ struct Profile: Codable, Equatable {
         try values.encodeIfPresent(shortcut, forKey: .shortcut)
         if apps.contains(where: { $0 != nil }) { try values.encode(apps, forKey: .apps) }
         if jobs.contains(where: { $0.count > 1 }) { try values.encode(jobs, forKey: .jobs) }
+        if !zoomed.isEmpty { try values.encode(zoomed, forKey: .zoom) }
     }
 }
 
@@ -232,7 +240,8 @@ func rank(_ target: Target) -> Int {
     case .nightShift: return 300
     case .builtinKeyboard: return 400
     case .externalKeyboard: return 401
-    case .app: return 500  // all the same: Settings lists them by name
+    case .zoom: return 500
+    case .app: return 600  // all the same: Settings lists them by name
     }
 }
 
@@ -259,18 +268,19 @@ func title(_ target: Target?) -> String {
     case .contrast(let ordinal)?: return tr("job.contrast", ["n": ordinal + 1])
     case .builtinKeyboard?: return tr("job.builtin_keyboard")
     case .externalKeyboard?: return tr("job.external_keyboard")
+    case .zoom?: return tr("job.zoom")
     case .app(let id)?: return appName(id)
     }
 }
 
 func section(_ target: Target) -> String {
-    tr("section." + ["volume", "brightness", "contrast", "night_shift", "keyboard", "apps"][rank(target) / 100])
+    tr("section." + ["volume", "brightness", "contrast", "night_shift", "keyboard", "zoom", "apps"][rank(target) / 100])
 }
 
 // A job's name under its section's header, which says the rest of title().
 func shortTitle(_ target: Target) -> String {
     switch target {
-    case .master, .microphone: return title(target)
+    case .master, .microphone, .zoom: return title(target)
     case .builtinBrightness, .builtinContrast: return tr("short.builtin_display")
     case .brightness(let ordinal), .contrast(let ordinal): return tr("short.screen", ["n": ordinal + 1])
     case .nightShift: return tr("short.warmth")

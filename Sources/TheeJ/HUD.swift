@@ -9,8 +9,8 @@ import AppKit
 }
 
 // ponytail: the three tunables. 1, 3 and 11 are the long-standing BezelServices graphic ids: sun,
-// speaker and keyboard backlight. There is none for a microphone, contrast or Night Shift, so those
-// get TheeJ's own HUD with the SF Symbols below. totalChiclets sets the bar resolution: 100 fills
+// speaker and keyboard backlight. There is none for a microphone, contrast, Night Shift or zoom, so
+// those get TheeJ's own HUD with the SF Symbols below. totalChiclets sets the bar resolution: 100 fills
 // smoothly on the modern slider style, 16 gives the classic segmented look.
 let osdBrightnessImage: Int64 = 1
 let osdVolumeImage: Int64 = 3
@@ -18,6 +18,7 @@ let osdKeyboardImage: Int64 = 11
 let hudMicrophone = "mic.fill"
 let hudContrast = "circle.lefthalf.filled"
 let hudNightShift = "moon.fill"
+let hudZoom = "plus.magnifyingglass"
 let osdChiclets: UInt32 = 100
 let osdFadeMsec: UInt32 = 1000
 
@@ -89,7 +90,9 @@ var hudShown = 0  // bumped per show, so an older fade leaves a newer HUD alone
 func makeHUD() -> (window: NSWindow, view: HUDView) {
     let view = HUDView(frame: NSRect(x: 0, y: 0, width: 200, height: 200))
     let window = NSWindow(contentRect: view.frame, styleMask: .borderless, backing: .buffered, defer: true)
-    window.level = .screenSaver
+    // Screen zoom leaves the cursor level alone, so the HUD stays where it is, at its own size, while a
+    // knob zooms in. Seen on macOS 26: the screen saver and accessibility overlay levels zoom with the rest.
+    window.level = NSWindow.Level(Int(CGWindowLevelForKey(.cursorWindow)))
     window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
     window.ignoresMouseEvents = true
     window.isOpaque = false

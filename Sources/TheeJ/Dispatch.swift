@@ -116,6 +116,9 @@ func handle(_ values: [Int]) {
             case .externalKeyboard:
                 debounce(target, on: .main, after: settle) { setExternalKeyboard(scalar) }
                 once(on: CGMainDisplayID()) { showOSD(osdKeyboardImage, on: CGMainDisplayID(), scalar) }
+            case .zoom:
+                debounce(target, on: .main, after: settle) { setZoom(scalar) }
+                once(on: CGMainDisplayID()) { showHUD(hudZoom, on: CGMainDisplayID(), scalar) }
             case .app(let id):
                 setAppVolume(id, scalar)
                 once(on: CGMainDisplayID()) { showHUD(on: CGMainDisplayID(), scalar) { appIcon(id) } }
