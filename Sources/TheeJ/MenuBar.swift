@@ -20,6 +20,7 @@ final class EditingWindow: NSWindow {
 
 final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate, NSTextFieldDelegate {
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    let menu = NSMenu()  // a right click's, lent to the item only while it opens
     // An update check or install is running. About's Check for updates… goes off with it, and stays off
     // while an installed update waits for Reopen.
     var checking = false {
@@ -28,7 +29,10 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     weak var checkButton: NSButton?
     var settingsWindow: NSWindow?
     var tabs: [NSToolbarItem.Identifier: NSView] = [:]  // Settings' pages, kept while another is shown
-    var draft = Setup()
+    var draft = Setup() {
+        didSet { dimApply() }
+    }
+    var applyButtons: [NSButton] = []
     let profilePicker = NSPopUpButton()
     let profileEdit = NSSegmentedControl()
     let profileName = NSTextField(string: "")
@@ -44,7 +48,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     var recording = 0  // which of shortcutPaths it records
     let profileRows = NSStackView()
     let profileShortcutRows = NSStackView()
-    let knobRows = NSStackView()
+    let knobRows = KnobList()
     let knobEdit = NSSegmentedControl()
     let invertKnobs = NSSwitch()
     let showName = NSSwitch()
@@ -72,11 +76,12 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     override init() {
         super.init()
         prefs.register(defaults: ["updateEvery": 604800, "showDataInMenu": true])
-        let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false
         menuNeedsUpdate(menu)
-        item.menu = menu  // assigned permanently, so left and right click both open it
+        item.button?.target = self
+        item.button?.action = #selector(clickIcon)
+        item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         item.button?.imagePosition = .imageLeading
         refresh()
 
@@ -84,6 +89,16 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         updates.tolerance = 600
         RunLoop.main.add(updates, forMode: .common)
         autoCheck()
+    }
+
+    // A click opens Settings, and a right or Control-click the menu.
+    @objc func clickIcon() {
+        guard let event = NSApp.currentEvent, event.type == .rightMouseUp || event.modifierFlags.contains(.control) else {
+            return openSettings()
+        }
+        item.menu = menu
+        item.button?.performClick(nil)  // returns once the menu closes
+        item.menu = nil
     }
 
     func entry(_ title: String, _ action: Selector, _ key: String, symbol: String? = nil) -> NSMenuItem {
@@ -265,7 +280,8 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         setup.active = index
         shared.setSetup(setup)
         refresh()
-        // Save makes the profile Settings shows active, so it has to follow or Save would switch back.
+        showHUD(hudProfile, on: pointerDisplayID(), 0, text: setup.profile.name)
+        // Apply makes the profile Settings shows active, so it has to follow or Apply would switch back.
         if settingsWindow?.isVisible == true, index < draft.profiles.count {
             draft.active = index
             reloadDraft()

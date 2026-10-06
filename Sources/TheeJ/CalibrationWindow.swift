@@ -8,7 +8,7 @@ extension MenuBar {
     }
 
     // The window says what to do, and Cancel leaves everything as it was, so it opens straight away.
-    // onlyNew, for Save and the automatic start, asks only for the knobs that have no input yet.
+    // onlyNew, for Apply and the automatic start, asks only for the knobs that have no input yet.
     func startCalibration(onlyNew: Bool) {
         if let window = calibrationWindow, calibrator != nil {
             present(window)

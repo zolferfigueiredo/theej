@@ -9,8 +9,8 @@ import AppKit
 }
 
 // ponytail: the three tunables. 1, 3 and 11 are the long-standing BezelServices graphic ids: sun,
-// speaker and keyboard backlight. There is none for a microphone, contrast, Night Shift or zoom, so
-// those get TheeJ's own HUD with the SF Symbols below. totalChiclets sets the bar resolution: 100 fills
+// speaker and keyboard backlight. There is none for a microphone, contrast, Night Shift, zoom or a
+// profile switch, so those get TheeJ's own HUD with the SF Symbols below. totalChiclets sets the bar resolution: 100 fills
 // smoothly on the modern slider style, 16 gives the classic segmented look.
 let osdBrightnessImage: Int64 = 1
 let osdVolumeImage: Int64 = 3
@@ -19,6 +19,7 @@ let hudMicrophone = "mic.fill"
 let hudContrast = "circle.lefthalf.filled"
 let hudNightShift = "moon.fill"
 let hudZoom = "plus.magnifyingglass"
+let hudProfile = "slider.vertical.3"  // the General tab's, where profiles are edited
 
 // A job's HUD graphic at a menu item's size, for a knob's menu and its list of jobs: the app's icon for
 // an app, and for the sun, speaker and keyboard light that OSDUIHelper draws, the nearest SF Symbol. A
@@ -93,18 +94,28 @@ func showOSD(_ image: Int64, on displayID: CGDirectDisplayID, _ scalar: Float32)
 final class HUDView: NSView {
     var symbol: NSImage?
     var scalar: Float32 = 0
+    var text: String?  // a profile's name, in the bar's place
     override var isFlipped: Bool { true }
     override func draw(_ dirtyRect: NSRect) {
-        NSColor(white: 0, alpha: 0.25).setFill()
-        NSRect(x: 21, y: 173, width: 159, height: 6).fill()
-        hudInk.setFill()
-        let pitch = 160 / CGFloat(osdChiclets)
-        let filled = Int((scalar * Float32(osdChiclets)).rounded())
-        if pitch >= 4 {
-            for i in 0..<filled { NSRect(x: 21 + pitch * CGFloat(i), y: 173, width: pitch - 1, height: 6).fill() }
+        if let text {
+            let style = NSMutableParagraphStyle()
+            style.alignment = .center
+            style.lineBreakMode = .byTruncatingTail
+            text.draw(in: NSRect(x: 12, y: 162, width: 176, height: 24),
+                      withAttributes: [.font: NSFont.systemFont(ofSize: 17, weight: .semibold),
+                                       .foregroundColor: NSColor.labelColor, .paragraphStyle: style])
         } else {
-            // One bar: chiclets this narrow, side by side, would show their antialiased edges as seams.
-            NSRect(x: 21, y: 173, width: 159 * CGFloat(filled) / CGFloat(osdChiclets), height: 6).fill()
+            NSColor(white: 0, alpha: 0.25).setFill()
+            NSRect(x: 21, y: 173, width: 159, height: 6).fill()
+            hudInk.setFill()
+            let pitch = 160 / CGFloat(osdChiclets)
+            let filled = Int((scalar * Float32(osdChiclets)).rounded())
+            if pitch >= 4 {
+                for i in 0..<filled { NSRect(x: 21 + pitch * CGFloat(i), y: 173, width: pitch - 1, height: 6).fill() }
+            } else {
+                // One bar: chiclets this narrow, side by side, would show their antialiased edges as seams.
+                NSRect(x: 21, y: 173, width: 159 * CGFloat(filled) / CGFloat(osdChiclets), height: 6).fill()
+            }
         }
         guard let symbol else { return }
         let fit = min(96 / symbol.size.width, 96 / symbol.size.height)
@@ -144,14 +155,14 @@ func makeHUD() -> (window: NSWindow, view: HUDView) {
     return (window, view)
 }
 
-func showHUD(_ symbol: String, on displayID: CGDirectDisplayID, _ scalar: Float32) {
-    showHUD(on: displayID, scalar) {
+func showHUD(_ symbol: String, on displayID: CGDirectDisplayID, _ scalar: Float32, text: String? = nil) {
+    showHUD(on: displayID, scalar, text: text) {
         NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?.withSymbolConfiguration(hudSymbolStyle)
     }
 }
 
 // Called from the serial thread, like showOSD. The image is made on the main thread.
-func showHUD(on displayID: CGDirectDisplayID, _ scalar: Float32, image: @escaping () -> NSImage?) {
+func showHUD(on displayID: CGDirectDisplayID, _ scalar: Float32, text: String? = nil, image: @escaping () -> NSImage?) {
     DispatchQueue.main.async {
         guard let screen = NSScreen.screens.first(where: {
             $0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID == displayID
@@ -162,6 +173,7 @@ func showHUD(on displayID: CGDirectDisplayID, _ scalar: Float32, image: @escapin
         let shown = hudShown
         view.symbol = image()
         view.scalar = scalar
+        view.text = text
         view.needsDisplay = true
         window.setFrameOrigin(NSPoint(x: screen.frame.midX - 100, y: screen.frame.minY + 140))
         window.alphaValue = 1
