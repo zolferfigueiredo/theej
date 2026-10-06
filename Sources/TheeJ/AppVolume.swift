@@ -240,7 +240,7 @@ func setAppVolume(_ app: String, _ scalar: Float32) {
     }
 }
 
-// On Save: an app no profile gives a knob any more goes back to its own volume.
+// On Apply: an app no profile gives a knob any more goes back to its own volume.
 func keepAppVolumes(for apps: Set<String>) {
     appQueue.async {
         appGains = appGains.filter { apps.contains($0.key) }

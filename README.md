@@ -25,6 +25,8 @@
   <a href="https://theej.zolfer.com">Try the mixer in your browser</a>
 </p>
 
+<p align="center">On Windows? Get <a href="https://weej.zolfer.com">WeeJ</a>.</p>
+
 <p align="center">
   <img src="docs/screenshots/theej-menu.png" width="447" alt="The TheeJ menu: each knob's job with its level, Settings, Calibrate, the Language list open, and the port">
 </p>
@@ -63,7 +65,7 @@ You need:
 - **Every level at a glance.** The menu lists each job with its level, one per line, each app with its icon.
 - **Follows your audio device.** Switch outputs or inputs, Bluetooth headphones included, and the knobs follow.
 - **Twin screens stay put.** Identical panels stay left and right across sleep and replug.
-- **Any number of knobs.** As many as your sketch sends, up to 26. One switch inverts them all for pots wired the other way round.
+- **Any number of knobs.** As many as your sketch sends, from A to Z, then A2, B2 and on. One switch inverts them all for pots wired the other way round.
 - **Same firmware.** Speaks the deej serial protocol, unchanged.
 - **Few permissions.** Shortcuts need no Accessibility or Input Monitoring access. App volume asks macOS for audio recording access, once.
 - **Speaks 12 languages.** Deutsch, English, Español, Français, Italiano, Polski, Português, Русский, Українська, 中文, 日本語 and 한국어. **Language** in the menu and at the top of App settings changes it at once, open windows included.
@@ -104,7 +106,7 @@ You need:
   the knob to the app's own level at the top. macOS has no volume per app, so TheeJ captures the
   app's sound with a Core Audio process tap and plays it back at the knob's level, about a hundredth
   of a second later. That has three consequences. macOS must allow TheeJ under Screen & System Audio
-  Recording, which Save asks for the first time, and a TheeJ started before the answer needs
+  Recording, which Apply asks for the first time, and a TheeJ started before the answer needs
   reopening. macOS shows its recording indicator while a turned-down app plays. And a sound can lose
   its first tenth of a second. At the top of the knob there is no capture at all. The app is back to
   its own level when TheeJ quits, or when no profile gives it a knob. It needs a TheeJ signed with a
@@ -171,7 +173,7 @@ using they stay as bright as macOS's own icons. Both icons are drawn in code in
 [Icons.swift](Sources/TheeJ/Icons.swift), the menu bar one by `makeIcon` and the app icon by
 `makeAppIcon`.
 
-Clicking it, with either button, opens a menu: Show data below first, on by default, with the live
+Clicking it opens Settings. Right-clicking it, or Control-clicking, opens a menu: Show data below first, on by default, with the live
 value of every knob's jobs under it, one job per line in knob order, an app's with its icon, then
 the profiles, with a check by the active one and each one's shortcut, then Settings, Calibrate and
 Language, then the current port with Reconnect under it, then Launch at login and Keep in Dock,
@@ -196,15 +198,18 @@ keyboard backlight. They all take the knob's position, and the row lists them on
 each with its icon. Clear, at the top of the menu, unticks them all. Each job sits under the header of its section: Volume, Brightness, Contrast,
 Night Shift, Keyboard backlight, Zoom or Apps. Apps lists the apps that make sound: the ones playing right
 now, the well-known players, browsers and call apps you have installed, open or not, and any app
-already on a knob. Other… at its end picks any app from Applications. Screens count left to right
-by their position in System Settings. The + and - buttons beside Knobs add or remove the last knob,
-down to none at all. A knob that has not been calibrated yet shows "Needs calibration" in red under
+already on a knob. Other… at its end picks any app from Applications. Brightness and Contrast list one Screen per
+external screen plugged in, counted left to right by their position in System Settings, plus any a
+knob already uses while it is unplugged. The + and - buttons beside Knobs add or remove the last
+knob, down to none at all, and after Z come A2, B2 and on. To reorder, drag a knob by the six dots
+before its name onto another knob: its jobs move there and the knobs in between shift along, while
+the letters stay where they are, since they stand for the knobs on the box. A knob that has not been calibrated yet shows "Needs calibration" in red under
 its name, and does nothing until it is.
 
 Those jobs belong to a **profile**: a name, the jobs of every knob, and an optional keyboard
 shortcut. The menu at the top picks the profile you are editing, + adds one with every knob doing
 nothing, and - removes the one shown. Switch profiles from the menu bar, or with a profile's
-shortcut from any app. In App settings, under **Shortcuts**, **Next profile** and **Previous
+shortcut from any app, and the new profile's name shows on screen, in a square like the HUD's. In App settings, under **Shortcuts**, **Next profile** and **Previous
 profile** step through them in order from any app, wrapping round at either end, and every profile
 is listed below them with its own shortcut, so you can set them all in one place. To set a shortcut,
 click Record Shortcut and press it; it needs ⌘ or ⌃, can't be one already in use, and Escape
@@ -219,17 +224,18 @@ default, puts the profiles in the menu. Under **Sensitivity**, **Speed** sets ho
 be still before its change lands: Slow (0.3 seconds, recommended), Medium (0.22), Fast (0.18) or
 Super fast (0.15). The volumes are not affected; they always follow the knob.
 
-**About** shows the version, with Check for updates…, and links to the website and to zolfer.com.
+**About** shows the version, with Check for updates…, and links to the website, to zolfer.com, to WeeJ, TheeJ for Windows, and to deej.
 
-Save applies at once, makes the profile shown the active one, and leaves the window open. A knob
-given a new job, by Save or by switching profiles, takes it over the next time you move it, so
+**Apply**, at the bottom of every tab with Close, applies at once, makes the profile shown the active
+one, and leaves the window open. It stays off until something changes, and goes off again once
+applied. A knob given a new job, by Apply or by switching profiles, takes it over the next time you move it, so
 neither ever jumps the volume or a panel to wherever that knob happens to sit. When a knob still
-needs calibration, as after +, Save opens Calibration for just the knobs that need it.
+needs calibration, as after +, Apply opens Calibration for just the knobs that need it.
 
 **Calibration** finds your knobs by itself. **Calibrate** in the menu runs it any time the board is
 connected, as does the Calibrate button under the knobs in Settings, and asks for knob A, then B,
 and so on. It also opens on its own when a knob needs it: the first time the board connects, as on a
-fresh install, and on Save after +. Then it asks only for the knobs that need it and keeps the
+fresh install, and on Apply after +. Then it asks only for the knobs that need it and keeps the
 others as they are. For each knob it asks for:
 
 1. Move it from one end to the other, so TheeJ can tell which knob it is.

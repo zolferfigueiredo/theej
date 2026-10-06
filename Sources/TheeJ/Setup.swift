@@ -34,6 +34,13 @@ struct Profile: Codable, Equatable {
 
     func jobs(of knob: Int) -> [Target] { knob < jobs.count ? jobs[knob] : [] }
 
+    // Knobs past the end have no jobs, so a profile padded with empty ones is the same profile. Apply
+    // in Settings stays off after a job is ticked and unticked.
+    static func == (a: Profile, b: Profile) -> Bool {
+        a.name == b.name && a.shortcut == b.shortcut
+            && (0..<max(a.jobs.count, b.jobs.count)).allSatisfy { a.jobs(of: $0) == b.jobs(of: $0) }
+    }
+
     init(name: String, jobs: [[Target]] = [], shortcut: Shortcut? = nil) {
         (self.name, self.jobs, self.shortcut) = (name, jobs, shortcut)
     }
@@ -295,4 +302,7 @@ func clipped(_ name: String, to limit: Int) -> String {
     name.count > limit ? name.prefix(limit - 1).trimmingCharacters(in: .whitespaces) + "…" : name
 }
 
-func letter(_ index: Int) -> String { String(Character(UnicodeScalar(UInt8(65 + index)))) }
+// A to Z, then A2 to Z2, A3 and on.
+func letter(_ index: Int) -> String {
+    String(Character(UnicodeScalar(UInt8(65 + index % 26)))) + (index < 26 ? "" : String(index / 26 + 1))
+}

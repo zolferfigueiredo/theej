@@ -161,3 +161,14 @@ private struct JobsProfile: Decodable, Equatable {
     #expect(try JSONDecoder().decode([OldProfile].self, from: JSONEncoder().encode([Profile(name: "Zoom", jobs: [[.zoom]])]))
         == [OldProfile(name: "Zoom", targets: [nil])])
 }
+
+// Past Z the letters start again with a number: there is no last knob.
+@Test func knobLettersNeverRunOut() {
+    #expect([0, 25, 26, 51, 52].map(letter) == ["A", "Z", "A2", "Z2", "A3"])
+}
+
+// A knob past the end of a profile's jobs has none, so padding the jobs leaves Apply off.
+@Test func emptyJobsAtTheEndChangeNothing() {
+    #expect(Profile(name: "a", jobs: [[.master], []]) == Profile(name: "a", jobs: [[.master]]))
+    #expect(Profile(name: "a", jobs: [[], [.master]]) != Profile(name: "a", jobs: [[.master]]))
+}

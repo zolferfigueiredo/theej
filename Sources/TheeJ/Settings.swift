@@ -22,6 +22,79 @@ final class TopClipView: NSClipView {
     override var isFlipped: Bool { true }
 }
 
+// Six dots, two by three, which no SF Symbol draws.
+let grip: NSImage = {
+    let image = NSImage(size: NSSize(width: 8, height: 14), flipped: false) { _ in
+        for column in 0..<2 {
+            for row in 0..<3 { NSBezierPath(ovalIn: NSRect(x: column * 5, y: 1 + row * 5, width: 3, height: 3)).fill() }
+        }
+        return true
+    }
+    image.isTemplate = true
+    return image
+}()
+
+// A knob row's grip. Dragged onto another knob's row, it moves this knob's jobs there.
+final class KnobHandle: NSImageView, NSDraggingSource {
+    var knob = 0
+
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .openHand) }
+
+    override func mouseDown(with event: NSEvent) {
+        guard let row = superview else { return }
+        let snapshot = NSImage(size: row.bounds.size)
+        if let rep = row.bitmapImageRepForCachingDisplay(in: row.bounds) {
+            row.cacheDisplay(in: row.bounds, to: rep)
+            snapshot.addRepresentation(rep)
+        }
+        let item = NSDraggingItem(pasteboardWriter: String(knob) as NSString)
+        item.setDraggingFrame(convert(row.bounds, from: row), contents: snapshot)
+        beginDraggingSession(with: [item], event: event, source: self)
+    }
+
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        context == .withinApplication ? .move : []
+    }
+}
+
+// The knobs' rows, where a grip lands: on the row nearest the pointer, which lights up meanwhile.
+final class KnobList: NSStackView {
+    private var lit: NSView? {
+        didSet {
+            oldValue?.layer?.backgroundColor = nil
+            lit?.wantsLayer = true
+            lit?.layer?.cornerRadius = 10
+            lit?.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.25).cgColor
+        }
+    }
+
+    private var rows: [NSView] { arrangedSubviews.filter { !($0 is NSBox) } }  // not the separators
+
+    private func target(_ info: NSDraggingInfo) -> Int? {
+        guard info.draggingSource is KnobHandle else { return nil }
+        let y = convert(info.draggingLocation, from: nil).y
+        let rows = rows
+        return rows.indices.min { abs(rows[$0].frame.midY - y) < abs(rows[$1].frame.midY - y) }
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { draggingUpdated(sender) }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        lit = target(sender).map { rows[$0] }
+        return lit == nil ? [] : .move
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) { lit = nil }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        lit = nil
+        guard let from = (sender.draggingSource as? KnobHandle)?.knob, let to = target(sender) else { return false }
+        // Once the drag is over: the rows are rebuilt, the grip it started from with them.
+        DispatchQueue.main.async { menuBar?.moveJobs(from: from, to: to) }
+        return true
+    }
+}
+
 extension MenuBar: NSToolbarDelegate {
     // A second click keeps unsaved edits in an open window.
     @objc func openSettings() {
@@ -43,6 +116,7 @@ extension MenuBar: NSToolbarDelegate {
         } else {
             shortcutButtons = []
             removeShortcutButtons = []
+            applyButtons = []
             setUpEdit(profileEdit, tr("add_profile"), tr("remove_profile"), #selector(editProfiles))
             setUpEdit(knobEdit, tr("add_knob"), tr("remove_knob"), #selector(editKnobs))
             profilePicker.target = self
@@ -51,6 +125,7 @@ extension MenuBar: NSToolbarDelegate {
                 // Whatever the name, + and - stay in the window.
                 profilePicker.widthAnchor.constraint(lessThanOrEqualToConstant: 240).isActive = true
                 profileName.widthAnchor.constraint(equalToConstant: 180).isActive = true
+                knobRows.registerForDraggedTypes([.string])
             }
             profileName.delegate = self
             profileName.bezelStyle = .roundedBezel
@@ -193,12 +268,13 @@ extension MenuBar: NSToolbarDelegate {
 
     func saveFooter() -> NSStackView {
         let close = NSButton(title: tr("close"), target: nil, action: #selector(NSWindow.performClose(_:)))
-        let save = NSButton(title: tr("save"), target: self, action: #selector(saveSettings))
-        save.keyEquivalent = "\r"
+        let apply = NSButton(title: tr("apply"), target: self, action: #selector(saveSettings))
+        apply.keyEquivalent = "\r"
+        applyButtons.append(apply)
         let footer = NSStackView()
         footer.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
         footer.addView(close, in: .leading)
-        footer.addView(save, in: .trailing)
+        footer.addView(apply, in: .trailing)
         return footer
     }
 
@@ -214,15 +290,21 @@ extension MenuBar: NSToolbarDelegate {
         check.isEnabled = !checking && UpdateProgress.underway == nil
         checkButton = check
         let website = link(tr("website"), "https://theej.zolfer.com/")
-        let page = NSStackView(views: [icon, name, version, check, website, credit(tr("made_by"), "zolfer.com", "https://zolfer.com/"),
-                                       credit(tr("inspired_by"), "deej", "https://github.com/omriharel/deej")])
+        let madeBy = credit(tr("made_by"), "zolfer.com", "https://zolfer.com/")
+        let windows = credit(tr("on_windows"), "WeeJ", "https://weej.zolfer.com/")
+        let inspired = credit(tr("inspired_by"), "deej", "https://github.com/omriharel/deej")
+        let footer = saveFooter()
+        footer.widthAnchor.constraint(equalToConstant: formWidth).isActive = true
+        let page = NSStackView(views: [icon, name, version, check, website, madeBy, windows, inspired, footer])
         page.orientation = .vertical
         page.alignment = .centerX
         page.spacing = 4
         page.setCustomSpacing(12, after: icon)
         page.setCustomSpacing(16, after: version)
         page.setCustomSpacing(16, after: check)
-        page.edgeInsets = NSEdgeInsets(top: 24, left: 20, bottom: 28, right: 20)
+        for line in [website, madeBy, windows] { page.setCustomSpacing(10, after: line) }
+        page.setCustomSpacing(24, after: inspired)
+        page.edgeInsets = NSEdgeInsets(top: 24, left: 20, bottom: 20, right: 20)
         page.widthAnchor.constraint(equalToConstant: formWidth + 40).isActive = true  // as wide as the other tabs
         return page
     }
@@ -432,11 +514,11 @@ extension MenuBar: NSToolbarDelegate {
             default: return nil
             }
         }.max() ?? 0
-        // Includes an assigned monitor that is unplugged right now, so Save cannot drop it.
-        let monitors: [Target] = (0..<max(2, externalDisplays().count, assigned))
+        // One per screen plugged in, and an assigned one that is unplugged right now, so Apply cannot drop it.
+        let monitors: [Target] = (0..<max(externalDisplays().count, assigned))
             .flatMap { [.brightness($0), .contrast($0)] }
         // Apps that make sound: the ones playing now, the well-known ones that are installed, and any a
-        // profile already uses, so Save cannot drop one. Other… in each menu picks any app.
+        // profile already uses, so Apply cannot drop one. Other… in each menu picks any app.
         let appsAvailable = if #available(macOS 14.2, *) { true } else { false }
         var apps: [Target] = []
         if appsAvailable {
@@ -476,7 +558,10 @@ extension MenuBar: NSToolbarDelegate {
             popup.setAccessibilityValue(title(jobs))
             let note = draft.columns[index] == nil ? tr("needs_calibration") : nil
             let list = jobList(jobs, opens: popup)
-            let knob = row([label(tr("knob", ["letter": letter(index)]), note: note, noteColor: .systemRed)], list, popup)
+            let handle = KnobHandle(image: grip)
+            handle.knob = index
+            handle.contentTintColor = .tertiaryLabelColor
+            let knob = row([handle, label(tr("knob", ["letter": letter(index)]), note: note, noteColor: .systemRed)], list, popup)
             // The row centres the list without keeping its own padding round it, so a tall one needs it spelt out.
             list.topAnchor.constraint(greaterThanOrEqualTo: knob.topAnchor, constant: 8).isActive = true
             list.bottomAnchor.constraint(lessThanOrEqualTo: knob.bottomAnchor, constant: -8).isActive = true
@@ -491,8 +576,26 @@ extension MenuBar: NSToolbarDelegate {
             rows = [row]
         }
         setRows(knobRows, rows)
-        knobEdit.setEnabled(draft.columns.count < 26, forSegment: 0)  // letters end at Z
         knobEdit.setEnabled(!draft.columns.isEmpty, forSegment: 1)
+        dimApply()
+    }
+
+    // Apply is on only while it would change something.
+    func dimApply() {
+        let saved = shared.config().setup
+        for button in applyButtons { button.isEnabled = draft != saved }
+    }
+
+    // A knob's jobs onto another knob, in the profile shown, with the knobs between shifting along. The
+    // letters, and the inputs they stand for, stay where they are.
+    func moveJobs(from: Int, to: Int) {
+        guard from != to else { return }
+        var all = draft.profile.jobs
+        all += Array(repeating: [], count: max(0, draft.columns.count - all.count))
+        all.insert(all.remove(at: from), at: to)
+        draft.profile.jobs = all
+        reloadDraft()
+        fitSettings()
     }
 
     @objc func pickDraftProfile(_ sender: NSPopUpButton) {
@@ -618,7 +721,7 @@ extension MenuBar: NSToolbarDelegate {
 
     @objc func editKnobs(_ sender: NSSegmentedControl) {
         if sender.selectedSegment == 0 {
-            if draft.columns.count < 26 { draft.columns.append(nil) }
+            draft.columns.append(nil)
             showSettings()
         } else if !draft.columns.isEmpty {
             confirm(tr("remove_knob_q", ["letter": letter(draft.columns.count - 1)]),
