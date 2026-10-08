@@ -447,7 +447,8 @@ extension MenuBar {
         let (choices, apps) = jobMenu
         for (i, choice) in choices.enumerated() {
             if i == 0 || rank(choice) / 100 != rank(choices[i - 1]) / 100 { pickHead(section(choice), into: picks) }
-            pick(shortTitle(choice), icon: jobIcon(choice), on: jobs.contains(choice), action: #selector(tickJob), into: picks).tag = i
+            pick(shortTitle(choice), icon: jobIcon(choice, tint: .labelColor), on: jobs.contains(choice), action: #selector(tickJob),
+                 into: picks).tag = i
         }
         guard apps else { return }
         if !choices.contains(where: { rank($0) == 600 }) { pickHead(tr("section.apps"), into: picks) }
@@ -465,7 +466,8 @@ extension MenuBar {
             pickHead(heading, into: picks)
             for action in group {
                 let kind = actionKind(action)
-                let box = pick(actionTitle(action, on: board), icon: actionIcon(action), on: kinds.contains(kind), action: #selector(tickAction),
+                let box = pick(actionTitle(action, on: board), icon: actionIcon(action, tint: .labelColor), on: kinds.contains(kind),
+                               action: #selector(tickAction),
                                into: picks)
                 box.tag = key
                 box.identifier = NSUserInterfaceItemIdentifier(action)
@@ -616,7 +618,7 @@ extension MenuBar {
         let actions = board.profile.buttons[key] ?? []
         let name = NSTextField(labelWithString: board.controlName(board.control(ofKey: key) ?? key))
         let room = width - 24 - name.fittingSize.width - popup.fittingSize.width - 2 * 8
-        let list = itemList(actions.isEmpty ? [(tr("job.empty"), nil)] : actions.map { (actionTitle($0, on: board), actionIcon($0)) },
+        let list = itemList(actions.isEmpty ? [(tr("job.empty"), nil)] : actions.map { (actionTitle($0, on: board), actionIcon($0, tint: .labelColor)) },
                             opens: popup, empty: actions.isEmpty, width: room)
         let top = row([name], list, popup)
         list.topAnchor.constraint(greaterThanOrEqualTo: top.topAnchor, constant: 8).isActive = true

@@ -106,7 +106,7 @@ private func defaults(_ name: String) -> UserDefaults {
     let setup = Setup.load(from: old)
     #expect(setup.boards.count == 1 && setup.added == 1)
     let board = setup.boards[0]
-    #expect(board.id == "d1" && board.name == "DIY (Arduino)" && board.type == .diy && board.list)
+    #expect(board.id == "d1" && board.name == "DIY (Arduino)" && board.type == .diy && !board.list)
     #expect(board.speed == .fast && board.active == 1 && board.port.isEmpty && board.baud == 9600)
     // Invert was on, which undid 1.8's 1 - raw, so the knobs read straight.
     #expect(board.controls == [Control(kind: .knob, input: 0), Control(kind: .knob, input: 3), Control(kind: .knob)])

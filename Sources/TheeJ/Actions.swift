@@ -176,7 +176,8 @@ func actionTitle(_ action: String, on board: Board) -> String {
     return keys[actionKind(action)].map { tr($0) } ?? action
 }
 
-func actionIcon(_ action: String) -> NSImage? {
+// As jobIcon: a label passes its colour as tint.
+func actionIcon(_ action: String, tint: NSColor? = nil) -> NSImage? {
     let symbols = ["media.playpause": "playpause.fill", "media.play": "play.fill", "media.pause": "pause.fill",
                    "media.previous": "backward.end.fill", "media.next": "forward.end.fill", "volume.up": "speaker.plus.fill",
                    "volume.down": "speaker.minus.fill", "mute.all": "speaker.slash.fill", "open:": "macwindow",
@@ -187,6 +188,6 @@ func actionIcon(_ action: String) -> NSImage? {
                    "lights.off": "lightbulb.slash"]
     let kind = actionKind(action)
     let name = mutedControl(action) != nil ? "speaker.slash" : profileTarget(action) != nil ? "list.bullet" : symbols[kind]
-    return name.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }
+    return name.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }.map { squareIcon($0, tint: tint) }
 }
 #endif
