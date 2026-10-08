@@ -149,8 +149,11 @@ extension MenuBar {
     // Every way out of a run ends here, Cancel and the close button included, so the board never stays
     // silenced. Only the calibration window has this delegate.
     func windowWillClose(_ notification: Notification) {
+        let ran = wizard != nil
         wizard = nil
         shared.setCalibrating(nil)
+        // Unless another run is starting, as startWizard closes this one first.
+        if ran, boardSetup != nil { DispatchQueue.main.async { [self] in if wizard == nil { nextInSetup() } } }
     }
 }
 #endif

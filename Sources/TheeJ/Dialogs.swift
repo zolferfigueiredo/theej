@@ -137,7 +137,7 @@ final class AddBoardDialog: Dialog {
 
     override init(owner: MenuBar) {
         super.init(owner: owner)
-        heading.stringValue = tr("add.title")
+        heading.stringValue = owner.boardSetup.map { tr("setup.board", ["n": $0.done + 1, "of": $0.total]) } ?? tr("add.title")
         types.segmentCount = 3
         for (index, kind) in BoardType.allCases.enumerated() {
             types.setLabel(tr("device.type.\(kind.rawValue)"), forSegment: index)
@@ -175,8 +175,13 @@ final class AddBoardDialog: Dialog {
             }
         }
         confirm.title = tr(type == .smc ? "add.add" : "add.next")
-        show(list, trailing: [button(tr("cancel"), #selector(close), key: "\u{1b}"), confirm])
+        show(list, trailing: [button(tr("cancel"), #selector(cancel), key: "\u{1b}"), confirm])
         check()
+    }
+
+    @objc private func cancel() {
+        owner.boardSetup = nil
+        close()
     }
 
     // The SMC-Mixer plugged in, Master before Private, if there is one.
@@ -222,7 +227,8 @@ final class AddBoardDialog: Dialog {
         owner.shownBoard = id
         owner.reloadDraft()
         owner.fitSettings()
-        if type == .smc { owner.showTab(.boards) } else { owner.startWizard(id) }
+        owner.boardSetup?.done += 1
+        if type == .smc { owner.nextInSetup() } else { owner.startWizard(id) }
     }
 }
 
@@ -233,6 +239,7 @@ final class BoardSettingsDialog: Dialog {
     private var device = NSPopUpButton()
     private var baud = NSPopUpButton()
     private var speed = NSPopUpButton()
+    private var lights = NSPopUpButton()
 
     init(owner: MenuBar, board: Board) {
         self.board = board
@@ -265,6 +272,10 @@ final class BoardSettingsDialog: Dialog {
             speed = popup(Speed.allCases.map(\.title), selected: Speed.allCases.firstIndex(of: board.speed) ?? 0)
             list.append(formRow(tr("baud_rate"), note: tr("baud_note"), baud))
             list.append(formRow(tr("speed"), note: tr("speed_note"), speed))
+        }
+        if board.type == .smc {
+            lights = popup(lightPatterns.map { tr("lights.\($0)") }, selected: lightPatterns.firstIndex(of: board.lights) ?? 0)
+            list.append(formRow(tr("lights"), note: tr("lights_note"), lights))
         }
         let next = ShortcutField(board.next) { [weak self] in self?.board.next = $0; self?.rebuild() }
         let previous = ShortcutField(board.previous) { [weak self] in self?.board.previous = $0; self?.rebuild() }
@@ -300,6 +311,7 @@ final class BoardSettingsDialog: Dialog {
             board.baud = baudRates[max(baud.indexOfSelectedItem, 0)]
             board.speed = Speed.allCases[max(speed.indexOfSelectedItem, 0)]
         }
+        if board.type == .smc { board.lights = parseLightPattern(lightPatterns[max(lights.indexOfSelectedItem, 0)]) }
     }
 
     @objc private func refresh() { rebuild() }
@@ -314,7 +326,7 @@ final class BoardSettingsDialog: Dialog {
         close()
         owner.changeAtOnce(edited.id) { board in
             board.name = edited.name.trimmingCharacters(in: .whitespaces).isEmpty ? tr("device.type.\(edited.type.rawValue)") : edited.name
-            (board.port, board.baud, board.speed) = (edited.port, edited.baud, edited.speed)
+            (board.port, board.baud, board.speed, board.lights) = (edited.port, edited.baud, edited.speed, edited.lights)
             (board.next, board.previous) = (edited.next, edited.previous)
         }
     }

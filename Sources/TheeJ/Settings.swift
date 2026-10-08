@@ -15,7 +15,7 @@ let settingsTabs: [(id: NSToolbarItem.Identifier, label: String, symbol: String)
 ]
 
 let formWidth: CGFloat = 420  // every group, heading and footnote on General and About
-let boardsWidth: CGFloat = 640  // the Boards tab, wider for the drawing
+let boardsWidth: CGFloat = 860  // the Boards tab, wide enough for the drawing and its inspector side by side
 
 // Flipped, so a page taller than the window starts at its top rather than its bottom.
 final class TopClipView: NSClipView {
@@ -180,6 +180,9 @@ extension MenuBar: NSToolbarDelegate {
             NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window,
                                                    queue: .main) { [weak self] _ in
                 self?.stopRecording()
+                self?.importNote = nil
+                self?.boardSetup = nil
+                self?.arranging = []
                 shared.setWatching(nil)
                 NSApp.setActivationPolicy(.accessory)
             }
@@ -473,7 +476,7 @@ extension MenuBar: NSToolbarDelegate {
         return row
     }
 
-    func setRows(_ stack: NSStackView, _ rows: [NSStackView]) {
+    func setRows(_ stack: NSStackView, _ rows: [NSView]) {
         for view in stack.arrangedSubviews { view.removeFromSuperview() }
         for (index, row) in rows.enumerated() {
             if index > 0 {
@@ -490,7 +493,7 @@ extension MenuBar: NSToolbarDelegate {
     // Rebuilt on every change: General's boards and options, and the Boards tab.
     func reloadDraft() {
         stopRecordingOnPages()
-        setRows(boardRows, draft.boards.isEmpty ? [emptyRow(tr("boards.none"))] : draft.boards.map(boardRow))
+        setRows(boardRows, draft.boards.isEmpty ? [setupRow()] : draft.boards.map(boardRow))
         showName.state = draft.showName ? .on : .off
         showProfiles.state = draft.showProfiles ? .on : .off
         hideIcon.state = draft.hideIcon ? .on : .off
@@ -498,6 +501,41 @@ extension MenuBar: NSToolbarDelegate {
         dimMenuBarOptions()
         reloadBoards()
         dimApply()
+    }
+
+    // A fresh install's question, as WeeJ asks it. The boards are then added one after another.
+    func setupRow() -> NSStackView {
+        let title = NSTextField(labelWithString: tr("setup.title"))
+        title.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
+        let note = NSTextField(wrappingLabelWithString: tr("setup.note"))
+        note.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        note.textColor = .secondaryLabelColor
+        note.preferredMaxLayoutWidth = formWidth - 24
+        let counts = NSSegmentedControl(labels: ["1", "2", "3", "4"], trackingMode: .momentary, target: self,
+                                        action: #selector(setUpBoards))
+        counts.setAccessibilityLabel(tr("setup.title"))
+        let row = NSStackView(views: [title, note, counts])
+        row.orientation = .vertical
+        row.alignment = .leading
+        row.spacing = 8
+        row.edgeInsets = NSEdgeInsets(top: 14, left: 12, bottom: 14, right: 12)
+        return row
+    }
+
+    @objc func setUpBoards(_ sender: NSSegmentedControl) {
+        boardSetup = (sender.selectedSegment + 1, 0)
+        addBoard()
+    }
+
+    // While the boards counted on General are added, the next one's Add follows the last one's calibration;
+    // once they are all in, the Boards tab shows them.
+    func nextInSetup() {
+        if let setup = boardSetup, setup.done < setup.total {
+            showSettings()
+            return addBoard()
+        }
+        boardSetup = nil
+        showTab(.boards)
     }
 
     // A board on General: switched on or off at once, its name opening it on the Boards tab, its status

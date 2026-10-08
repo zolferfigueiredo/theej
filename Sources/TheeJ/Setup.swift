@@ -238,7 +238,6 @@ func legacyBoard(_ defaults: UserDefaults) -> Board? {
     board.next = decode("nextProfile")
     board.previous = decode("previousProfile")
     board.speed = Speed(rawValue: defaults.string(forKey: "speed") ?? "") ?? .slow
-    board.list = true  // the rows 1.8 showed
     return board
 }
 

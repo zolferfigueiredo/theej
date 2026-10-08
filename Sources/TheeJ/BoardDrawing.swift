@@ -2,8 +2,8 @@
 import AppKit
 
 // A board as Settings draws it, in millimetres scaled to the view's width: the SMC-Mixer as its panel sits,
-// from weej's device.js, and any other board as a row of knobs, one of faders and one of buttons. A click or
-// the arrow keys pick a control, and its knobs and faders follow the board as it moves.
+// from weej's device.js, and any other board in the rows it is arranged in. A click or the arrow keys pick a
+// control, and its knobs and faders follow the board as it moves.
 final class BoardDrawing: NSView {
     private enum Shape {
         case knob(center: NSPoint)
@@ -80,8 +80,7 @@ final class BoardDrawing: NSView {
     // Rows of 16 mm cells, each row as tall as its tallest control; at least as big as the SMC-Mixer, so a
     // small board isn't drawn huge.
     private static func rows(_ board: Board) -> ([Part], NSPoint, NSSize) {
-        let rows = ControlKind.allCases.map { kind in board.controls.indices.filter { board.controls[$0].kind == kind } }
-            .filter { !$0.isEmpty }
+        let rows = board.rows
         let tall: [ControlKind: CGFloat] = [.knob: 16, .fader: 41, .button: 14]
         let heights = rows.map { row in row.map { tall[board.controls[$0].kind]! }.max()! }
         let content = heights.reduce(0, +) + 4 * CGFloat(max(rows.count - 1, 0))
@@ -247,14 +246,15 @@ final class BoardDrawing: NSView {
         }
     }
 
-    // A label fitted to its strip, less a gap: 17 mm, with "+N" kept whole.
+    // A label fitted to its strip, less a gap: 17 mm of the SMC-Mixer's 18, 15 of another board's 16, with
+    // "+N" kept whole.
     private func draw(_ label: (text: String, more: Int, empty: Bool), at x: CGFloat, _ y: CGFloat) {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10),
             .foregroundColor: label.empty ? NSColor.tertiaryLabelColor : NSColor.secondaryLabelColor,
         ]
         let more = label.more > 0 ? " +\(label.more)" : ""
-        let room = 17 * scale - (more as NSString).size(withAttributes: attributes).width
+        let room = (board.type == .smc ? 17 : 15) * scale - (more as NSString).size(withAttributes: attributes).width
         var text = label.text
         while text.count > 1, (text as NSString).size(withAttributes: attributes).width > room {
             text = String(text.dropLast(text.hasSuffix("…") ? 2 : 1)).trimmingCharacters(in: .whitespaces) + "…"

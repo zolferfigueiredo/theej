@@ -98,10 +98,11 @@ final class MIDI {
         }
         inputs[id] = (port, source.ref)
         let destination = board.type == .smc ? MIDI.destination(beside: source.ref) : nil
+        let pattern = board.lights
         engineQueue.async {
             let state = BoardState()
             state.lights = destination.map(Lights.init)
-            state.lights?.connect()
+            state.lights?.connect(faders: savedFaders(id), pattern: pattern)
             boardStates[id] = state
         }
         log("Connected: \(source.name)", for: board.name)
@@ -112,7 +113,10 @@ final class MIDI {
         guard let input = inputs.removeValue(forKey: id) else { return }
         MIDIPortDisconnectSource(input.port, input.source)
         MIDIPortDispose(input.port)
-        engineQueue.async { boardStates[id] = nil }
+        engineQueue.async {
+            if let lights = boardStates[id]?.lights { saveFaders(id, lights.faders) }
+            boardStates[id] = nil
+        }
         shared.setStatus(id, BoardStatus())
     }
 }
@@ -127,55 +131,152 @@ func midiSend(_ destination: MIDIEndpointRef, _ message: UInt32) {
     }
 }
 
-// An SMC-Mixer's button lights: lit while held or while their mute is on. At most 4 change every 10 ms,
-// since a real mixer sent fader moves nobody made after a few dozen at once. Engine queue only.
+// The sound the EQ patterns follow, which the sound tap fills while one of them runs.
+let spectrum = Spectrum()
+
+// A fader's LED only stops when the mixer is told where the fader is, and a fader doesn't move while TheeJ
+// is closed, so each SMC-Mixer's faders are kept between runs, by board: [lsb, msb] or null per strip.
+func savedFaders(_ id: String) -> [Int: (lsb: Int, msb: Int)] {
+    let saved = prefs.dictionary(forKey: "mixerFaders")?[id] as? [Any] ?? []
+    var faders: [Int: (lsb: Int, msb: Int)] = [:]
+    for (strip, pair) in saved.prefix(8).enumerated() {
+        if let pair = pair as? [Int], pair.count == 2 { faders[strip] = (pair[0] & 0x7F, pair[1] & 0x7F) }
+    }
+    return faders
+}
+
+func saveFaders(_ id: String, _ faders: [Int: (lsb: Int, msb: Int)]) {
+    var saved = prefs.dictionary(forKey: "mixerFaders") ?? [:]
+    saved[id] = (0..<8).map { strip -> Any in faders[strip].map { [$0.lsb, $0.msb] } ?? NSNull() }
+    prefs.set(saved, forKey: "mixerFaders")
+}
+
+// An SMC-Mixer's button lights: its pattern, and a button lit while held or while its mute is on, all on the
+// strip buttons. At most 4 change every 10 ms, since a real mixer sent fader moves nobody made after a few
+// dozen at once. The LED over a fader blinks while its knob turns. Engine queue only.
 final class Lights {
     let destination: MIDIEndpointRef
     private(set) var daw = true  // the mode the mixer is in, which a light is sent in
     var guardian = LightGuard()
     private(set) var lastSent = -Double.infinity  // seconds of uptime
+    private(set) var faders: [Int: (lsb: Int, msb: Int)] = [:]  // each fader's last pitch bend, as it came
     private var held: Set<Int> = []
     private var muted: Set<Int> = []
     private var want: [Int: Bool] = [:]
     private var sent: [Int: Bool] = [:]
     private var flushQueued = false
+    private var pattern = ""
+    private var started = 0.0
+    private var eq: EQ?
+    private var ticker: DispatchSourceTimer?
+    private var knobUntil = Array(repeating: 0.0, count: 8)  // when each strip's LED stops blinking for its knob
+    private var blinking: [UInt32?] = Array(repeating: nil, count: 8)  // the message keeping each one blinking
 
     init(destination: MIDIEndpointRef) { self.destination = destination }
 
-    // Whatever a run before this one left lit goes off.
-    func connect() {
+    deinit { ticker?.cancel() }
+
+    private var now: Double { ProcessInfo.processInfo.systemUptime }
+
+    // Whatever a run before this one left lit goes off, and the faders are where they were left.
+    func connect(faders: [Int: (lsb: Int, msb: Int)], pattern: String) {
+        self.faders = faders
         for id in smcStripButtons { want[id] = false }
-        flush()
+        setPattern(pattern)
+    }
+
+    func setPattern(_ name: String) {
+        let name = parseLightPattern(name)
+        if name != pattern { (pattern, started, eq) = (name, now, EQ(name)) }
+        update()
     }
 
     func hold(_ id: Int, _ down: Bool) {
         guard smcStripButtons.contains(id) else { return }
         if down { held.insert(id) } else { held.remove(id) }
-        update(id)
+        update()
     }
 
     func mute(_ id: Int, _ on: Bool) {
         guard smcStripButtons.contains(id) else { return }
         if on { muted.insert(id) } else { muted.remove(id) }
-        update(id)
+        update()
     }
 
     func clearMutes() {
-        let ids = muted
         muted = []
-        ids.forEach(update)
+        update()
     }
 
-    // A light is sent differently in each mode, so all of them go again.
+    // A fader moving puts the LED over it out on the mixer itself.
+    func faderMoved(_ strip: Int, lsb: Int, msb: Int) {
+        guard (0..<8).contains(strip) else { return }
+        faders[strip] = (lsb, msb)
+        blinking[strip] = nil
+    }
+
+    // ponytail: 0.3 s past the knob's last step, so the LED doesn't flicker between steps, as weej's knobTail.
+    func knobTurned(_ strip: Int) {
+        guard (0..<8).contains(strip) else { return }
+        knobUntil[strip] = now + 0.3
+        update()
+    }
+
+    // A light is sent differently in each mode, so all of them go again, and any LED still blinking from
+    // before is settled on the fader's place.
     func setMode(daw: Bool) {
         self.daw = daw
         sent = [:]
-        flush()
+        blinking = Array(repeating: nil, count: 8)
+        if daw { for (strip, fader) in faders { midiSend(destination, smcStripRestore(strip, lsb: fader.lsb, msb: fader.msb)) } }
+        update()
     }
 
-    private func update(_ id: Int) {
-        want[id] = held.contains(id) || muted.contains(id)
+    private func update() {
+        let now = now
+        let knobs = knobUntil.contains { $0 > now }
+        if animated(pattern) || knobs {
+            if ticker == nil {
+                let timer = DispatchSource.makeTimerSource(queue: engineQueue)
+                timer.schedule(deadline: .now() + 0.04, repeating: 0.04, leeway: .milliseconds(5))
+                timer.setEventHandler { [weak self] in self?.update() }
+                timer.resume()
+                ticker = timer
+            }
+        } else {
+            ticker?.cancel()
+            ticker = nil
+        }
+        let frame: [Int]
+        if let eq {
+            frame = eqFrame(eq.columns(spectrum, now: now - started))
+        } else if pattern == "clock" {
+            frame = clockFrame(Date())
+        } else {
+            frame = lightFrame(pattern, now - started)
+        }
+        let lit = Set(frame).union(held).union(muted)
+        for id in smcStripButtons { want[id] = lit.contains(id) }
         flush()
+        for strip in 0..<8 { blink(strip, knobUntil[strip] > now) }
+    }
+
+    // Once the fader has said where it is: only its own place stops a blink. A blinking LED flashes on its
+    // own, so it counts as a light change for the guard.
+    private func blink(_ strip: Int, _ on: Bool) {
+        guard daw, let fader = faders[strip] else { return }
+        if on {
+            let message = smcStripBlink(strip, faderMSB: fader.msb)
+            if blinking[strip] != message {
+                midiSend(destination, message)
+                blinking[strip] = message
+            }
+            lastSent = now
+        } else if blinking[strip] != nil {
+            midiSend(destination, smcStripRestore(strip, lsb: fader.lsb, msb: fader.msb))
+            blinking[strip] = nil
+            lastSent = now
+        }
     }
 
     private func flush() {
@@ -184,9 +285,9 @@ final class Lights {
             guard budget > 0 else {
                 if !flushQueued {
                     flushQueued = true
-                    engineQueue.asyncAfter(deadline: .now() + 0.01) { [self] in
-                        flushQueued = false
-                        flush()
+                    engineQueue.asyncAfter(deadline: .now() + 0.01) { [weak self] in
+                        self?.flushQueued = false
+                        self?.flush()
                     }
                 }
                 return
@@ -195,13 +296,17 @@ final class Lights {
             sent[id] = on
             if let message = smcLight(id, on: on, daw: daw) {
                 midiSend(destination, message)
-                lastSent = ProcessInfo.processInfo.systemUptime
+                lastSent = now
             }
         }
     }
 
-    // As TheeJ quits: every light that is on goes off, 4 every 10 ms.
+    // As TheeJ quits: the blinks stop, and every light that is on goes off, 4 every 10 ms.
     func off() {
+        ticker?.cancel()
+        ticker = nil
+        knobUntil = Array(repeating: 0, count: 8)
+        for strip in 0..<8 { blink(strip, false) }
         for (index, id) in sent.filter(\.value).keys.sorted().enumerated() {
             if let message = smcLight(id, on: false, daw: daw) { midiSend(destination, message) }
             if index % 4 == 3 { Thread.sleep(forTimeInterval: 0.01) }
