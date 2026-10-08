@@ -246,14 +246,15 @@ final class BoardDrawing: NSView {
         }
     }
 
-    // A label fitted to its strip, less a gap: 17 mm, with "+N" kept whole.
+    // A label fitted to its strip, less a gap: 17 mm of the SMC-Mixer's 18, 15 of another board's 16, with
+    // "+N" kept whole.
     private func draw(_ label: (text: String, more: Int, empty: Bool), at x: CGFloat, _ y: CGFloat) {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10),
             .foregroundColor: label.empty ? NSColor.tertiaryLabelColor : NSColor.secondaryLabelColor,
         ]
         let more = label.more > 0 ? " +\(label.more)" : ""
-        let room = 17 * scale - (more as NSString).size(withAttributes: attributes).width
+        let room = (board.type == .smc ? 17 : 15) * scale - (more as NSString).size(withAttributes: attributes).width
         var text = label.text
         while text.count > 1, (text as NSString).size(withAttributes: attributes).width > room {
             text = String(text.dropLast(text.hasSuffix("…") ? 2 : 1)).trimmingCharacters(in: .whitespaces) + "…"

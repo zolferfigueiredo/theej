@@ -53,6 +53,8 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     var importNote: (board: String, text: String)?  // what the last Import left out, or why it or Export failed
     var boardSetup: (total: Int, done: Int)?  // while the boards counted on General are added one by one
     weak var drawing: BoardDrawing?
+    weak var inspectorClear: NSButton?
+    var scrollers: [String: NSScrollView] = [:]  // the Boards tab's lists that scroll, kept where they were as it is built again
     var listRows: [Int: NSView] = [:]  // List's rows by control, which light up as they move
     var jobMenu: (jobs: [Target], apps: Bool) = ([], false)  // the shown board's job choices, as last built
     var recorder: Any?  // the key monitor while a shortcut is being recorded
@@ -348,17 +350,24 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     }
 
     // A light action: the pattern of the SMC-Mixer the button is on, or of every SMC-Mixer when it is on
-    // another board. Saved at once, as a board's own settings are.
+    // another board. Saved at once, as a board's own settings are, and named in the HUD as a profile is.
     func changeLights(_ id: String, _ change: (String) -> String) {
         var setup = shared.config().setup
         let own = setup.board(id)?.type == .smc
+        var changed: [Board] = []
         for index in setup.boards.indices where setup.boards[index].type == .smc && (!own || setup.boards[index].id == id) {
             let pattern = parseLightPattern(change(setup.boards[index].lights))
             setup.boards[index].lights = pattern
+            changed.append(setup.boards[index])
             if let shown = draft.index(of: setup.boards[index].id) { draft.boards[shown].lights = pattern }
         }
+        guard let first = changed.first else { return }
         shared.setSetup(setup)
         applyLights(setup)
+        let style = tr("lights.\(first.lights.isEmpty ? "off" : first.lights)")
+        let mixers = setup.boards.filter { $0.type == .smc }.count
+        showHUD(first.lights.isEmpty ? "lightbulb.slash" : "lightbulb.fill", on: pointerDisplayID(), 0,
+                text: mixers > 1 && changed.count == 1 ? "\(first.name) · \(style)" : style)
     }
 
     @objc func reconnect() {

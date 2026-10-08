@@ -15,7 +15,7 @@ let settingsTabs: [(id: NSToolbarItem.Identifier, label: String, symbol: String)
 ]
 
 let formWidth: CGFloat = 420  // every group, heading and footnote on General and About
-let boardsWidth: CGFloat = 640  // the Boards tab, wider for the drawing
+let boardsWidth: CGFloat = 860  // the Boards tab, wide enough for the drawing and its inspector side by side
 
 // Flipped, so a page taller than the window starts at its top rather than its bottom.
 final class TopClipView: NSClipView {
@@ -476,7 +476,7 @@ extension MenuBar: NSToolbarDelegate {
         return row
     }
 
-    func setRows(_ stack: NSStackView, _ rows: [NSStackView]) {
+    func setRows(_ stack: NSStackView, _ rows: [NSView]) {
         for view in stack.arrangedSubviews { view.removeFromSuperview() }
         for (index, row) in rows.enumerated() {
             if index > 0 {

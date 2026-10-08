@@ -152,7 +152,8 @@ A button does any number of these, in order, each time it is pressed:
   Turn off screens, Lock the Mac and Sleep.
 - **TheeJ**: Previous profile, Next profile, Go to a profile, and Open Settings, on the board the
   button is on, and Next button lights, Previous button lights, Button lights on and Button lights off,
-  for the SMC-Mixer the button is on, or every SMC-Mixer when it is on another board.
+  for the SMC-Mixer the button is on, or every SMC-Mixer when it is on another board. The HUD names
+  the pattern it moves to.
 - **Function keys**: F13 to F20, keys no Mac keyboard has, for another app to take.
 - **Knobs**: Mute a knob or fader of the board, which sets its jobs to 0 until pressed again, when
   they go back to where the control now is. On an SMC-Mixer the button lights up while it is muted.
@@ -253,12 +254,12 @@ for a DIY board, its baud rate and **Speed**, for an SMC-Mixer its **Button ligh
 editing, and its ⋯ menu edits the profile's name and shortcut, adds a profile, removes the one shown,
 imports or exports a profile, or opens the board's settings. **Draw** draws the board: an SMC-Mixer as
 its panel sits, any other board as a row of knobs, one of faders and one of buttons, until the gear
-beside Draw arranges it, with arrows that move the picked control along its row or to the row above or
-below. Its knobs and faders move with the real ones. Click a control, or move or press it on the
-board, to pick it, and the group under the drawing shows what it does with its menu. **List** lists
-the knobs, faders and buttons instead, each with its menu; drag a knob or fader by the six dots before
-its name onto another of its kind to move its jobs there, while the controls stay where they are. Draw
-or List sticks per board.
+beside Draw arranges it, with arrow keys that move the picked control along its row or to the row
+above or below. Its knobs and faders move with the real ones. Click a control, or move or press it on
+the board, to pick it, and the group beside the drawing lists everything it can do, ticked where it
+does it. **List** shows the knobs, faders and buttons side by side instead, each with its menu; drag a
+knob or fader by the six dots before its name onto another of its kind to move its jobs there, while
+the controls stay where they are. Draw or List sticks per board.
 
 **Export…** saves the profile shown to a file in WeeJ's format, so WeeJ reads it too. **Import…** adds
 a profile from such a file, or from deej's `config.yaml`. Jobs land on the same controls, and buttons
