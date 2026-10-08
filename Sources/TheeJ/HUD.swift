@@ -37,8 +37,11 @@ func jobIcon(_ target: Target, tint: NSColor? = nil) -> NSImage? {
     case .builtinKeyboard, .externalKeyboard: name = "light.max"
     case .zoom: name = hudZoom
     }
-    guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil) else { return nil }
-    // Centred in the square an app's icon takes, so every option's name starts at the same place.
+    return NSImage(systemSymbolName: name, accessibilityDescription: nil).map { squareIcon($0, tint: tint) }
+}
+
+// A symbol centred in the square an app's icon takes, so every option's name starts at the same place.
+func squareIcon(_ symbol: NSImage, tint: NSColor?) -> NSImage {
     let fit = min(14 / symbol.size.width, 14 / symbol.size.height)
     let icon = NSImage(size: NSSize(width: 16, height: 16), flipped: false) { square in
         let size = NSSize(width: symbol.size.width * fit, height: symbol.size.height * fit)

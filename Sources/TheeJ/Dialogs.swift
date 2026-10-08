@@ -137,7 +137,7 @@ final class AddBoardDialog: Dialog {
 
     override init(owner: MenuBar) {
         super.init(owner: owner)
-        heading.stringValue = tr("add.title")
+        heading.stringValue = owner.boardSetup.map { tr("setup.board", ["n": $0.done + 1, "of": $0.total]) } ?? tr("add.title")
         types.segmentCount = 3
         for (index, kind) in BoardType.allCases.enumerated() {
             types.setLabel(tr("device.type.\(kind.rawValue)"), forSegment: index)
@@ -175,8 +175,13 @@ final class AddBoardDialog: Dialog {
             }
         }
         confirm.title = tr(type == .smc ? "add.add" : "add.next")
-        show(list, trailing: [button(tr("cancel"), #selector(close), key: "\u{1b}"), confirm])
+        show(list, trailing: [button(tr("cancel"), #selector(cancel), key: "\u{1b}"), confirm])
         check()
+    }
+
+    @objc private func cancel() {
+        owner.boardSetup = nil
+        close()
     }
 
     // The SMC-Mixer plugged in, Master before Private, if there is one.
@@ -222,7 +227,8 @@ final class AddBoardDialog: Dialog {
         owner.shownBoard = id
         owner.reloadDraft()
         owner.fitSettings()
-        if type == .smc { owner.showTab(.boards) } else { owner.startWizard(id) }
+        owner.boardSetup?.done += 1
+        if type == .smc { owner.nextInSetup() } else { owner.startWizard(id) }
     }
 }
 
