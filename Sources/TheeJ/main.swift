@@ -29,7 +29,7 @@ setvbuf(stdout, nil, _IOLBF, 0)
 
 let app = NSApplication.shared
 // Opening the app again through Launch Services reaches applicationShouldHandleReopen instead. A copy
-// started directly, as ./run.sh does, hands over here, so two never fight over the serial port.
+// started directly, as ./run.sh does, hands over here, so two never fight over a board.
 // deliverImmediately, since TheeJ is never the active app and would otherwise not get it.
 let settingsRequest = Notification.Name("com.zolfer.theej.settings")
 if NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "")
@@ -46,10 +46,12 @@ app.setActivationPolicy(.accessory)  // menu bar only; a regular app only while 
 if prefs.string(forKey: "language") == nil { withExtendedLifetime(LanguagePrompt()) { $0.run() } }
 
 let saved = shared.config().setup
-print("\(appName): profile \(saved.profile.name)")
-for (index, column) in saved.columns.enumerated() {
-    let input = column.map { "input \($0)" } ?? "not calibrated"
-    print("\(appName): knob \(letter(index)), \(input): \(title(saved.profile.jobs(of: index)))")
+for board in saved.boards {
+    print("\(appName): \(board.name), \(board.type.rawValue)\(board.enabled ? "" : ", off"), profile \(board.profile.name)")
+    for (index, control) in board.controls.enumerated() where control.kind != .button {
+        let input = control.input.map { "input \($0)" } ?? "not calibrated"
+        print("\(appName):   \(board.controlName(index)), \(input): \(title(board.profile.jobs(of: index)))")
+    }
 }
 if m1ddcPath == nil {
     fputs("m1ddc not found, external brightness and contrast are disabled. brew install m1ddc\n", stderr)
@@ -79,7 +81,8 @@ DistributedNotificationCenter.default().addObserver(forName: settingsRequest, ob
     menuBar?.openSettings()
 }
 installHotKeyHandler()
-registerHotKeys(saved)
-DispatchQueue.global(qos: .utility).async { serialLoop() }
+midi = MIDI()
+startBoards()
+if saved.boards.isEmpty { DispatchQueue.main.async { menuBar?.openSettings() } }  // where a first board is added
 app.run()
 #endif

@@ -33,24 +33,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         didSet { dimApply() }
     }
     var applyButtons: [NSButton] = []
-    let profilePicker = NSPopUpButton()
-    let profileEdit = NSSegmentedControl()
-    let profileName = NSTextField(string: "")
-    // The shortcut of the profile shown in General, Next and Previous profile, then every profile's in
-    // App settings. Each has a button that records it and a ✕, which shortcutRow makes in this order.
-    var shortcutPaths: [WritableKeyPath<Setup, Shortcut?>] {
-        [\Setup.profiles[draft.active].shortcut, \Setup.next, \Setup.previous]
-            + draft.profiles.indices.map { \Setup.profiles[$0].shortcut }
-    }
-    var shortcutButtons: [NSButton] = []
-    var removeShortcutButtons: [NSButton] = []
-    var recorder: Any?  // the key monitor while a shortcut is being recorded
-    var recording = 0  // which of shortcutPaths it records
-    let profileRows = NSStackView()
-    let profileShortcutRows = NSStackView()
-    let knobRows = KnobList()
-    let knobEdit = NSSegmentedControl()
-    let invertKnobs = NSSwitch()
+    let boardRows = NSStackView()
     let showName = NSSwitch()
     let hideIcon = NSSwitch()
     let showNameLabel = NSTextField(labelWithString: "")  // these three are dimmed with the icon hidden
@@ -58,19 +41,34 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     let profileListLabel = NSTextField(labelWithString: "")
     let iconPicker = NSPopUpButton()
     let iconLabel = NSTextField(labelWithString: "")
-    let speedPicker = NSPopUpButton()
     let languagePicker = NSPopUpButton()
     let m1ddcStatus = NSTextField(labelWithString: "")
     let m1ddcButton = NSButton(title: "", target: nil, action: nil)
     var m1ddcSupport = NSStackView()
     var m1ddcInstallStarted = false  // the button checks again instead of installing
+    let boardsPage = NSStackView()  // the Boards tab, built again on each change
+    var shownBoard: String?  // the board the Boards tab shows
+    var picked: [String: Int] = [:]  // each board's picked control in Draw
+    weak var drawing: BoardDrawing?
+    var listRows: [Int: NSView] = [:]  // List's rows by control, which light up as they move
+    var recorder: Any?  // the key monitor while a shortcut is being recorded
+    weak var recordingField: ShortcutField?
+    var boardsFooter: NSStackView?  // the Boards tab's Close and Apply, kept as the tab is built again
+    var liveValues: [String: [Int]] = [:]  // each board's values as last drawn
+    var recordNext: Int?  // a button whose new Press a shortcut starts recording once its row is built
+    var dialog: Dialog?  // the open sheet, kept alive while it is open
+    var sheet: NSWindow?
     var calibrationWindow: NSWindow?
-    var calibrator: Calibrator?
-    var calibrationOffered = false
+    var wizard: (board: String, run: CalWizard)?
+    var calibrationOffered: Set<String> = []
     let stepTitle = NSTextField(labelWithString: "")
     let stepBody = NSTextField(wrappingLabelWithString: "")
-    let stepProgress = NSTextField(labelWithString: "")
+    let stepCount = NSTextField(labelWithString: "")
+    let stepWarning = NSTextField(wrappingLabelWithString: "")
+    let stepNote = NSTextField(wrappingLabelWithString: "")
+    let redoButton = NSButton(title: "", target: nil, action: nil)
     let skipButton = NSButton(title: "", target: nil, action: nil)
+    let nextButton = NSButton(title: "", target: nil, action: nil)
     let cancelButton = NSButton(title: "", target: nil, action: #selector(NSWindow.performClose(_:)))
 
     override init() {
@@ -109,9 +107,16 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         return mi
     }
 
-    // Rebuilt as the menu opens, so the status lines are never stale.
+    func statusText(_ board: Board) -> String {
+        let status = shared.status(board.id)
+        if status.connected { return tr("connected", ["port": status.port ?? "?"]) }
+        if status.busy { return tr("port_busy", ["port": status.port ?? "?"]) }
+        return tr("not_connected")
+    }
+
+    // Rebuilt as the menu opens, so the status lines are never stale. A block for each board that is on:
+    // its status, its jobs' levels, its profiles and its Calibrate.
     func menuNeedsUpdate(_ menu: NSMenu) {
-        let state = shared.snapshot()
         let setup = shared.config().setup
         menu.removeAllItems()
         func label(_ text: String) -> NSMenuItem {
@@ -123,32 +128,45 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         let data = entry(tr("show_data"), #selector(toggleData), "")
         data.state = showData ? .on : .off
         menu.addItem(data)
-        if showData, state.connected {
-            // An app's line has its icon. Once one does, the others get a blank, to keep their text in line.
-            let icons = state.lines.map { menuIcon($0.target) }
-            let blank = icons.contains { $0 != nil } ? NSImage(size: NSSize(width: 16, height: 16)) : nil
-            for (line, icon) in zip(state.lines, icons) {
-                let item = label(line.text)
-                item.image = icon ?? blank
-                menu.addItem(item)
-            }
-        }
         menu.addItem(.separator())
-        if setup.showProfiles {
-            menu.addItem(.sectionHeader(title: tr("profiles")))
-            for (index, profile) in setup.profiles.enumerated() {
-                let mi = entry(clipped(profile.name, to: 30), #selector(pickProfile), profile.shortcut?.key ?? "")
-                mi.keyEquivalentModifierMask = profile.shortcut?.flags ?? []
-                mi.tag = index
-                mi.state = index == setup.active ? .on : .off
-                menu.addItem(mi)
+        let boards = setup.boards.filter(\.enabled)
+        if boards.isEmpty {
+            menu.addItem(label(tr("boards.none")))
+            menu.addItem(.separator())
+        }
+        for board in boards {
+            let connected = shared.status(board.id).connected
+            menu.addItem(.sectionHeader(title: tr("menu.board", ["name": clipped(board.name, to: 30), "status": statusText(board)])))
+            if showData, connected {
+                let lines = shared.lines(board.id)
+                // An app's line has its icon. Once one does, the others get a blank, to keep their text in line.
+                let icons = lines.map { menuIcon($0.target) }
+                let blank = icons.contains { $0 != nil } ? NSImage(size: NSSize(width: 16, height: 16)) : nil
+                for (line, icon) in zip(lines, icons) {
+                    let item = label(line.text)
+                    item.image = icon ?? blank
+                    menu.addItem(item)
+                }
+            }
+            if setup.showProfiles {
+                for (index, profile) in board.profiles.enumerated() {
+                    let mi = entry(clipped(profile.name, to: 30), #selector(pickProfile), profile.shortcut?.key ?? "")
+                    mi.keyEquivalentModifierMask = profile.shortcut?.flags ?? []
+                    mi.tag = index
+                    mi.representedObject = board.id
+                    mi.state = index == board.active ? .on : .off
+                    menu.addItem(mi)
+                }
+            }
+            if board.type != .smc {
+                let calibrate = entry(tr("calibrate"), #selector(calibrateBoard), "", symbol: "wrench.and.screwdriver")
+                calibrate.representedObject = board.id
+                calibrate.isEnabled = connected
+                menu.addItem(calibrate)
             }
             menu.addItem(.separator())
         }
         menu.addItem(entry(tr("settings"), #selector(openSettings), ","))
-        let calibrateItem = entry(tr("calibrate"), #selector(calibrate), "", symbol: "wrench.and.screwdriver")
-        calibrateItem.isEnabled = state.connected
-        menu.addItem(calibrateItem)
         // The globe is the website's language picker. Each language is named in itself, so it can always be found.
         let languages = NSMenu()
         for (index, language) in Language.allCases.enumerated() {
@@ -161,8 +179,6 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         languageItem.image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
         languageItem.submenu = languages
         menu.addItem(languageItem)
-        menu.addItem(.separator())
-        menu.addItem(label(state.connected ? tr("connected", ["port": state.port ?? "?"]) : tr("not_connected")))
         menu.addItem(entry(tr("reconnect"), #selector(reconnect), ""))
         menu.addItem(.separator())
         // Registering from anywhere else (a build folder) would point the login item at a bundle that disappears.
@@ -200,17 +216,27 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         menu.addItem(entry(tr("quit"), #selector(quit), "q", symbol: "xmark.square"))
     }
 
-    // No knob values here: nothing calls this as they change, so they would be stale.
+    // No levels here: nothing calls this as they change, so they would be stale. The icon is parked while no
+    // board is connected, and the name beside it is each connected board's profile.
     func refresh() {
-        let state = shared.snapshot()
         let setup = shared.config().setup
+        let connected = setup.boards.filter { $0.enabled && shared.status($0.id).connected }
         item.isVisible = !setup.hideIcon
-        item.button?.image = menuBarIcon(setup.icon, parked: !state.connected)
+        item.button?.image = menuBarIcon(setup.icon, parked: connected.isEmpty)
         // In labelColor, not a plain title's controlTextColor, which is dimmed like a template on the menu bars
         // of the displays not in use: see menuBarIcon.
-        item.button?.attributedTitle = NSAttributedString(string: setup.showName ? clipped(setup.profile.name, to: 20) : "",
+        let names = connected.map { clipped($0.profile.name, to: 20) }.joined(separator: " · ")
+        item.button?.attributedTitle = NSAttributedString(string: setup.showName ? names : "",
                                                           attributes: [.foregroundColor: NSColor.labelColor])
-        item.button?.toolTip = "\(appName): \(state.connected ? state.port ?? "?" : tr("not_connected"))"
+        item.button?.toolTip = "\(appName): " + (connected.isEmpty ? tr("not_connected")
+            : connected.map { "\($0.name) · \($0.profile.name)" }.joined(separator: ", "))
+    }
+
+    // A board connected or went away.
+    func statusChanged(_ id: String) {
+        refresh()
+        if settingsWindow?.isVisible == true { reloadDraft() }
+        if wizard?.board == id { showStep() }
     }
 
     func makeWindow(_ title: String, _ content: NSView) -> NSWindow {
@@ -265,27 +291,39 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         if let url = sender.toolTip.flatMap(URL.init(string:)) { NSWorkspace.shared.open(url) }
     }
 
-
     @objc func pickProfile(_ sender: NSMenuItem) {
-        switchProfile(sender.tag)
+        guard let id = sender.representedObject as? String else { return }
+        setProfiles([HotKeyTarget(board: id, profile: sender.tag)])
     }
 
-    func stepProfile(_ by: Int) {
-        switchProfile(shared.config().setup.stepped(by))
-    }
-
-    func switchProfile(_ index: Int) {
+    // Shortcuts, the menu and the boards' buttons switch profiles here, which saves once. A board gets its
+    // mutes back first, and its knobs start again from where their new jobs are.
+    func setProfiles(_ targets: [HotKeyTarget]) {
         var setup = shared.config().setup
-        guard setup.profiles.indices.contains(index) else { return }
-        setup.active = index
+        var switched: [Board] = []
+        for target in targets {
+            guard let index = setup.index(of: target.board) else { continue }
+            let board = setup.boards[index]
+            let next = target.step != 0 ? board.stepped(target.step) : target.profile
+            guard board.profiles.indices.contains(next) else { continue }
+            engineQueue.async {
+                unmuteAll(board)
+                boardStates[board.id]?.mixer.forgetKnobs()
+            }
+            setup.boards[index].active = next
+            switched.append(setup.boards[index])
+            // Apply makes the profile Settings shows active, so it has to follow or Apply would switch back.
+            if settingsWindow?.isVisible == true, let shown = draft.index(of: board.id),
+               draft.boards[shown].profiles.indices.contains(next) {
+                draft.boards[shown].active = next
+            }
+        }
+        guard let first = switched.first else { return }
         shared.setSetup(setup)
         refresh()
-        showHUD(hudProfile, on: pointerDisplayID(), 0, text: setup.profile.name)
-        // Apply makes the profile Settings shows active, so it has to follow or Apply would switch back.
-        if settingsWindow?.isVisible == true, index < draft.profiles.count {
-            draft.active = index
-            reloadDraft()
-        }
+        let name = setup.boards.count > 1 ? "\(first.name) · \(first.profile.name)" : first.profile.name
+        showHUD(hudProfile, on: pointerDisplayID(), 0, text: name)
+        if settingsWindow?.isVisible == true { reloadDraft() }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -293,13 +331,19 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         return false
     }
 
-    // Only TheeJ's own zoom, so quitting leaves one from Accessibility Zoom alone.
+    // Only TheeJ's own zoom, so quitting leaves one from Accessibility Zoom alone. A mixer's lights go off.
     func applicationWillTerminate(_ notification: Notification) {
         if zoomTracker != nil { setZoom(0) }
+        engineQueue.sync { for state in boardStates.values { state.lights?.off() } }
     }
 
     @objc func reconnect() {
-        shared.requestReconnect()
+        shared.requestReconnect(nil)
+        midi?.sync(reconnect: true)
+    }
+
+    @objc func calibrateBoard(_ sender: NSMenuItem) {
+        if let id = sender.representedObject as? String { startWizard(id) }
     }
 
     @objc func quit() {
@@ -342,12 +386,13 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     func setLanguage(_ language: Language) {
         prefs.set(language.rawValue, forKey: "language")
         refresh()
-        if calibrator != nil { showStep() }
+        if wizard != nil { showStep() }
         guard let old = settingsWindow else { return }
         let tab = old.toolbar?.selectedItemIdentifier ?? .general
         let corner = NSPoint(x: old.frame.minX, y: old.frame.maxY)
         let visible = old.isVisible
         stopRecording()
+        closeSheet()
         settingsWindow = nil
         old.orderOut(nil)  // not close(), which would take the app out of the Dock and ⌘Tab for a moment
         guard visible else { return }

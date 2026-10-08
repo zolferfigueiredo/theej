@@ -50,8 +50,7 @@ enum Language: String, CaseIterable {
     }
 }
 
-/// Every string the app shows, by language and then by key. A key ending in .one, .few, .many or
-/// .other is a plural form. Each language's table is in Strings/.
+/// Every string the app shows, by language and then by key. Each language's table is in Strings/.
 enum Strings {
     static let all: [Language: [String: String]] = [.de: de, .en: en, .es: es, .fr: fr, .it: it, .pl: pl,
                                                     .pt: pt, .ru: ru, .uk: uk, .zh: zh, .ja: ja, .ko: ko]
@@ -62,20 +61,4 @@ func tr(_ key: String, _ values: [String: Any] = [:], in language: Language = .c
     var text = Strings.all[language]?[key] ?? Strings.en[key] ?? key
     for (name, value) in values { text = text.replacingOccurrences(of: "{\(name)}", with: "\(value)") }
     return text
-}
-
-/// "{n} minutes" in the form the language uses for `n`. Polish, Russian and Ukrainian have a few and
-/// a many form, French counts 0 as one, and Chinese, Japanese and Korean have a single form.
-func plural(_ key: String, _ n: Int, in language: Language = .current) -> String {
-    let one = n % 10 == 1 && n % 100 != 11
-    let few = (2...4).contains(n % 10) && !(12...14).contains(n % 100)
-    let form = switch language {
-    case .zh, .ja, .ko: "other"
-    case .fr: n < 2 ? "one" : "other"
-    case .pl: n == 1 ? "one" : few ? "few" : "many"
-    case .ru, .uk: one ? "one" : few ? "few" : "many"
-    default: n == 1 ? "one" : "other"
-    }
-    let table = Strings.all[language] ?? Strings.en
-    return tr(table["\(key).\(form)"] == nil ? "\(key).other" : "\(key).\(form)", ["n": n], in: language)
 }

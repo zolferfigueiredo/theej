@@ -2,35 +2,39 @@
 import AppKit
 
 extension MenuBar {
-    // Every knob, from A: the menu's Calibrate and the button in Settings.
-    @objc func calibrate() {
-        startCalibration(onlyNew: false)
-    }
-
-    // The window says what to do, and Cancel leaves everything as it was, so it opens straight away.
-    // onlyNew, for Apply and the automatic start, asks only for the knobs that have no input yet.
-    func startCalibration(onlyNew: Bool) {
-        if let window = calibrationWindow, calibrator != nil {
-            present(window)
-            return
-        }
-        calibrator = Calibrator(saved: shared.config().setup.columns, onlyNew: onlyNew)
+    // The given controls of a board, every one when none are given. The window says what to do, and Cancel
+    // leaves everything as it was, so it opens straight away. Another board's run stops first.
+    func startWizard(_ id: String, controls: [Int]? = nil) {
+        guard let board = shared.config().setup.board(id), board.type != .smc else { return }
+        if wizard?.board == id, let window = calibrationWindow, window.isVisible { return present(window) }
+        calibrationWindow?.close()
+        wizard = (id, CalWizard(board, controls: controls ?? Array(board.controls.indices)))
+        shared.setCalibrating(id)
         if calibrationWindow == nil {
             stepTitle.font = .boldSystemFont(ofSize: 16)
-            stepBody.preferredMaxLayoutWidth = 360
-            stepBody.widthAnchor.constraint(equalToConstant: 360).isActive = true
-            stepProgress.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            for text in [stepBody, stepWarning, stepNote] {
+                text.preferredMaxLayoutWidth = 380
+                text.widthAnchor.constraint(equalToConstant: 380).isActive = true
+            }
+            stepCount.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            stepWarning.textColor = .systemOrange
+            stepNote.textColor = .secondaryLabelColor
             cancelButton.keyEquivalent = "\u{1b}"
-            skipButton.target = self
-            skipButton.action = #selector(skipKnob)
+            for (button, action) in [(redoButton, #selector(wizardRedo)), (skipButton, #selector(wizardSkip)), (nextButton, #selector(wizardNext))] {
+                button.target = self
+                button.action = action
+            }
+            nextButton.keyEquivalent = "\r"
             let buttons = NSStackView()
+            buttons.addView(redoButton, in: .leading)
+            buttons.addView(skipButton, in: .leading)
             buttons.addView(cancelButton, in: .trailing)
-            buttons.addView(skipButton, in: .trailing)
-            let content = NSStackView(views: [stepTitle, stepBody, stepProgress, buttons])
+            buttons.addView(nextButton, in: .trailing)
+            let content = NSStackView(views: [stepTitle, stepBody, stepCount, stepWarning, stepNote, buttons])
             content.orientation = .vertical
             content.alignment = .leading
             content.spacing = 12
-            content.setCustomSpacing(20, after: stepProgress)
+            content.setCustomSpacing(20, after: stepNote)
             content.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
             content.setHuggingPriority(.defaultHigh, for: .horizontal)
             buttons.widthAnchor.constraint(equalTo: stepBody.widthAnchor).isActive = true
@@ -41,102 +45,112 @@ extension MenuBar {
         }
         showStep()
         present(calibrationWindow!)
-        shared.setCalibrating(true)
     }
 
-    // handle() sends every line here while calibrating.
-    func feed(_ values: [Int], at now: Double) {
-        guard var run = calibrator else { return }
-        let before = (run.knob, run.phase, run.full)
-        run.feed(values, at: now)
-        calibrator = run
-        if (run.knob, run.phase, run.full) != before {
-            NSSound(named: "Tink")?.play()  // the user is watching the knob, not the screen
-            showStep()
-        } else {
-            showProgress(run)
-        }
+    // Once per launch per board, as it connects with a control not found yet: after Add, or a board from
+    // before boards that was never calibrated.
+    func calibrateIfNeeded(_ id: String) {
+        guard let board = shared.config().setup.board(id), board.type != .smc, !board.calibrated,
+              calibrationOffered.insert(id).inserted, wizard == nil else { return }
+        startWizard(id, controls: board.controls.indices.filter { board.controls[$0].input == nil })
     }
 
-    // Once per launch, as the board connects: on a fresh install, or after + in Settings, a knob has no input yet.
-    func calibrateIfNeeded() {
-        let columns = shared.config().setup.columns
-        guard !calibrationOffered, columns.isEmpty || columns.contains(nil) else { return }
-        calibrationOffered = true
-        startCalibration(onlyNew: true)
+    // The board's frames and presses while it is calibrated, from the engine. A control found plays a
+    // sound: the user is watching the board, not the screen.
+    func feedWizard(_ id: String, _ raw: [Int]) {
+        guard var run = wizard?.run, wizard?.board == id else { return }
+        let before = (run.position, run.stage, run.count, run.warning)
+        run.feed(raw)
+        update(run, before)
+    }
+
+    func pressWizard(_ id: String, _ key: Int) {
+        guard var run = wizard?.run, wizard?.board == id else { return }
+        let before = (run.position, run.stage, run.count, run.warning)
+        run.press(key)
+        update(run, before)
+    }
+
+    private func update(_ run: CalWizard, _ before: (Int, CalWizard.Stage, Int, CalWizard.Warning?)) {
+        wizard?.run = run
+        if run.position != before.0 || run.count != before.2 { NSSound(named: "Tink")?.play() }
+        if run.position != before.0 || run.stage != before.1 || run.count != before.2 || run.warning != before.3 { showStep() }
     }
 
     func showStep() {
-        guard let run = calibrator, let window = calibrationWindow else { return }
-        let name = letter(run.knob)
-        let turns = Int(Calibrator.turnSeconds)
-        // The first knob also says why, and what the turning after it is for.
-        var move = tr(run.knob == run.first ? "cal.move_first" : "cal.move", ["letter": name, "n": turns])
-        var more: [String] = []
-        if run.canSkip {
-            more.append(tr("cal.skip_keeps"))
-        } else if run.knob < run.saved.count {
-            more.append(tr("cal.finish_later"))
-        } else if run.knob > 0 {
-            more.append(tr("cal.no_knob", ["letter": name]))
+        guard let (id, run) = wizard, let window = calibrationWindow, let board = shared.config().setup.board(id) else { return }
+        window.title = tr("wizard.title", ["name": board.name])  // set here, not once, so a language change reaches an open window
+        let name = run.current.map(board.controlName) ?? ""
+        let finding = run.stage == .find || run.stage == .press
+        stepTitle.stringValue = finding ? tr("wizard.step", ["i": run.position + 1, "n": run.order.count]) + ": " + name : ""
+        stepTitle.isHidden = !finding
+        stepBody.stringValue = switch run.stage {
+        case .zero: tr("wizard.zero")
+        case .full: tr("wizard.full")
+        case .find: tr("wizard.find", ["name": name])
+        case .press: tr("wizard.press", ["name": name])
+        case .done: tr("wizard.done")
         }
-        if run.knob == run.first { more.append(tr("cal.hold")) }
-        // Chinese and Japanese put no space between sentences.
-        for sentence in more { move += ([.zh, .ja].contains(Language.current) ? "" : " ") + sentence }
-        let steps = [move, tr("cal.turn", ["n": turns])]
-        window.title = tr("calibration_title")  // set here, not once, so a language change reaches an open window
+        stepCount.stringValue = tr("wizard.count", ["n": run.count, "of": 3])
+        stepCount.isHidden = run.stage != .press
+        stepWarning.stringValue = switch run.warning {
+        case .wrong(let other)?: tr("wizard.wrong", ["other": board.controlName(other), "name": name])
+        case .mismatch?: tr("wizard.mismatch", ["name": name])
+        case .nothing?: tr("wizard.nothing")
+        case .unswept?: tr("wizard.unswept")
+        case nil: ""
+        }
+        stepWarning.isHidden = run.warning == nil
+        stepNote.stringValue = tr("wizard.waiting", ["name": board.name])
+        stepNote.isHidden = shared.status(id).connected
         cancelButton.title = tr("cancel")
-        stepTitle.stringValue = run.full ? tr("cal.all_found") : tr("knob", ["letter": name])
-        stepBody.stringValue = run.full ? tr("cal.all_found_text", ["n": run.found.count]) : steps[run.phase]
-        showProgress(run)
-        skipButton.title = run.canSkip ? tr("skip") : tr("finish")
+        redoButton.title = tr("wizard.redo")
+        redoButton.isHidden = run.stage == .zero || run.stage == .done
+        skipButton.title = tr("skip")
+        skipButton.isHidden = !finding
+        nextButton.title = run.stage == .done ? tr("finish") : tr("add.next")
+        nextButton.isHidden = !(run.stage == .zero || run.stage == .full || run.stage == .done)
         fit(window)
     }
 
-    func showProgress(_ run: Calibrator) {
-        stepProgress.stringValue = progress(run)
-        stepProgress.textColor = run.paused || run.wrongKnob != nil ? .systemOrange : .secondaryLabelColor
+    @objc func wizardNext() {
+        guard let run = wizard?.run else { return }
+        if run.done { return finishWizard() }
+        wizard?.run.next()
+        showStep()
     }
 
-    func progress(_ run: Calibrator) -> String {
-        if run.full { return plural("knobs_found", run.found.count) }
-        if let wrong = run.wrongKnob { return tr("cal.wrong", ["wrong": letter(wrong), "letter": letter(run.knob)]) }
-        if run.phase == 0 {
-            return shared.snapshot().connected ? tr("cal.waiting_knob", ["letter": letter(run.knob)]) : tr("cal.waiting_board")
-        }
-        let left = plural("seconds_left", Int(run.left.rounded(.up)))
-        return run.paused ? tr("cal.paused", ["left": left, "letter": letter(run.knob)]) : left
+    @objc func wizardSkip() {
+        wizard?.run.skip()
+        showStep()
     }
 
-    @objc func skipKnob() {
-        if calibrator?.canSkip == true {
-            calibrator?.skip()
-            showStep()
-        } else {
-            finish()
-        }
+    @objc func wizardRedo() {
+        wizard?.run.redo()
+        showStep()
     }
 
-    // Saves before closing: windowWillClose throws the run away. With nothing to save, as when Finish
-    // comes straight away, it ends like Cancel.
-    func finish() {
-        guard let run = calibrator else { return }
+    // Saves before closing: windowWillClose throws the run away. Settings then opens on the board, where
+    // each control's job is chosen.
+    func finishWizard() {
+        guard let (id, run) = wizard else { return }
         var setup = shared.config().setup
-        guard run.result != setup.columns else { calibrationWindow?.close(); return }
-        setup.columns = run.result
+        if let index = setup.index(of: id) { setup.boards[index].controls = run.result }
+        if let index = draft.index(of: id) { draft.boards[index].controls = run.result }
         shared.setSetup(setup)
         calibrationWindow?.close()
-        // Started from an open Settings, which may hold unsaved edits: only the inputs change there.
-        if settingsWindow?.isVisible == true { draft.columns = setup.columns } else { draft = setup }
+        let open = settingsWindow?.isVisible == true
+        if !open { draft = setup }
+        shownBoard = id
         showSettings()
-        showTab(.general)  // where each knob's job is chosen
+        showTab(.boards)
     }
 
-    // Every way out of a run ends here, Cancel and the close button included, so the knobs never
-    // stay silenced. Only the calibration window has this delegate.
+    // Every way out of a run ends here, Cancel and the close button included, so the board never stays
+    // silenced. Only the calibration window has this delegate.
     func windowWillClose(_ notification: Notification) {
-        calibrator = nil
-        shared.setCalibrating(false)
+        wizard = nil
+        shared.setCalibrating(nil)
     }
 }
 #endif

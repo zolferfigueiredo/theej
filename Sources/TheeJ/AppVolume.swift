@@ -240,6 +240,11 @@ func setAppVolume(_ app: String, _ scalar: Float32) {
     }
 }
 
+// Where a knob would sit for the app's volume now: the gain's cube root, or the top when it isn't turned down.
+func appLevel(_ app: String) -> Float32 {
+    appQueue.sync { appGains[app].map { cbrt($0) } ?? 1 }
+}
+
 // On Apply: an app no profile gives a knob any more goes back to its own volume.
 func keepAppVolumes(for apps: Set<String>) {
     appQueue.async {

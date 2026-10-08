@@ -39,13 +39,6 @@ private func placeholders(_ text: String) -> Set<String> {
     }
 }
 
-@Test func pluralForms() {
-    #expect(plural("seconds_left", 1, in: .en) == "1 second left" && plural("seconds_left", 20, in: .en) == "20 seconds left")
-    #expect([1, 3, 5, 21].map { plural("knobs_found", $0, in: .ru) } == ["Найдена 1 ручка", "Найдено 3 ручки", "Найдено 5 ручек", "Найдена 21 ручка"])
-    #expect([1, 2, 5, 22].map { plural("seconds_left", $0, in: .pl) } == ["Została 1 sekunda", "Zostały 2 sekundy", "Zostało 5 sekund", "Zostały 22 sekundy"])
-    #expect(plural("knobs_found", 1, in: .ja) == "1 個のノブが見つかりました")
-}
-
 @Test func everyLanguageHasANameAndAFlag() {
     #expect(Language.allCases.count == 12)
     #expect(Set(Language.allCases.map(\.name)).count == 12 && Set(Language.allCases.map(\.flag)).count == 12)
