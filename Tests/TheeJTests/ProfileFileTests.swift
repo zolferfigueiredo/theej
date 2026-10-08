@@ -49,7 +49,7 @@ noise_reduction: default
 }
 
 @Test func deejSlidersGoByPlaceOnAMixer() throws {
-    let yaml = "\u{FEFF}# my mixer\r\nslider_mapping:\r\n  0:\r\n    - master   # main\r\n    - Headset Microphone (Realtek)\r\n"
+    let yaml = "\u{FEFF}# my mixer\r\nslider_mapping:\r\n  0:\r\n    - master   # main\r\n    - Headset Microphone (Realtek)\r\n    -\r\n"
         + "  \"1\": [mic, 'monitor 2 (brightness)', Mic]\r\n  20: master\r\n  x: master\r\ninvert_sliders: false\r\n"
     let smc = Board.make(id: "d1", name: "SMC", type: .smc, profileName: "Default")
     let (profile, skipped) = try #require(importedProfile(Data(yaml.utf8), for: smc))
@@ -104,8 +104,9 @@ noise_reduction: default
 
     // From another type of board only the jobs come, by control.
     let desk = Board.make(id: "d2", name: "Desk", type: .diy, knobs: 2, buttons: 1, profileName: "Default")
-    let (deskProfile, _) = try #require(importedProfile(Data(weej.utf8), for: desk))
-    #expect(deskProfile.jobs == [[.master], [.nightShift], [.brightness(0)]] && deskProfile.buttons.isEmpty)
+    let (deskProfile, deskSkipped) = try #require(importedProfile(Data(weej.utf8), for: desk))
+    #expect(deskProfile.jobs == [[.master], [.nightShift], []] && deskProfile.buttons.isEmpty)
+    #expect(deskSkipped == ["System sounds", "spotify.exe", "Screen 1 brightness"])
 }
 
 @Test func controlsMoveBetweenRows() {

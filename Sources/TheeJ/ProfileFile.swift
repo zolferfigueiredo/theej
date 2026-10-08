@@ -133,6 +133,11 @@ private func fileProfile(_ file: ImportFile, for board: Board) -> (Profile, [Str
             }
         }
     }
+    // A job on a button would do nothing out of sight, and an app's would keep that app's sound tapped.
+    for control in board.controls.indices where board.controls[control].kind == .button {
+        skipped += profile.jobs[control].map { title($0) }
+        profile.jobs[control] = []
+    }
     guard file.type == board.type.rawValue else { return (profile, skipped) }
     profile.buttons = file.profile.buttons
     guard !mac else { return (profile, skipped) }
@@ -214,7 +219,8 @@ func deejSliders(_ yaml: String) -> [(slider: String, entries: [String])]? {
         }
         guard inMapping == true else { continue }
         if text.hasPrefix("- ") || text == "-" {
-            if !sliders.isEmpty { sliders[sliders.count - 1].entries.append(unquoted(text.dropFirst())) }
+            let entry = unquoted(text.dropFirst())
+            if !entry.isEmpty, !sliders.isEmpty { sliders[sliders.count - 1].entries.append(entry) }
         } else if let colon = text.firstIndex(of: ":") {
             let value = text[text.index(after: colon)...].trimmingCharacters(in: .whitespaces)
             let entries = value.hasPrefix("[") && value.hasSuffix("]")
