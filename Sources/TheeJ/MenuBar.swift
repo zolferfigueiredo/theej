@@ -49,6 +49,9 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     let boardsPage = NSStackView()  // the Boards tab, built again on each change
     var shownBoard: String?  // the board the Boards tab shows
     var picked: [String: Int] = [:]  // each board's picked control in Draw
+    var arranging: Set<String> = []  // the boards whose Draw shows the arrows that move a control
+    var importNote: (board: String, text: String)?  // what the last Import left out, or why it or Export failed
+    var boardSetup: (total: Int, done: Int)?  // while the boards counted on General are added one by one
     weak var drawing: BoardDrawing?
     var listRows: [Int: NSView] = [:]  // List's rows by control, which light up as they move
     var jobMenu: (jobs: [Target], apps: Bool) = ([], false)  // the shown board's job choices, as last built

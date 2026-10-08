@@ -36,7 +36,7 @@
 
 1. [Download the DMG](https://github.com/zolferfigueiredo/theej/releases/latest), open it and drag TheeJ to Applications.
 2. Open TheeJ. It's signed and notarized by Apple, so macOS only asks you to confirm the first time. It then asks which language to use, starting from your Mac's.
-3. Settings opens on General. Click **Add board**, pick DIY (Arduino), SMC-Mixer or Other MIDI, and plug it in. A deej board or another MIDI controller is calibrated next, an SMC-Mixer needs none, and the Boards tab then shows it to choose what each control does.
+3. Settings opens on General and asks how many boards you have, then adds them one after another: pick DIY (Arduino), SMC-Mixer or Other MIDI, and plug it in. A deej board or another MIDI controller is calibrated next, an SMC-Mixer needs none, and the Boards tab then shows them to choose what each control does.
 
 Or install it with [Homebrew](https://brew.sh/):
 
@@ -64,6 +64,7 @@ You need:
 - **Buttons that do things.** Play/pause, the volume keys, mute a fader, open an app or a website, press a shortcut, Night Shift, lock, sleep, switch profiles. Several at once, if you like.
 - **The real macOS HUD.** It shows up on the display the knob controls, or for screen zoom the one with the pointer, with the app's own icon for an app's volume.
 - **Finds your controls by itself.** Calibration reads every knob and fader at 0% and at 100%, then has you turn each one back, so it learns which input each is on and which way round it is wired.
+- **Profiles that travel.** Export a profile to a file and import it on another Mac, or in WeeJ, TheeJ for Windows. Or start one from a deej `config.yaml`.
 - **Profiles on a shortcut.** Switch every control's jobs at once, from the menu bar, a button or any app. One shortcut can switch several boards.
 - **No jumps.** A knob takes up a new job the next time you move it, so switching profiles never jumps the volume or a screen. An SMC-Mixer's endless knobs carry on from where their job is.
 - **Every level at a glance.** The menu lists each board with its jobs and their levels, one per line, each app with its icon.
@@ -238,7 +239,8 @@ the app's own settings, **Boards** for what each control does, and **About**. A 
 screen scrolls.
 
 **General** lists every board with a switch that turns it on or off at once, its name, which opens it
-on the Boards tab, its type, whether it is connected, and a gear for its own settings. **Add board**
+on the Boards tab, its type, whether it is connected, and a gear for its own settings. With no board
+yet, it asks how many you have and adds them one after another. **Add board**
 asks for a name, the type (DIY (Arduino), SMC-Mixer or Other MIDI), the device it is on, and for a
 DIY board or another MIDI controller, its baud rate and how many knobs, faders and buttons it has;
 Next then calibrates it. The gear holds the board's name, its status with Reconnect, the device and,
@@ -249,12 +251,21 @@ for a DIY board, its baud rate and **Speed**, for an SMC-Mixer its **Button ligh
 
 **Boards** shows one connected board at a time. Its toolbar picks the board and the profile you are
 editing, and its ⋯ menu edits the profile's name and shortcut, adds a profile, removes the one shown,
-or opens the board's settings. **Draw** draws the board: an SMC-Mixer as its panel sits, any other
-board as a row of knobs, one of faders and one of buttons. Its knobs and faders move with the real
-ones. Click a control, or move or press it on the board, to pick it, and the group under the drawing
-shows what it does with its menu. **List** lists the knobs, faders and buttons instead, each with its
-menu; drag a knob or fader by the six dots before its name onto another of its kind to move its jobs
-there, while the controls stay where they are. Draw or List sticks per board.
+imports or exports a profile, or opens the board's settings. **Draw** draws the board: an SMC-Mixer as
+its panel sits, any other board as a row of knobs, one of faders and one of buttons, until the gear
+beside Draw arranges it, with arrows that move the picked control along its row or to the row above or
+below. Its knobs and faders move with the real ones. Click a control, or move or press it on the
+board, to pick it, and the group under the drawing shows what it does with its menu. **List** lists
+the knobs, faders and buttons instead, each with its menu; drag a knob or fader by the six dots before
+its name onto another of its kind to move its jobs there, while the controls stay where they are. Draw
+or List sticks per board.
+
+**Export…** saves the profile shown to a file in WeeJ's format, so WeeJ reads it too. **Import…** adds
+a profile from such a file, or from deej's `config.yaml`. Jobs land on the same controls, and buttons
+only come from the same type of board. From Windows, apps and the buttons that open or close an app or
+press keys stay behind, since they name Windows programs and keys. From deej, master, mic and monitor
+brightness come in, each on the knob or fader that reads its slider, or on a MIDI board the one at its
+place. A line under the toolbar says what was left out.
 
 A knob's or fader's menu holds the jobs under [What a knob or fader can do](#what-a-knob-or-fader-can-do),
 each under the header of its section: Volume, Brightness, Contrast, Night Shift, Keyboard backlight,

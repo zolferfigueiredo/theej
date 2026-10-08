@@ -22,7 +22,8 @@ extension MenuBar {
         if let board { jobMenu = jobChoices(board) }
         var views: [NSView]
         if let board {
-            views = [boardToolbar(board, boards)] + (board.list ? listView(board) : drawView(board))
+            let note = importNote.flatMap { $0.board == board.id ? [footnote($0.text, width: boardsWidth)] : nil } ?? []
+            views = [boardToolbar(board, boards)] + note + (board.list ? listView(board) : drawView(board))
         } else {
             let text = NSTextField(wrappingLabelWithString: tr(draft.boards.isEmpty ? "boards.none" : "boards.none_connected"))
             text.textColor = .secondaryLabelColor
@@ -79,12 +80,21 @@ extension MenuBar {
         view.selectedSegment = board.list ? 1 : 0
         let bar = NSStackView()
         for item in [boardPicker, profilePicker, more] { bar.addView(item, in: .leading) }
+        if !board.list, board.type != .smc, !board.controls.isEmpty {
+            let arrange = NSButton(image: NSImage(systemSymbolName: "gearshape", accessibilityDescription: tr("board.arrange"))!,
+                                   target: self, action: #selector(toggleArrange))
+            arrange.setButtonType(.pushOnPushOff)
+            arrange.state = arranging.contains(board.id) ? .on : .off
+            arrange.toolTip = tr("board.arrange")
+            bar.addView(arrange, in: .trailing)
+        }
         bar.addView(view, in: .trailing)
         return bar
     }
 
     @objc func pickShownBoard(_ sender: NSPopUpButton) {
         shownBoard = sender.selectedItem?.representedObject as? String
+        importNote = nil
         reloadBoards()
         fitSettings()
     }
@@ -106,6 +116,9 @@ extension MenuBar {
         let remove = entry(tr("remove_profile"), #selector(removeProfile), "")
         remove.isEnabled = draft.boards[index].profiles.count > 1
         menu.addItem(remove)
+        menu.addItem(.separator())
+        menu.addItem(entry(tr("profile.import"), #selector(importProfile), ""))
+        menu.addItem(entry(tr("profile.export"), #selector(exportProfile), ""))
         menu.addItem(.separator())
         let settings = entry(tr("boards.settings"), #selector(openBoardSettings), "")
         settings.representedObject = draft.boards[index].id
@@ -132,6 +145,54 @@ extension MenuBar {
             draft.boards[index].active = min(draft.boards[index].active, draft.boards[index].profiles.count - 1)
             reloadBoards()
             fitSettings()
+        }
+    }
+
+    // A WeeJ or TheeJ profile file, or deej's config, as a new profile of the board shown, which Apply saves.
+    @objc func importProfile() {
+        guard let id = shownBoard, let window = settingsWindow else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json, .yaml]
+        panel.beginSheetModal(for: window) { [self] response in
+            guard response == .OK, let url = panel.url, let index = draft.index(of: id) else { return }
+            shownBoard = id
+            defer {
+                reloadBoards()
+                fitSettings()
+            }
+            guard let data = try? Data(contentsOf: url), let imported = importedProfile(data, for: draft.boards[index]) else {
+                importNote = (id, tr("import_failed"))
+                return
+            }
+            var profile = imported.profile
+            let count = draft.boards[index].profiles.count
+            if profile.name.trimmingCharacters(in: .whitespaces).isEmpty { profile.name = tr("profile_n", ["n": count + 1]) }
+            draft.boards[index].profiles.append(profile)
+            draft.boards[index].active = count
+            importNote = imported.skipped.isEmpty ? nil : (id, tr("import_skipped", ["items": imported.skipped.joined(separator: ", ")]))
+        }
+    }
+
+    // The profile shown, as Settings has it, Apply or not.
+    @objc func exportProfile() {
+        guard let index = shownIndex, let window = settingsWindow else { return }
+        let board = draft.boards[index]
+        guard let data = profileFile(board.profile, of: board) else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        // Finder shows a colon in a file name as a slash, and a slash can't be in one.
+        panel.nameFieldStringValue = "\(board.name) - \(board.profile.name)".components(separatedBy: CharacterSet(charactersIn: "/:"))
+            .joined(separator: "_") + ".json"
+        panel.beginSheetModal(for: window) { [self] response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                try data.write(to: url)
+            } catch {
+                log("Could not export the profile: \(error.localizedDescription)", for: board.id)
+                importNote = (board.id, tr("profile.export_failed"))
+                reloadBoards()
+                fitSettings()
+            }
         }
     }
 
@@ -198,6 +259,20 @@ extension MenuBar {
         return (short, jobs.count - 1, false)
     }
 
+    @objc func toggleArrange() {
+        guard let id = shownBoard else { return }
+        if arranging.remove(id) == nil { arranging.insert(id) }
+        reloadBoards()
+        fitSettings()
+    }
+
+    @objc func moveControl(_ sender: NSButton) {
+        guard let index = shownIndex, let control = pickedControl(draft.boards[index]) else { return }
+        draft.boards[index].move(control, Board.Move.allCases[sender.tag])
+        reloadBoards()
+        fitSettings()
+    }
+
     func inspector(_ board: Board, _ control: Int?) -> NSBox {
         let rows = NSStackView()
         let box = group(rows, width: boardsWidth)
@@ -209,6 +284,17 @@ extension MenuBar {
         name.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
         let clear = NSButton(title: tr("clear"), target: self, action: #selector(clearControl))
         var list = [row([name], clear)]
+        if arranging.contains(board.id), board.type != .smc {
+            let arrows = Board.Move.allCases.enumerated().map { tag, move in
+                let arrow = NSButton(image: NSImage(systemSymbolName: "arrow.\(move)", accessibilityDescription: tr("board.\(move)"))!,
+                                     target: self, action: #selector(moveControl))
+                arrow.tag = tag
+                arrow.toolTip = tr("board.\(move)")
+                arrow.isEnabled = board.canMove(control, move)
+                return arrow
+            }
+            list.append(row(arrows))
+        }
         if !board.isButton(control) {
             clear.isEnabled = !board.profile.jobs(of: control).isEmpty
             list.append(potRow(board, control, handle: false))
