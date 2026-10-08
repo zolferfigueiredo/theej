@@ -362,6 +362,7 @@ final class SerialReader {
                 continue
             }
             log("Connected: \(path)", for: name)
+            _ = shared.takeReconnect(id)  // asked for while it waited, which opening it has done
             engineQueue.async { [id] in boardStates[id] = BoardState() }
             status(BoardStatus(connected: true, port: path))
             readUntilDrop(fd)

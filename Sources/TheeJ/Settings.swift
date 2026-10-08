@@ -489,7 +489,7 @@ extension MenuBar: NSToolbarDelegate {
 
     // Rebuilt on every change: General's boards and options, and the Boards tab.
     func reloadDraft() {
-        stopRecording()
+        stopRecordingOnPages()
         setRows(boardRows, draft.boards.isEmpty ? [emptyRow(tr("boards.none"))] : draft.boards.map(boardRow))
         showName.state = draft.showName ? .on : .off
         showProfiles.state = draft.showProfiles ? .on : .off
@@ -640,6 +640,12 @@ extension MenuBar: NSToolbarDelegate {
             field.changed(shortcut)
         }
         stopRecording()
+    }
+
+    // The pages are built again, so a field on them goes, and its recorder with it, else it would keep
+    // taking every key. One in an open dialog stays.
+    func stopRecordingOnPages() {
+        if sheet == nil || recordingField?.window !== sheet { stopRecording() }
     }
 
     func stopRecording() {

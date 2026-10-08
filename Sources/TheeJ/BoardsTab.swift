@@ -12,13 +12,14 @@ extension MenuBar {
     var shownIndex: Int? { shownBoard.flatMap { draft.index(of: $0) } }
 
     func reloadBoards() {
-        stopRecording()  // else a recorder whose field is gone would keep taking every key
+        stopRecordingOnPages()
         listRows = [:]
         for view in boardsPage.arrangedSubviews { view.removeFromSuperview() }
         let boards = connectedBoards
         let board = boards.first { $0.id == shownBoard } ?? boards.first
         shownBoard = board?.id
         shared.setWatching(selectedTab == .boards && settingsWindow?.isVisible == true ? board?.id : nil)
+        if let board { jobMenu = jobChoices(board) }
         var views: [NSView]
         if let board {
             views = [boardToolbar(board, boards)] + (board.list ? listView(board) : drawView(board))
@@ -437,7 +438,7 @@ extension MenuBar {
     func jobPopup(_ board: Board, _ control: Int) -> NSPopUpButton {
         let popup = checklist(control, #selector(pickJob), label: board.controlName(control))
         let jobs = board.profile.jobs(of: control)
-        let (choices, apps) = jobChoices(board)
+        let (choices, apps) = jobMenu
         for (i, choice) in choices.enumerated() {
             if i == 0 || rank(choice) / 100 != rank(choices[i - 1]) / 100 {
                 popup.menu?.addItem(.sectionHeader(title: section(choice)))

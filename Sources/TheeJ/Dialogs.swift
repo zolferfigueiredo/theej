@@ -7,7 +7,7 @@ private let dialogWidth: CGFloat = 460
 // through MenuBar.dialog until it closes.
 class Dialog: NSObject, NSTextFieldDelegate {
     unowned let owner: MenuBar
-    let window = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+    let window = EditingWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
     let rows = NSStackView()
     let heading = NSTextField(labelWithString: "")
     let buttons = NSStackView()
@@ -305,8 +305,7 @@ final class BoardSettingsDialog: Dialog {
     @objc private func refresh() { rebuild() }
 
     @objc private func reconnect() {
-        shared.requestReconnect(board.id)
-        midi?.sync(reconnect: true)
+        if board.type.isMIDI { midi?.reconnect(board.id) } else { shared.requestReconnect(board.id) }
     }
 
     @objc private func save() {

@@ -51,6 +51,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     var picked: [String: Int] = [:]  // each board's picked control in Draw
     weak var drawing: BoardDrawing?
     var listRows: [Int: NSView] = [:]  // List's rows by control, which light up as they move
+    var jobMenu: (jobs: [Target], apps: Bool) = ([], false)  // the shown board's job choices, as last built
     var recorder: Any?  // the key monitor while a shortcut is being recorded
     weak var recordingField: ShortcutField?
     var boardsFooter: NSStackView?  // the Boards tab's Close and Apply, kept as the tab is built again

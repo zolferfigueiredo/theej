@@ -76,10 +76,10 @@ final class Shared {
         lock.lock(); lines[id] = value; lock.unlock()
     }
 
-    // nil asks every board.
+    // A DIY board's reader takes it; nil asks every DIY board. MIDI.reconnect does a MIDI board's.
     func requestReconnect(_ id: String?) {
         lock.lock()
-        if let id { reconnects.insert(id) } else { reconnects.formUnion(setup.boards.map(\.id)) }
+        if let id { reconnects.insert(id) } else { reconnects.formUnion(setup.boards.filter { $0.type == .diy }.map(\.id)) }
         lock.unlock()
     }
 

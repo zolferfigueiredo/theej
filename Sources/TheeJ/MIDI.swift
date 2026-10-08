@@ -55,14 +55,21 @@ final class MIDI {
             ?? mixers.first { !$0.name.lowercased().contains("private") } ?? mixers.first
     }
 
-    // Main thread, as boards change and as devices come and go.
+    func reconnect(_ id: String) {
+        disconnect(id)
+        sync()
+    }
+
+    // Main thread, as boards change and as devices come and go. A board set to a source that is there gets
+    // it before one on Automatic can take the device.
     func sync(reconnect: Bool = false) {
         let setup = shared.config().setup
         let wanted = setup.boards.filter { $0.enabled && $0.type.isMIDI }
         for id in inputs.keys where reconnect || !wanted.contains(where: { $0.id == id }) { disconnect(id) }
         let sources = MIDI.sources()
+        let named = Set(sources.map(\.name))
         var taken: Set<MIDIDeviceRef> = []
-        for board in wanted {
+        for board in wanted.filter({ named.contains($0.port) }) + wanted.filter({ !named.contains($0.port) }) {
             let pick = source(for: board, among: sources, besides: taken)
             if let pick { taken.insert(MIDI.device(of: pick.ref)) }
             if inputs[board.id]?.source == pick?.ref, pick != nil { continue }
@@ -148,6 +155,7 @@ final class Lights {
     }
 
     func mute(_ id: Int, _ on: Bool) {
+        guard smcStripButtons.contains(id) else { return }
         if on { muted.insert(id) } else { muted.remove(id) }
         update(id)
     }
