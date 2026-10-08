@@ -19,46 +19,45 @@ enum Target: Hashable, Codable {
     case app(String)  // one app's volume, by bundle identifier
 }
 
-// Knobs as saved before profiles, each with its own job. Only read, to make the first profile.
+// Knobs as saved before profiles, each with its own job. Only read, to make the first board.
 struct Knob: Decodable, Equatable {
     var column: Int?
     var target: Target?
 }
 
-// Indexed like Setup.columns: each knob's jobs, which all take its position as it turns. A knob past
-// the end has none.
+// Indexed like Board.controls: each control's jobs, which all take its position as it turns, and each
+// button's actions by its key (Board.buttonKey). A control past the end has none.
 struct Profile: Codable, Equatable {
     var name: String
     var jobs: [[Target]] = []
     var shortcut: Shortcut?
+    var buttons: [Int: [String]] = [:]
 
-    func jobs(of knob: Int) -> [Target] { knob < jobs.count ? jobs[knob] : [] }
+    func jobs(of control: Int) -> [Target] { control < jobs.count ? jobs[control] : [] }
 
-    // Knobs past the end have no jobs, so a profile padded with empty ones is the same profile. Apply
+    // Controls past the end have no jobs, so a profile padded with empty ones is the same profile. Apply
     // in Settings stays off after a job is ticked and unticked.
     static func == (a: Profile, b: Profile) -> Bool {
-        a.name == b.name && a.shortcut == b.shortcut
+        a.name == b.name && a.shortcut == b.shortcut && a.buttons == b.buttons
             && (0..<max(a.jobs.count, b.jobs.count)).allSatisfy { a.jobs(of: $0) == b.jobs(of: $0) }
     }
 
-    init(name: String, jobs: [[Target]] = [], shortcut: Shortcut? = nil) {
-        (self.name, self.jobs, self.shortcut) = (name, jobs, shortcut)
+    init(name: String, jobs: [[Target]] = [], shortcut: Shortcut? = nil, buttons: [Int: [String]] = [:]) {
+        (self.name, self.jobs, self.shortcut, self.buttons) = (name, jobs, shortcut, buttons)
     }
 
-    // Saved so that every older TheeJ still reads the profiles, as one job per knob: the knob's first.
-    // "targets" holds that job, or nothing when it is an app, since a version before 1.5.0 fails on the
-    // whole profile list at a job it doesn't know, falls back to none, and overwrites them all at its next
-    // save. "apps" holds it when it is an app, which is where 1.5.0 looks. "jobs" holds every job, and is
-    // only written once a knob has more than one. A version before 1.7.5 fails the same way on zoom in
-    // "targets" or "jobs", so neither holds it: "zoom" lists the knobs that have it, after their other jobs.
-    enum CodingKeys: String, CodingKey { case name, targets, shortcut, apps, jobs, zoom }
+    // A board's profiles keep every job in "jobs" and the buttons' actions in "buttons", by key, as WeeJ
+    // does. 1.8 and before saved one job per knob in "targets", an app's in "apps", every job in "jobs" once
+    // a knob had several, and zoom in "zoom": those are read once, to make the first board.
+    enum CodingKeys: String, CodingKey { case name, targets, shortcut, apps, jobs, zoom, buttons }
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        name = try values.decode(String.self, forKey: .name)
-        shortcut = try values.decodeIfPresent(Shortcut.self, forKey: .shortcut)
-        if let every = try values.decodeIfPresent([[Target]].self, forKey: .jobs) {
-            jobs = every
+        name = (try? values.decode(String.self, forKey: .name)) ?? ""
+        shortcut = try? values.decodeIfPresent(Shortcut.self, forKey: .shortcut)
+        // A job this version doesn't know is dropped, not the whole profile with it.
+        if let every = try? values.decodeIfPresent([[Lossy<Target>]].self, forKey: .jobs) {
+            jobs = every.map { $0.compactMap(\.value) }
         } else {
             var first = try values.decode([Target?].self, forKey: .targets)
             let apps = try values.decodeIfPresent([String?].self, forKey: .apps) ?? []
@@ -67,26 +66,35 @@ struct Profile: Codable, Equatable {
             }
             jobs = first.map { $0.map { [$0] } ?? [] }
         }
-        for knob in try values.decodeIfPresent([Int].self, forKey: .zoom) ?? [] where jobs.indices.contains(knob) {
+        for knob in (try? values.decodeIfPresent([Int].self, forKey: .zoom)) ?? [] where jobs.indices.contains(knob) {
             jobs[knob].append(.zoom)
+        }
+        // A bad entry goes on its own: a key that is no button id, or an action this version doesn't know.
+        for (key, list) in (try? values.decodeIfPresent([String: Actions].self, forKey: .buttons)) ?? [:] {
+            guard let id = Int(key), (0...255).contains(id) else { continue }
+            var kept: [String] = []
+            for action in list.actions where validAction(action) && !kept.contains(action) { kept.append(action) }
+            if !kept.isEmpty { buttons[id] = kept }
         }
     }
 
     func encode(to encoder: Encoder) throws {
-        let jobs = self.jobs.map { $0.filter { $0 != .zoom } }
-        let zoomed = self.jobs.indices.filter { self.jobs[$0].contains(.zoom) }
-        let first = jobs.map(\.first)
-        let apps = first.map { job -> String? in
-            if case .app(let id)? = job { return id }
-            return nil
-        }
         var values = encoder.container(keyedBy: CodingKeys.self)
         try values.encode(name, forKey: .name)
-        try values.encode(zip(first, apps).map { $1 == nil ? $0 : nil }, forKey: .targets)
         try values.encodeIfPresent(shortcut, forKey: .shortcut)
-        if apps.contains(where: { $0 != nil }) { try values.encode(apps, forKey: .apps) }
-        if jobs.contains(where: { $0.count > 1 }) { try values.encode(jobs, forKey: .jobs) }
-        if !zoomed.isEmpty { try values.encode(zoomed, forKey: .zoom) }
+        try values.encode(jobs, forKey: .jobs)
+        let buttons = Dictionary(uniqueKeysWithValues: self.buttons.filter { !$0.value.isEmpty }.map { (String($0.key), $0.value) })
+        try values.encode(buttons, forKey: .buttons)
+    }
+
+    // A button's actions, or a single one, as WeeJ once saved them.
+    private struct Actions: Decodable {
+        let actions: [String]
+
+        init(from decoder: Decoder) throws {
+            let value = try decoder.singleValueContainer()
+            actions = (try? value.decode([String].self)) ?? (try? value.decode(String.self)).map { [$0] } ?? []
+        }
     }
 }
 
@@ -96,6 +104,9 @@ struct Shortcut: Codable, Equatable {
     var keyCode: UInt16
     var modifiers: UInt
     var key: String
+
+    // The same keys, whatever the layout types with them.
+    func sameKeys(_ other: Shortcut) -> Bool { keyCode == other.keyCode && modifiers == other.modifiers }
 }
 
 #if canImport(AppKit)
@@ -127,7 +138,7 @@ func appName(_ id: String) -> String { id }
 #endif
 
 // How soon a knob's job applies, picked in Settings. The raw values are saved, so renaming one resets it.
-enum Speed: String, CaseIterable {
+enum Speed: String, CaseIterable, Codable {
     case slow, medium, fast, superFast
 
     var title: String { tr("speed.\(rawValue)") }
@@ -150,87 +161,84 @@ enum Speed: String, CaseIterable {
 let prefs = UserDefaults.standard
 
 struct Setup: Equatable {
-    var columns: [Int?] = []
-    var profiles = [Profile(name: tr("default_profile"))]
-    var active = 0
-    var next: Shortcut?  // from any app, like a profile's own shortcut
-    var previous: Shortcut?
-    var invert = false
+    var boards: [Board] = []
+    var added = 0  // every board ever added, so an id is never given out again
     var showName = false
-    var showProfiles = true  // the profiles in the menu bar's menu
+    var showProfiles = true  // each board's profiles in the menu bar's menu
     var hideIcon = false
     var icon = IconStyle.mixer
-    var speed = Speed.slow
 
-    var profile: Profile {
-        get { profiles[active] }
-        set { profiles[active] = newValue }
-    }
+    func board(_ id: String) -> Board? { boards.first { $0.id == id } }
 
-    var mapping: [Int: [Target]] { targets(columns, profile.jobs) }
+    func index(of id: String) -> Int? { boards.firstIndex { $0.id == id } }
 
-    // Every app a knob sets the volume of, in any profile.
-    var apps: Set<String> {
-        Set(profiles.flatMap(\.jobs).joined().compactMap { job in
-            if case .app(let id) = job { return id }
-            return nil
-        })
-    }
+    var apps: Set<String> { Set(boards.flatMap(\.apps)) }
 
-    // The profile `by` steps away from the active one, wrapping round at either end.
-    func stepped(_ by: Int) -> Int { ((active + by) % profiles.count + profiles.count) % profiles.count }
-
-    // JSON strings rather than data, so `defaults read com.zolfer.theej` is readable.
-    static func load() -> Setup {
-        func decode<T: Decodable>(_ key: String) -> T? {
-            prefs.string(forKey: key).flatMap { try? JSONDecoder().decode(T.self, from: Data($0.utf8)) }
-        }
+    // JSON strings rather than data, so `defaults read com.zolfer.theej` is readable. The keys from before
+    // boards (columns, profiles, knobs, profile, nextProfile, previousProfile, invertKnobs, speed) are read
+    // once, to make the first board, and never written, so TheeJ 1.8 still finds its own after a downgrade.
+    static func load(from defaults: UserDefaults = prefs) -> Setup {
         var setup = Setup()
-        if let profiles: [Profile] = decode("profiles"), !profiles.isEmpty {
-            setup.profiles = profiles
-            setup.columns = decode("columns") ?? []
-        } else if let knobs: [Knob] = decode("knobs") {
-            setup.columns = knobs.map(\.column)
-            setup.profile.jobs = knobs.map { $0.target.map { [$0] } ?? [] }
+        if let json = defaults.string(forKey: "boards"),
+           let boards = try? JSONDecoder().decode([Lossy<Board>].self, from: Data(json.utf8)) {
+            setup.boards = boards.compactMap(\.value)
+            setup.added = defaults.integer(forKey: "boardsAdded")
+            for board in setup.boards where board.id.hasPrefix("d") {
+                setup.added = max(setup.added, Int(board.id.dropFirst()) ?? 0)
+            }
+            var seen: Set<String> = []
+            for index in setup.boards.indices where setup.boards[index].id.isEmpty || !seen.insert(setup.boards[index].id).inserted {
+                setup.boards[index].id = nextBoardID(setup.added)
+                setup.added += 1
+            }
+        } else if let board = legacyBoard(defaults) {
+            setup.boards = [board]
+            setup.added = 1
         }
-        setup.active = min(max(prefs.integer(forKey: "profile"), 0), setup.profiles.count - 1)
-        setup.next = decode("nextProfile")
-        setup.previous = decode("previousProfile")
-        setup.invert = prefs.bool(forKey: "invertKnobs")
-        setup.showName = prefs.bool(forKey: "showProfileName")
-        setup.showProfiles = prefs.object(forKey: "showProfileList") as? Bool ?? true
-        setup.hideIcon = prefs.bool(forKey: "hideMenuBarIcon")
-        setup.icon = IconStyle(rawValue: prefs.string(forKey: "menuBarIcon") ?? "") ?? .mixer
-        setup.speed = Speed(rawValue: prefs.string(forKey: "speed") ?? "") ?? .slow
+        setup.showName = defaults.bool(forKey: "showProfileName")
+        setup.showProfiles = defaults.object(forKey: "showProfileList") as? Bool ?? true
+        setup.hideIcon = defaults.bool(forKey: "hideMenuBarIcon")
+        setup.icon = IconStyle(rawValue: defaults.string(forKey: "menuBarIcon") ?? "") ?? .mixer
+        if defaults.string(forKey: "boards") == nil, !setup.boards.isEmpty { setup.save(to: defaults) }
         return setup
     }
 
-    func save() {
-        func encode<T: Encodable>(_ value: T, _ key: String) {
-            guard let json = try? JSONEncoder().encode(value) else { return }
-            prefs.set(String(decoding: json, as: UTF8.self), forKey: key)
-        }
-        encode(columns, "columns")
-        encode(profiles, "profiles")
-        prefs.set(active, forKey: "profile")
-        encode(next, "nextProfile")
-        encode(previous, "previousProfile")
-        prefs.set(invert, forKey: "invertKnobs")
-        prefs.set(showName, forKey: "showProfileName")
-        prefs.set(showProfiles, forKey: "showProfileList")
-        prefs.set(hideIcon, forKey: "hideMenuBarIcon")
-        prefs.set(icon.rawValue, forKey: "menuBarIcon")
-        prefs.set(speed.rawValue, forKey: "speed")
+    func save(to defaults: UserDefaults = prefs) {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        if let json = try? encoder.encode(boards) { defaults.set(String(decoding: json, as: UTF8.self), forKey: "boards") }
+        defaults.set(added, forKey: "boardsAdded")
+        defaults.set(showName, forKey: "showProfileName")
+        defaults.set(showProfiles, forKey: "showProfileList")
+        defaults.set(hideIcon, forKey: "hideMenuBarIcon")
+        defaults.set(icon.rawValue, forKey: "menuBarIcon")
     }
 }
 
-// A loop, not Dictionary(uniqueKeysWithValues:), which traps on a duplicate column.
-func targets(_ columns: [Int?], _ jobs: [[Target]]) -> [Int: [Target]] {
-    var result: [Int: [Target]] = [:]
-    for (column, jobs) in zip(columns, jobs) {
-        if let column, !jobs.isEmpty { result[column] = jobs }
+// The board TheeJ read before boards, as board d1: its knobs, profiles, shortcuts and speed. 1.8 read a
+// knob as 1 - raw, which Invert undid, so each knob is reversed unless Invert was on.
+func legacyBoard(_ defaults: UserDefaults) -> Board? {
+    func decode<T: Decodable>(_ key: String) -> T? {
+        defaults.string(forKey: key).flatMap { try? JSONDecoder().decode(T.self, from: Data($0.utf8)) }
     }
-    return result
+    var columns: [Int?] = decode("columns") ?? []
+    var profiles: [Profile] = decode("profiles") ?? []
+    if profiles.isEmpty, let knobs: [Knob] = decode("knobs") {
+        columns = knobs.map(\.column)
+        profiles = [Profile(name: tr("default_profile"), jobs: knobs.map { $0.target.map { [$0] } ?? [] })]
+    }
+    let count = max(columns.count, profiles.map(\.jobs.count).max() ?? 0)
+    guard count > 0 else { return nil }
+    let invert = defaults.bool(forKey: "invertKnobs")
+    var board = Board(id: nextBoardID(0), name: tr("device.type.diy"), type: .diy)
+    board.controls = (0..<count).map { Control(kind: .knob, input: $0 < columns.count ? columns[$0] : nil, reverse: !invert) }
+    board.profiles = profiles.isEmpty ? [board.newProfile(tr("default_profile"))] : profiles
+    for index in board.profiles.indices { board.profiles[index].jobs = board.fitted(board.profiles[index].jobs) }
+    board.active = min(max(defaults.integer(forKey: "profile"), 0), board.profiles.count - 1)
+    board.next = decode("nextProfile")
+    board.previous = decode("previousProfile")
+    board.speed = Speed(rawValue: defaults.string(forKey: "speed") ?? "") ?? .slow
+    return board
 }
 
 // The order of the jobs in a knob's popup in Settings. Each hundred is a section there, under the
@@ -250,12 +258,6 @@ func rank(_ target: Target) -> Int {
     case .zoom: return 500
     case .app: return 600  // all the same: Settings lists them by name
     }
-}
-
-// The status lines follow the knobs, A first, which is not the order of the serial columns driving
-// them. lastIndex, since the last knob on a column is the one targets() keeps.
-func ordered(_ mapping: [Int: [Target]], by columns: [Int?]) -> [(key: Int, value: [Target])] {
-    mapping.sorted { (columns.lastIndex(of: $0.key) ?? 0) < (columns.lastIndex(of: $1.key) ?? 0) }
 }
 
 // A knob's jobs on one line, for Settings and the startup log.

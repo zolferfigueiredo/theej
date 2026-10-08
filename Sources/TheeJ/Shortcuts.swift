@@ -2,12 +2,12 @@
 import AppKit
 import Carbon.HIToolbox
 
-// Carbon hot keys are the global shortcuts that need no Accessibility or Input Monitoring
-// permission. A profile's own shortcut has its index as id, so every save registers them all again,
-// and Next and Previous profile have the two ids at the top.
+// Carbon hot keys are the global shortcuts that need no Accessibility or Input Monitoring permission.
+// A key combination is registered once, with its place in hotKeyBindings as id, since one may switch
+// several boards; every save registers them all again.
 var hotKeys: [EventHotKeyRef] = []  // main thread only, where Carbon calls the handler
-let nextProfileKey = UInt32.max
-let previousProfileKey = UInt32.max - 1
+var hotKeyTargets: [[HotKeyTarget]] = []  // by id
+let probeHotKey = UInt32.max  // a recorded shortcut, registered for a moment to see whether another app has it
 
 func carbonModifiers(_ flags: NSEvent.ModifierFlags) -> UInt32 {
     [(NSEvent.ModifierFlags.command, cmdKey), (.shift, shiftKey), (.option, optionKey), (.control, controlKey)]
@@ -25,9 +25,9 @@ func registerHotKey(_ shortcut: Shortcut, id: UInt32) -> EventHotKeyRef? {
 // nil while a shortcut is being recorded, so pressing one records it instead of switching.
 func registerHotKeys(_ setup: Setup?) {
     hotKeys.forEach { UnregisterEventHotKey($0) }
-    let profiles = setup?.profiles.enumerated().map { ($1.shortcut, UInt32($0)) } ?? []
-    let keys = profiles + [(setup?.next, nextProfileKey), (setup?.previous, previousProfileKey)]
-    hotKeys = keys.compactMap { shortcut, id in shortcut.flatMap { registerHotKey($0, id: id) } }
+    let bindings = setup.map { hotKeyBindings($0.boards) } ?? []
+    hotKeyTargets = bindings.map(\.targets)
+    hotKeys = bindings.enumerated().compactMap { registerHotKey($1.shortcut, id: UInt32($0)) }
 }
 
 func installHotKeyHandler() {
@@ -36,11 +36,7 @@ func installHotKeyHandler() {
         var id = EventHotKeyID()
         GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
                           nil, MemoryLayout<EventHotKeyID>.size, nil, &id)
-        switch id.id {
-        case nextProfileKey: menuBar?.stepProfile(1)
-        case previousProfileKey: menuBar?.stepProfile(-1)
-        default: menuBar?.switchProfile(Int(id.id))
-        }
+        if hotKeyTargets.indices.contains(Int(id.id)) { menuBar?.setProfiles(hotKeyTargets[Int(id.id)]) }
         return noErr
     }, 1, &pressed, nil, nil)
 }

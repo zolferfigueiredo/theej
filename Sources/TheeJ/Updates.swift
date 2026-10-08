@@ -237,9 +237,6 @@ private func run(_ tool: String, _ arguments: String...) async throws {
     }
 }
 
-// Everything Settings saves. columns[i] is the serial field knob i (A = 0) arrives on, which
-// calibration finds: nil until it has.
-
 extension MenuBar {
     @objc func autoCheck() {
         let every = TimeInterval(prefs.integer(forKey: "updateEvery"))

@@ -5,9 +5,6 @@ import AppKit
 #endif
 @testable import TheeJ
 
-// Knob A to E arrive on serial columns 0, 3, 2, 4 and 1.
-private let columns: [Int?] = [0, 3, 2, 4, 1]
-private let jobs: [[Target]] = [[.master], [.brightness(0)], [.brightness(1)], [], [.builtinBrightness]]
 // The strings expected below are English, whatever language this Mac uses.
 private let english: Void = UserDefaults.standard.set("en", forKey: "language")
 
@@ -18,21 +15,6 @@ private let english: Void = UserDefaults.standard.set("en", forKey: "language")
     #expect(percent(1.5) == 100)
     #expect(percent(0.355) == 36)
     #expect(percent(0.004) == 0)
-}
-
-// A knob with no job maps to nothing, and so does one past the end of the profile's jobs.
-@Test func knobsMapToSerialColumns() {
-    #expect(targets(columns, jobs) == [0: [.master], 1: [.builtinBrightness], 3: [.brightness(0)], 2: [.brightness(1)]])
-    #expect(targets(columns, [[.master]]) == [0: [.master]])
-    // One knob can do several jobs, of any kind.
-    #expect(targets(columns, [[.brightness(0), .brightness(1), .app("com.apple.Music")]])
-        == [0: [.brightness(0), .brightness(1), .app("com.apple.Music")]])
-}
-
-// Menu order is knob order, A to E, which is not the serial column order.
-@Test func menuOrder() {
-    #expect(ordered(targets(columns, jobs), by: columns).map(\.key) == [0, 3, 2, 1])
-    #expect(ordered(targets(columns, jobs), by: columns).map(\.value) == [[.master], [.brightness(0)], [.brightness(1)], [.builtinBrightness]])
 }
 
 // The rank bands must stay distinct as target kinds are added.
@@ -52,46 +34,32 @@ private let every: [Target] = [.master, .microphone, .builtinBrightness, .builti
     #expect(try JSONDecoder().decode([Target].self, from: JSONEncoder().encode(every)) == every)
 }
 
-// Knobs saved before profiles still load, to become the first profile.
+// Knobs saved before profiles still load, to become the first board.
 @Test func knobsSavedBeforeProfilesStillLoad() throws {
     let saved = #"[{"target":{"master":{}},"column":0},{"target":{"brightness":{"_0":0}},"column":3},"#
         + #"{"target":{"brightness":{"_0":1}},"column":2},{"column":4},{"target":{"builtinBrightness":{}},"column":1}]"#
-    #expect(try JSONDecoder().decode([Knob].self, from: Data(saved.utf8)) == zip(columns, jobs).map { Knob(column: $0, target: $1.first) })
+    #expect(try JSONDecoder().decode([Knob].self, from: Data(saved.utf8)) == [
+        Knob(column: 0, target: .master), Knob(column: 3, target: .brightness(0)), Knob(column: 2, target: .brightness(1)),
+        Knob(column: 4, target: nil), Knob(column: 1, target: .builtinBrightness),
+    ])
 }
 
-// What a TheeJ from before app volumes reads: only the jobs it knew, and it fails on any other.
-private enum OldTarget: Decodable, Equatable { case master }
-private struct OldProfile: Decodable, Equatable {
-    var name: String
-    var targets: [OldTarget?]
-}
-
-// An app job is saved apart from the others, so an older TheeJ still reads every profile, with that
-// knob doing nothing, instead of failing on the list and overwriting it.
-@Test func appJobsAreSavedWhereOlderVersionsDoNotLook() throws {
-    let music = [Profile(name: "Music", jobs: [[.master], [.app("com.spotify.client")], []])]
-    let saved = try JSONEncoder().encode(music)
-    #expect(try JSONDecoder().decode([Profile].self, from: saved) == music)
-    #expect(try JSONDecoder().decode([OldProfile].self, from: saved) == [OldProfile(name: "Music", targets: [.master, nil, nil])])
-    let before = #"[{"name":"Default","targets":[{"master":{}},null]}]"#
-    #expect(try JSONDecoder().decode([Profile].self, from: Data(before.utf8)) == [Profile(name: "Default", jobs: [[.master], []])])
-    #expect(Setup(profiles: music + [Profile(name: "Calls", jobs: [[.app("us.zoom.xos")]])]).apps == ["com.spotify.client", "us.zoom.xos"])
-}
-
-// A knob with several jobs is saved so that older versions read its first one: a plain job where
-// versions before app volumes look, an app where 1.5.0 looks. This version reads them all back.
-@Test func severalJobsPerKnobAreSavedSoOlderVersionsReadTheFirst() throws {
+// Profiles from before boards, as 1.8 and earlier saved them so that older versions could read them: one
+// job per knob in "targets", an app's in "apps", every job in "jobs" once a knob had several, and zoom in
+// "zoom". They still load, to become the first board's.
+@Test func profilesSavedBeforeBoardsStillLoad() throws {
     _ = english
-    let both = [Profile(name: "Desk", jobs: [[.master, .app("com.apple.Music")], [.app("com.google.Chrome"), .master], []])]
-    let saved = try JSONEncoder().encode(both)
-    #expect(try JSONDecoder().decode([Profile].self, from: saved) == both)
-    #expect(try JSONDecoder().decode([OldProfile].self, from: saved) == [OldProfile(name: "Desk", targets: [.master, nil, nil])])
-    let json = try #require(JSONSerialization.jsonObject(with: saved) as? [[String: Any]])
-    // Each item cast on its own: Linux reads a JSON null as NSNull, which [String?] doesn't take.
-    #expect((json[0]["apps"] as? [Any])?.map { $0 as? String } == [nil, "com.google.Chrome", nil])
-    // With one job per knob nothing new is written, so what is saved stays as it was.
-    let plain = try JSONEncoder().encode([Profile(name: "Default", jobs: [[.master], []])])
-    #expect(try #require(JSONSerialization.jsonObject(with: plain) as? [[String: Any]])[0]["jobs"] == nil)
+    let saved = #"[{"name":"Default","targets":[{"master":{}},null]},"#
+        + #"{"name":"Music","targets":[{"master":{}},null,null],"apps":[null,"com.spotify.client",null]},"#
+        + #"{"name":"Desk","targets":[{"master":{}},null,null],"apps":[null,"com.google.Chrome",null],"#
+        + #""jobs":[[{"master":{}},{"app":{"_0":"com.apple.Music"}}],[{"app":{"_0":"com.google.Chrome"}},{"master":{}}],[]]},"#
+        + #"{"name":"Reading","targets":[{"master":{}},null,null],"jobs":[[{"master":{}},{"microphone":{}}],[],[]],"zoom":[0,1]}]"#
+    #expect(try JSONDecoder().decode([Profile].self, from: Data(saved.utf8)) == [
+        Profile(name: "Default", jobs: [[.master], []]),
+        Profile(name: "Music", jobs: [[.master], [.app("com.spotify.client")], []]),
+        Profile(name: "Desk", jobs: [[.master, .app("com.apple.Music")], [.app("com.google.Chrome"), .master], []]),
+        Profile(name: "Reading", jobs: [[.master, .microphone, .zoom], [.zoom], []]),
+    ])
     #expect(title([.master, .app("no.such.thing")]) == "Master volume, no.such.thing" && title([Target]()) == "Nothing")
 }
 
@@ -126,49 +94,33 @@ private struct OldProfile: Decodable, Equatable {
 
 // Next from the last profile is the first, and previous from the first is the last.
 @Test func steppingThroughProfilesWrapsRound() {
-    var setup = Setup(profiles: [Profile(name: "A"), Profile(name: "B"), Profile(name: "C")])
-    #expect(setup.stepped(1) == 1 && setup.stepped(-1) == 2)
-    setup.active = 2
-    #expect(setup.stepped(1) == 0 && setup.stepped(-1) == 1)
+    var board = Board.make(id: "d1", name: "Desk", type: .diy, knobs: 1, profileName: "A")
+    board.profiles += [board.newProfile("B"), board.newProfile("C")]
+    #expect(board.stepped(1) == 1 && board.stepped(-1) == 2)
+    board.active = 2
+    #expect(board.stepped(1) == 0 && board.stepped(-1) == 1)
 }
 
 #if canImport(AppKit)
 @Test func profilesAndShortcutsSurviveSaving() throws {
-    let games = [Profile(name: "Games", jobs: jobs, shortcut: Shortcut(
-        keyCode: 18, modifiers: NSEvent.ModifierFlags([.control, .option]).rawValue, key: "1"))]
+    let games = [Profile(name: "Games", jobs: [[.master], [.brightness(1)], []], shortcut: Shortcut(
+        keyCode: 18, modifiers: NSEvent.ModifierFlags([.control, .option]).rawValue, key: "1"), buttons: [144: ["mute:0"]])]
     #expect(try JSONDecoder().decode([Profile].self, from: JSONEncoder().encode(games)) == games)
     #expect(games[0].shortcut?.label == "⌃⌥1")
     let f1 = Shortcut(keyCode: 122, modifiers: NSEvent.ModifierFlags.command.rawValue, key: "\u{F704}")
     #expect(f1.label == "⌘F1")
+    #expect(pressedKeys(functionKeys[0].action)?.label == "F13")
 }
 #endif
-
-// What a TheeJ from 1.6.0 to 1.7.4 reads: every job, from "jobs" once a knob has several, and it fails on zoom.
-private enum JobsTarget: Decodable, Equatable { case master, microphone }
-private struct JobsProfile: Decodable, Equatable {
-    var name: String
-    var targets: [JobsTarget?]
-    var jobs: [[JobsTarget]]?
-}
-
-// Zoom is saved apart, like an app, so an older TheeJ still reads every profile, with zoom left off.
-@Test func zoomIsSavedWhereOlderVersionsDoNotLook() throws {
-    let reading = [Profile(name: "Reading", jobs: [[.master, .microphone, .zoom], [.zoom], []])]
-    let saved = try JSONEncoder().encode(reading)
-    #expect(try JSONDecoder().decode([Profile].self, from: saved) == reading)
-    #expect(try JSONDecoder().decode([JobsProfile].self, from: saved)
-        == [JobsProfile(name: "Reading", targets: [.master, nil, nil], jobs: [[.master, .microphone], [], []])])
-    #expect(try JSONDecoder().decode([OldProfile].self, from: JSONEncoder().encode([Profile(name: "Zoom", jobs: [[.zoom]])]))
-        == [OldProfile(name: "Zoom", targets: [nil])])
-}
 
 // Past Z the letters start again with a number: there is no last knob.
 @Test func knobLettersNeverRunOut() {
     #expect([0, 25, 26, 51, 52].map(letter) == ["A", "Z", "A2", "Z2", "A3"])
 }
 
-// A knob past the end of a profile's jobs has none, so padding the jobs leaves Apply off.
+// A control past the end of a profile's jobs has none, so padding the jobs leaves Apply off.
 @Test func emptyJobsAtTheEndChangeNothing() {
     #expect(Profile(name: "a", jobs: [[.master], []]) == Profile(name: "a", jobs: [[.master]]))
     #expect(Profile(name: "a", jobs: [[], [.master]]) != Profile(name: "a", jobs: [[.master]]))
+    #expect(Profile(name: "a", buttons: [144: ["mute:0"]]) != Profile(name: "a"))
 }

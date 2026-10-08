@@ -1,9 +1,10 @@
 import Foundation
 
 let args = Array(CommandLine.arguments.dropFirst())
+// A port given at launch, as install.sh can put in the login item, is the first DIY board's.
 let portOverride = args.first { $0.hasPrefix("/dev/") }
 
-let baud = speed_t(B9600)
+let baudRates = [9600, 19200, 38400, 57600, 115200]
 
 // Reject anything that isn't all in-range integers rather than salvaging fields out of garbage.
 // Any field count parses: the sketch decides it, and readUntilDrop checks that it holds steady.
@@ -17,22 +18,25 @@ func parse(_ line: String) -> [Int]? {
     return values
 }
 
-func findPort() -> String? {
-    if let override = portOverride { return override }
+// The ports a deej board can be on, the likeliest first.
+func serialPorts() -> [String] {
     let entries = ((try? FileManager.default.contentsOfDirectory(atPath: "/dev")) ?? []).sorted()
-    let prefixes = ["cu.usbmodem", "cu.usbserial", "cu.SLAB_USBtoUART", "cu.wchusbserial"]
-    for prefix in prefixes {
-        if let name = entries.first(where: { $0.hasPrefix(prefix) }) { return "/dev/" + name }
+    return ["cu.usbmodem", "cu.usbserial", "cu.SLAB_USBtoUART", "cu.wchusbserial"].flatMap { prefix in
+        entries.filter { $0.hasPrefix(prefix) }.map { "/dev/" + $0 }
     }
-    return nil
 }
 
-func configureSerial(_ fd: Int32) -> Bool {
+// The first one no other board reads.
+func findPort(excluding taken: Set<String>) -> String? {
+    serialPorts().first { !taken.contains($0) }
+}
+
+func configureSerial(_ fd: Int32, baud: Int) -> Bool {
     var options = termios()
     guard tcgetattr(fd, &options) == 0 else { return false }
     cfmakeraw(&options)  // also sets VMIN=1, VTIME=0 for blocking reads
-    cfsetispeed(&options, baud)
-    cfsetospeed(&options, baud)
+    cfsetispeed(&options, speed_t(baud))
+    cfsetospeed(&options, speed_t(baud))
     options.c_cflag |= tcflag_t(CLOCAL | CREAD | CS8)
     options.c_cflag &= ~tcflag_t(PARENB | CSTOPB)
     return tcsetattr(fd, TCSANOW, &options) == 0

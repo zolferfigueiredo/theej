@@ -148,22 +148,7 @@ final class AppTap {
         description.isPrivate = true
         var tap = AudioObjectID(kAudioObjectUnknown)
         guard AudioHardwareCreateProcessTap(description, &tap) == noErr else { return nil }
-        // Drift compensation crackles on Bluetooth, which is where other tap apps turned it off.
-        let transport: UInt32 = read(output, kAudioDevicePropertyTransportType, 0) ?? 0
-        let bluetooth = transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
-        let device: [String: Any] = [
-            kAudioAggregateDeviceNameKey: "TheeJ",
-            kAudioAggregateDeviceUIDKey: UUID().uuidString,
-            kAudioAggregateDeviceMainSubDeviceKey: uid,
-            kAudioAggregateDeviceIsPrivateKey: true,
-            kAudioAggregateDeviceIsStackedKey: false,
-            kAudioAggregateDeviceTapAutoStartKey: true,
-            kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: uid]],
-            kAudioAggregateDeviceTapListKey: [[kAudioSubTapDriftCompensationKey: !bluetooth,
-                                               kAudioSubTapUIDKey: description.uuid.uuidString]],
-        ]
-        var aggregate = AudioObjectID(kAudioObjectUnknown)
-        guard AudioHardwareCreateAggregateDevice(device as CFDictionary, &aggregate) == noErr else {
+        guard let aggregate = joinTap(description.uuid, to: output, uid: uid) else {
             AudioHardwareDestroyProcessTap(tap)
             return nil
         }
@@ -224,6 +209,118 @@ final class AppTap {
     }
 }
 
+// A private device that joins a tap to the output device, so one callback reads the tap on the output's clock.
+private func joinTap(_ tap: UUID, to output: AudioDeviceID, uid: String) -> AudioObjectID? {
+    // Drift compensation crackles on Bluetooth, which is where other tap apps turned it off.
+    let transport: UInt32 = read(output, kAudioDevicePropertyTransportType, 0) ?? 0
+    let bluetooth = transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
+    let device: [String: Any] = [
+        kAudioAggregateDeviceNameKey: "TheeJ",
+        kAudioAggregateDeviceUIDKey: UUID().uuidString,
+        kAudioAggregateDeviceMainSubDeviceKey: uid,
+        kAudioAggregateDeviceIsPrivateKey: true,
+        kAudioAggregateDeviceIsStackedKey: false,
+        kAudioAggregateDeviceTapAutoStartKey: true,
+        kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: uid]],
+        kAudioAggregateDeviceTapListKey: [[kAudioSubTapDriftCompensationKey: !bluetooth, kAudioSubTapUIDKey: tap.uuidString]],
+    ]
+    var aggregate = AudioObjectID(kAudioObjectUnknown)
+    return AudioHardwareCreateAggregateDevice(device as CFDictionary, &aggregate) == noErr ? aggregate : nil
+}
+
+// MARK: The Mac's sound, for the EQ light patterns
+
+// A tap on every process, unmuted, read while an SMC-Mixer shows an EQ. macOS shows its recording indicator
+// meanwhile, and gives silence until TheeJ is allowed to record.
+final class SoundTap {
+    let output: AudioDeviceID
+    private let tap: AudioObjectID
+    private let aggregate: AudioObjectID
+    private let proc: AudioDeviceIOProcID
+
+    private init(output: AudioDeviceID, tap: AudioObjectID, aggregate: AudioObjectID, proc: AudioDeviceIOProcID) {
+        (self.output, self.tap, self.aggregate, self.proc) = (output, tap, aggregate, proc)
+    }
+
+    static func make() -> SoundTap? {
+        guard #available(macOS 14.2, *), let output = defaultDevice(input: false),
+              let uid = readString(output, kAudioDevicePropertyDeviceUID) else { return nil }
+        let description = CATapDescription(stereoGlobalTapButExcludeProcesses: [])
+        description.name = "TheeJ EQ"
+        description.muteBehavior = .unmuted
+        description.isPrivate = true
+        var tap = AudioObjectID(kAudioObjectUnknown)
+        guard AudioHardwareCreateProcessTap(description, &tap) == noErr else { return nil }
+        guard let aggregate = joinTap(description.uuid, to: output, uid: uid) else {
+            AudioHardwareDestroyProcessTap(tap)
+            return nil
+        }
+        spectrum.setRate(read(aggregate, kAudioDevicePropertyNominalSampleRate, Float64(48000)) ?? 48000)
+        var proc: AudioDeviceIOProcID?
+        let status = AudioDeviceCreateIOProcIDWithBlock(&proc, aggregate, nil) { _, input, _, output, _ in
+            // The tap is the last input stream, as in AppTap.
+            let ins = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input))
+            if let source = ins.last, let samples = source.mData?.assumingMemoryBound(to: Float32.self) {
+                spectrum.add(interleaved: UnsafeBufferPointer(start: samples, count: Int(source.mDataByteSize) / MemoryLayout<Float32>.size),
+                             channels: Int(max(1, source.mNumberChannels)))
+            }
+            // The device plays what is written here, on top of the sound itself, so nothing is.
+            for out in UnsafeMutableAudioBufferListPointer(output) {
+                if let data = out.mData { memset(data, 0, Int(out.mDataByteSize)) }
+            }
+        }
+        guard status == noErr, let proc else {
+            AudioHardwareDestroyAggregateDevice(aggregate)
+            AudioHardwareDestroyProcessTap(tap)
+            return nil
+        }
+        guard AudioDeviceStart(aggregate, proc) == noErr else {
+            AudioDeviceDestroyIOProcID(aggregate, proc)
+            AudioHardwareDestroyAggregateDevice(aggregate)
+            AudioHardwareDestroyProcessTap(tap)
+            return nil
+        }
+        return SoundTap(output: output, tap: tap, aggregate: aggregate, proc: proc)
+    }
+
+    deinit {
+        AudioDeviceStop(aggregate, proc)
+        AudioDeviceDestroyIOProcID(aggregate, proc)
+        AudioHardwareDestroyAggregateDevice(aggregate)
+        if #available(macOS 14.2, *) { AudioHardwareDestroyProcessTap(tap) }
+    }
+}
+
+private var soundTap: SoundTap?  // appQueue only, like everything here
+private var following = false
+private var watchingOutput = false
+
+// From applyLights. The tap runs on the output device's clock, so a new output device gets a new tap.
+func followSound(_ on: Bool) {
+    appQueue.async {
+        following = on
+        if on, !watchingOutput {
+            watchingOutput = true
+            var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+                                                     mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+            AudioObjectAddPropertyListenerBlock(system, &address, appQueue) { _, _ in tendSound() }
+        }
+        tendSound()
+    }
+}
+
+private func tendSound() {
+    guard following else {
+        soundTap = nil
+        return
+    }
+    let output = defaultDevice(input: false)
+    if soundTap?.output != output {
+        soundTap = nil  // the old one goes first, so two never read at once
+        soundTap = SoundTap.make()
+    }
+}
+
 // MARK: Every app with a knob
 
 private var appGains: [String: Float32] = [:]
@@ -232,13 +329,20 @@ private var lastPlayed: [String: Date] = [:]
 private var retryAfter: [String: Date] = [:]
 private var appTimer: DispatchSourceTimer?
 
-// From the serial thread, as a knob turns.
+private var appLevels: [String: Float32] = [:]  // engine queue only, like setAppVolume
+
+// From the engine queue, as a control turns.
 func setAppVolume(_ app: String, _ scalar: Float32) {
+    appLevels[app] = scalar
     appQueue.async {
         appGains[app] = appGain(scalar)
         tendApps()
     }
 }
+
+// Where a control last set the app's volume, or the top when none has. Engine queue only, so it never
+// waits for appQueue, which can be busy making a tap.
+func appLevel(_ app: String) -> Float32 { appLevels[app] ?? 1 }
 
 // On Apply: an app no profile gives a knob any more goes back to its own volume.
 func keepAppVolumes(for apps: Set<String>) {

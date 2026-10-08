@@ -14,6 +14,7 @@ func coreBrightness(_ name: String, _ proto: Protocol) -> NSObject? {
 @objc protocol BlueLightClient {
     @objc(setStrength:commit:) optional func setStrength(_ strength: Float, commit: Bool) -> Bool
     @objc(setEnabled:) optional func setEnabled(_ enabled: Bool) -> Bool
+    @objc(getBlueLightStatus:) optional func getBlueLightStatus(_ status: UnsafeMutableRawPointer) -> Bool
 }
 
 let blueLight = coreBrightness("CBBlueLightClient", BlueLightClient.self) as? BlueLightClient
@@ -22,6 +23,16 @@ let blueLight = coreBrightness("CBBlueLightClient", BlueLightClient.self) as? Bl
 func setNightShift(_ scalar: Float32) {
     if scalar > 0 { _ = blueLight?.setStrength?(Float(scalar), commit: true) }
     _ = blueLight?.setEnabled?(scalar > 0)
+}
+
+// Night Shift on or off, as Control Center turns it. The status is a private struct whose second byte
+// says whether it is on; 64 bytes is more than it has ever taken. Whether it is on now, or nil.
+func toggleNightShift() -> Bool? {
+    var status = [UInt8](repeating: 0, count: 64)
+    guard status.withUnsafeMutableBytes({ blueLight?.getBlueLightStatus?($0.baseAddress!) }) == true else { return nil }
+    let on = status[1] == 0
+    _ = blueLight?.setEnabled?(on)
+    return on
 }
 
 @objc protocol KeyboardClient {

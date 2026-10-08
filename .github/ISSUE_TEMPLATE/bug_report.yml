@@ -28,7 +28,7 @@ body:
   - type: input
     attributes:
       label: Mac and board
-      description: Apple silicon or Intel, and your deej board (how many knobs, which Arduino).
+      description: Apple silicon or Intel, and your boards (a deej board with how many knobs and which Arduino, an SMC-Mixer over USB or Bluetooth, or another MIDI controller).
   - type: input
     attributes:
       label: Screens and keyboards
