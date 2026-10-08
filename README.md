@@ -8,7 +8,7 @@
 
 <p align="center">
   The Mac client for <a href="https://github.com/omriharel/deej">deej</a>. Volume for your Mac and your apps, brightness and more,<br>
-  straight from the Arduino mixer on your desk.
+  straight from the Arduino or MIDI mixer on your desk.
 </p>
 
 <p align="center">
@@ -36,7 +36,7 @@
 
 1. [Download the DMG](https://github.com/zolferfigueiredo/theej/releases/latest), open it and drag TheeJ to Applications.
 2. Open TheeJ. It's signed and notarized by Apple, so macOS only asks you to confirm the first time. It then asks which language to use, starting from your Mac's.
-3. Plug in your deej board. Calibrate opens on its own: move each knob from end to end, and Settings opens to choose what each one does.
+3. Settings opens on General. Click **Add board**, pick DIY (Arduino), SMC-Mixer or Other MIDI, and plug it in. A deej board or another MIDI controller is calibrated next, an SMC-Mixer needs none, and the Boards tab then shows it to choose what each control does.
 
 Or install it with [Homebrew](https://brew.sh/):
 
@@ -48,7 +48,7 @@ brew install --cask theej
 You need:
 
 - macOS 14 or later, on Apple silicon or Intel
-- Any deej board, over USB. Your Arduino sketch stays as it is.
+- Any deej board, over USB, and your Arduino sketch stays as it is. Or an M-VAVE SMC-Mixer, over USB or Bluetooth MIDI, or any other MIDI controller. As many as you like, at once.
 - For external screens: Apple silicon and [m1ddc](https://github.com/waydabber/m1ddc) (`brew install m1ddc`)
 - For one app's volume: macOS 14.2 or later
 - TheeJ in Applications, for launch at login and updates
@@ -57,18 +57,21 @@ You need:
 
 ## Features
 
-- **One knob, several jobs.** The volume of your Mac, your mic or a single app, a screen's brightness or contrast, Night Shift, a keyboard backlight, screen zoom. Tick several, of any kind, and they all follow the knob.
+- **One knob, several jobs.** The volume of your Mac, your mic or a single app, a screen's brightness or contrast, Night Shift, a keyboard backlight, screen zoom. Tick several, of any kind, and they all follow the knob or fader.
+- **Any number of boards.** A deej board, an M-VAVE SMC-Mixer and other MIDI controllers side by side, each with its own profiles, shortcuts and calibration.
+- **The SMC-Mixer, ready to go.** Its 8 faders, 8 knobs and 43 buttons are known, over USB or Bluetooth, in DAW or CC mode. Settings draws it as it sits on your desk, and its M buttons light up while their fader is muted.
+- **Buttons that do things.** Play/pause, the volume keys, mute a fader, open an app or a website, press a shortcut, Night Shift, lock, sleep, switch profiles. Several at once, if you like.
 - **The real macOS HUD.** It shows up on the display the knob controls, or for screen zoom the one with the pointer, with the app's own icon for an app's volume.
-- **Finds your knobs by itself.** Calibrate opens when your board first connects, works out how many knobs you have and which input each is on, then sweeps a jumpy pot clean.
-- **Profiles on a shortcut.** Switch every knob's jobs at once, from the menu bar or any app.
-- **No jumps.** A knob takes up a new job the next time you move it, so switching profiles never jumps the volume or a screen.
-- **Every level at a glance.** The menu lists each job with its level, one per line, each app with its icon.
+- **Finds your controls by itself.** Calibration reads every knob and fader at 0% and at 100%, then has you turn each one back, so it learns which input each is on and which way round it is wired.
+- **Profiles on a shortcut.** Switch every control's jobs at once, from the menu bar, a button or any app. One shortcut can switch several boards.
+- **No jumps.** A knob takes up a new job the next time you move it, so switching profiles never jumps the volume or a screen. An SMC-Mixer's endless knobs carry on from where their job is.
+- **Every level at a glance.** The menu lists each board with its jobs and their levels, one per line, each app with its icon.
 - **Follows your audio device.** Switch outputs or inputs, Bluetooth headphones included, and the knobs follow.
 - **Twin screens stay put.** Identical panels stay left and right across sleep and replug.
-- **Any number of knobs.** As many as your sketch sends, from A to Z, then A2, B2 and on. One switch inverts them all for pots wired the other way round.
-- **Same firmware.** Speaks the deej serial protocol, unchanged.
-- **Few permissions.** Shortcuts need no Accessibility or Input Monitoring access. App volume asks macOS for audio recording access, once.
-- **Speaks 12 languages.** Deutsch, English, Español, Français, Italiano, Polski, Português, Русский, Українська, 中文, 日本語 and 한국어. **Language** in the menu and at the top of App settings changes it at once, open windows included.
+- **Any number of knobs.** As many as your sketch sends, from A to Z, then A2, B2 and on.
+- **Same firmware.** Speaks the deej serial protocol, unchanged, at the baud rate your sketch uses.
+- **Few permissions.** Shortcuts need no Accessibility or Input Monitoring access. App volume asks macOS for audio recording access, once. Only a button that presses keys or media keys needs Accessibility, which macOS asks for when you apply one.
+- **Speaks 12 languages.** Deutsch, English, Español, Français, Italiano, Polski, Português, Русский, Українська, 中文, 日本語 and 한국어. **Language** in the menu and on the General tab changes it at once, open windows included.
 - **Lives in the menu bar.** Out of the Dock and Cmd+Tab unless Settings is open or you keep it in the Dock. Reconnects on its own, can launch at login, and installs updates in one click.
 
 ## Screenshots
@@ -97,7 +100,7 @@ You need:
 </p>
 <p align="center"><sub>Calibration finds each knob, then sweeps it clean</sub></p>
 
-## What a knob can do
+## What a knob or fader can do
 
 - **Master volume**: the current output device, through CoreAudio.
 - **Microphone volume**: the input volume of the current input device, the same slider as in
@@ -134,13 +137,42 @@ You need:
 The volumes follow the knob as it turns. Everything else waits for the knob to settle, as described
 under On-screen feedback.
 
+## What a button can do
+
+A button does any number of these, in order, each time it is pressed:
+
+- **Media**: Play/pause, Previous track and Next track, as the keyboard's media keys, and Volume up,
+  Volume down and Mute all sound, as the volume keys with their HUD. A Mac has one key for play and
+  pause and none for stop, so those are one action.
+- **Apps**: Open an app, which brings it forward when it is open already, Close an app, and Open a
+  website (http and https only).
+- **System**: Mute microphone, Press a shortcut (any keys, recorded in Settings), Night Shift on/off,
+  Turn off screens, Lock the Mac and Sleep.
+- **TheeJ**: Previous profile, Next profile, Go to a profile, and Open Settings, on the board the
+  button is on.
+- **Function keys**: F13 to F20, keys no Mac keyboard has, for another app to take.
+- **Knobs**: Mute a knob or fader of the board, which sets its jobs to 0 until pressed again, when
+  they go back to where the control now is. On an SMC-Mixer the button lights up while it is muted.
+
+The media keys and Press a shortcut post key presses, which macOS only allows an app under
+Accessibility in Privacy & Security; Apply asks for it when a button first does one of them. A new
+SMC-Mixer profile has M1 to M8 muting faders 1 to 8, and the « and » buttons stepping through the
+profiles.
+
 ## How it works
 
 Upstream deej is Windows-only for audio (it uses Windows Core Audio for per-app sessions). TheeJ is a
 small Swift app that speaks the same serial protocol and drives macOS instead.
 
-- It reads the deej serial protocol at 9600 baud, however many sliders the sketch sends. It finds the
-  serial port by itself and reconnects when the board is unplugged.
+- It reads the deej serial protocol at the board's baud rate, 9600 by default, however many sliders
+  the sketch sends. It finds the serial port by itself, leaving alone the ones other boards use, and
+  reconnects when the board is unplugged.
+- A **MIDI board** goes through CoreMIDI, with no driver: the SMC-Mixer is a standard USB MIDI device,
+  and over Bluetooth macOS connects it in Audio MIDI Setup (Window, Show MIDI Studio, the Bluetooth
+  button). Over USB it has two ports that both send everything, so TheeJ reads only its Master port.
+  Its knobs, faders and buttons are read in DAW (Mackie) mode or CC mode alike, and its button lights
+  are sent no more than 4 at a time. Lit buttons pull the faders' readings down a little for a few
+  seconds, which TheeJ ignores unless a fader moves further than that.
 - The **output and input volume** go through CoreAudio, in-process, with no `osascript`, and follow
   whichever devices are current.
 - **Each app's volume** goes through Core Audio process taps (macOS 14.2).
@@ -160,12 +192,12 @@ small Swift app that speaks the same serial protocol and drives macOS instead.
 <details>
 <summary><b>The menu bar</b></summary>
 
-An icon in the menu bar shows whether the Arduino is connected. Settings offers three looks:
+An icon in the menu bar shows whether a board is connected. Settings offers three looks:
 
-- **Mixer**, the default: the app icon's three faders cut out of a tile. Disconnected, all three
-  knobs drop to the bottom.
-- **Dial**: a knob in a track, lit up to its pointer. Disconnected, the pointer drops to the minimum
-  and the track dims.
+- **Mixer**, the default: the app icon's three faders cut out of a tile. With no board connected, all
+  three knobs drop to the bottom.
+- **Dial**: a knob in a track, lit up to its pointer. With no board connected, the pointer drops to the
+  minimum and the track dims.
 - **App icon**: the app icon itself, the same whether connected or not.
 
 Mixer and Dial follow light and dark menu bars, and on the menu bars of the displays you are not
@@ -173,88 +205,92 @@ using they stay as bright as macOS's own icons. Both icons are drawn in code in
 [Icons.swift](Sources/TheeJ/Icons.swift), the menu bar one by `makeIcon` and the app icon by
 `makeAppIcon`.
 
-Clicking it opens Settings. Right-clicking it, or Control-clicking, opens a menu: Show data below first, on by default, with the live
-value of every knob's jobs under it, one job per line in knob order, an app's with its icon, then
-the profiles, with a check by the active one and each one's shortcut, then Settings, Calibrate and
-Language, then the current port with Reconnect under it, then Launch at login and Keep in Dock,
-About TheeJ, which opens the About tab of Settings, Check for updates… with Check automatically
-(daily, weekly by default, or never), and Quit TheeJ. Settings can leave the profiles out.
+Clicking it opens Settings. Right-clicking it, or Control-clicking, opens a menu: Show data below
+first, on by default, then a block for each board that is on, headed by its name and whether it is
+connected. Under the heading come the live value of every one of its jobs, one job per line in control
+order, an app's with its icon, then its profiles, with a check by the active one and each one's
+shortcut, and Calibrate, except on an SMC-Mixer. Then come Settings, Language and Reconnect, Launch at
+login and Keep in Dock, About TheeJ, which opens the About tab of Settings, Check for updates… with
+Check automatically (daily, weekly by default, or never), and Quit TheeJ. Settings can leave the
+profiles out.
 
-Settings can show the active profile's name beside the icon, or hide the icon altogether. **Keep in
-Dock** pins a shortcut to TheeJ in the Dock, as the Dock's own Keep in Dock does; clicking it opens
-Settings.
+Settings can show each connected board's profile name beside the icon, or hide the icon altogether.
+**Keep in Dock** pins a shortcut to TheeJ in the Dock, as the Dock's own Keep in Dock does; clicking it
+opens Settings.
 
 </details>
 
 <details>
 <summary><b>Settings and calibration</b></summary>
 
-**Settings** has three tabs, laid out in groups as System Settings is: **General** for the profile
-and its knobs, **App settings** for the language, shortcuts, the menu bar and sensitivity, and
-**About**. A tab too tall for the screen scrolls. General lists every knob by the letter on the box
-with a menu for what it does: any of the jobs under [What a knob can do](#what-a-knob-can-do), each
-with the icon its HUD shows. Clicking a job ticks it and clicking it again unticks it, so one knob can do several at once, of any kind: two screens' brightness, or an app's volume and a
-keyboard backlight. They all take the knob's position, and the row lists them one under the other,
-each with its icon. Clear, at the top of the menu, unticks them all. Each job sits under the header of its section: Volume, Brightness, Contrast,
-Night Shift, Keyboard backlight, Zoom or Apps. Apps lists the apps that make sound: the ones playing right
-now, the well-known players, browsers and call apps you have installed, open or not, and any app
-already on a knob. Other… at its end picks any app from Applications. Brightness and Contrast list one Screen per
-external screen plugged in, counted left to right by their position in System Settings, plus any a
-knob already uses while it is unplugged. The + and - buttons beside Knobs add or remove the last
-knob, down to none at all, and after Z come A2, B2 and on. To reorder, drag a knob by the six dots
-before its name onto another knob: its jobs move there and the knobs in between shift along, while
-the letters stay where they are, since they stand for the knobs on the box. A knob that has not been calibrated yet shows "Needs calibration" in red under
-its name, and does nothing until it is.
+**Settings** has three tabs, laid out in groups as System Settings is: **General** for the boards and
+the app's own settings, **Boards** for what each control does, and **About**. A tab too tall for the
+screen scrolls.
 
-Those jobs belong to a **profile**: a name, the jobs of every knob, and an optional keyboard
-shortcut. The menu at the top picks the profile you are editing, + adds one with every knob doing
-nothing, and - removes the one shown. Switch profiles from the menu bar, or with a profile's
-shortcut from any app, and the new profile's name shows on screen, in a square like the HUD's. In App settings, under **Shortcuts**, **Next profile** and **Previous
-profile** step through them in order from any app, wrapping round at either end, and every profile
-is listed below them with its own shortcut, so you can set them all in one place. To set a shortcut,
-click Record Shortcut and press it; it needs ⌘ or ⌃, can't be one already in use, and Escape
+**General** lists every board with a switch that turns it on or off at once, its name, which opens it
+on the Boards tab, its type, whether it is connected, and a gear for its own settings. **Add board**
+asks for a name, the type (DIY (Arduino), SMC-Mixer or Other MIDI), the device it is on, and for a
+DIY board or another MIDI controller, its baud rate and how many knobs, faders and buttons it has;
+Next then calibrates it. The gear holds the board's name, its status with Reconnect, the device and,
+for a DIY board, its baud rate and **Speed**, then the board's **Next profile** and **Previous
+profile** shortcuts, with Remove board and Calibrate. Its Save applies at once. Under the boards come
+**Language**, **Hide menu bar icon**, **Show profile name**, **Icon** (Mixer, Dial or App icon) and
+**Profile list**, which puts the profiles in the menu.
+
+**Boards** shows one connected board at a time. Its toolbar picks the board and the profile you are
+editing, and its ⋯ menu edits the profile's name and shortcut, adds a profile, removes the one shown,
+or opens the board's settings. **Draw** draws the board: an SMC-Mixer as its panel sits, any other
+board as a row of knobs, one of faders and one of buttons. Its knobs and faders move with the real
+ones. Click a control, or move or press it on the board, to pick it, and the group under the drawing
+shows what it does with its menu. **List** lists the knobs, faders and buttons instead, each with its
+menu; drag a knob or fader by the six dots before its name onto another of its kind to move its jobs
+there, while the controls stay where they are. Draw or List sticks per board.
+
+A knob's or fader's menu holds the jobs under [What a knob or fader can do](#what-a-knob-or-fader-can-do),
+each under the header of its section: Volume, Brightness, Contrast, Night Shift, Keyboard backlight,
+Zoom or Apps. Clicking a job ticks it and clicking it again unticks it, so one control can do several
+at once, of any kind, and Clear at the top unticks them all. Apps lists the apps that make sound: the
+ones playing right now, the well-known players, browsers and call apps you have installed, open or not,
+and any app a profile already uses. Other… at its end picks any app from Applications. Brightness and
+Contrast list one Screen per external screen plugged in, counted left to right by their position in
+System Settings, plus any a profile already uses while it is unplugged. A button's menu holds the
+actions under [What a button can do](#what-a-button-can-do); one that needs a setting, such as a website
+or the keys to press, asks for it beside the button's name.
+
+Those jobs and actions belong to a **profile**, which also has a name and an optional keyboard
+shortcut. Each board has its own. Switch profiles from the menu bar, with a button, or with a
+shortcut from any app, and the new profile's name shows on screen, in a square like the HUD's, with
+the board's name when you have several. Next profile and Previous profile step through a board's
+profiles in order, wrapping round at either end. One shortcut may switch several boards at once:
+Settings says which other boards use it. To set a shortcut, click Record Shortcut and press it; it
+needs ⌘ or ⌃, can't be one this board or another app already uses, which the button says, and Escape
 cancels. The ✕ after a shortcut removes it, as does Delete while recording. Shortcuts need no
 Accessibility or Input Monitoring permission.
 
-**Invert knobs** flips every knob's direction, for a board whose pots are wired the other way round.
-In App settings, under **Menu bar**, **Hide menu bar icon** removes the icon, name and all, and
-greys out the rest while it is on. **Show profile name** puts the active profile's name beside the
-icon, cut short when it is long, **Icon** picks Mixer, Dial or App icon, and **Profile list**, on by
-default, puts the profiles in the menu. Under **Sensitivity**, **Speed** sets how long a knob has to
-be still before its change lands: Slow (0.3 seconds, recommended), Medium (0.22), Fast (0.18) or
-Super fast (0.15). The volumes are not affected; they always follow the knob.
-
 **About** shows the version, with Check for updates…, and links to the website, to zolfer.com, to WeeJ, TheeJ for Windows, and to deej.
 
-**Apply**, at the bottom of every tab with Close, applies at once, makes the profile shown the active
-one, and leaves the window open. It stays off until something changes, and goes off again once
-applied. A knob given a new job, by Apply or by switching profiles, takes it over the next time you move it, so
-neither ever jumps the volume or a panel to wherever that knob happens to sit. When a knob still
-needs calibration, as after +, Apply opens Calibration for just the knobs that need it.
+**Apply**, at the bottom of every tab with Close, applies at once, makes each board's profile shown the
+active one, and leaves the window open. It stays off until something changes, and goes off again once
+applied. A control given a new job, by Apply or by switching profiles, takes it over the next time you
+move it, so neither ever jumps the volume or a panel to wherever that control happens to sit.
 
-**Calibration** finds your knobs by itself. **Calibrate** in the menu runs it any time the board is
-connected, as does the Calibrate button under the knobs in Settings, and asks for knob A, then B,
-and so on. It also opens on its own when a knob needs it: the first time the board connects, as on a
-fresh install, and on Apply after +. Then it asks only for the knobs that need it and keeps the
-others as they are. For each knob it asks for:
+**Calibration** finds a DIY board's or another MIDI controller's controls. It opens after Add board,
+from the board's gear and from Calibrate in the menu, and on its own when a board connects with a
+control it hasn't found yet. An SMC-Mixer's controls are known, so it needs none.
 
-1. Move it from one end to the other, so TheeJ can tell which knob it is.
-2. Turn it back and forth, from one end to the other, for 20 seconds.
+1. Turn every knob and fader to 0%, and press Next.
+2. Turn every knob and fader to 100%, and press Next. That gives each input its ends and its
+   direction, so pots wired the other way round need nothing.
+3. For each knob and fader in turn, turn it back to 0%.
+4. Press each button three times.
 
-Step 2 is the cure for jumpy knobs (below). Its timer only runs while the knob turns, and when it
-stops, the window says so in orange and asks you to keep turning. A short sound marks each new step,
-so you can watch the knob rather than the screen. Allow about half a minute per knob. While it waits
-for a knob, moving one it already found gets an orange reminder of which knob that is. Skip is there
-for any knob TheeJ has found: one it found just now skips its turning, and one that was set up
-before keeps its input. While the knob it asks for isn't found, the button is Finish, which ends the
-run: the knobs found keep their inputs and the others stay as they were. When TheeJ asks for a knob
-you don't have, click Finish. Once every value the sketch sends has a knob, it says so, and Finish
-is all that's left. Every knob holds still for the whole run, Cancel leaves everything as it was,
-and Settings comes to the front at the end to choose what each knob does. Calibration never removes
-a knob; - beside Knobs in Settings does.
+A short sound marks each control found, so you can watch the board rather than the screen. Moving a
+control it already found gets an orange reminder of which one that is, as does an input that didn't
+move between 0% and 100%. Skip keeps a control as it was, Start again goes back to the 0% reading,
+Cancel leaves everything as it was, and Finish keeps what was found and opens the board in Settings.
+Every control holds still for the whole run.
 
-A knob only shows up once the Arduino sketch sends its value. A knob the sketch does not send is
-never found, so click Finish when TheeJ asks for it.
+A knob only shows up once the Arduino sketch sends its value. Skip one the sketch does not send.
 
 </details>
 
@@ -284,9 +320,8 @@ contact for anywhere from 15ms to a few hundred ms and the Arduino reads a stray
 the ends of travel. It builds up on knobs that rarely move, which is why the volume knob stays
 clean.
 
-Sweep the knob slowly from end to end a dozen or so times. **Calibrate** in the menu walks you
-through it, one knob at a time. Recordings of this board showed a dirty knob reading clean within
-about 15 seconds of sweeping. A drop of potentiometer contact cleaner makes it last. The panel is
+Sweep the knob slowly from end to end a dozen or so times. Recordings of this board showed a dirty
+knob reading clean within about 15 seconds of sweeping. A drop of potentiometer contact cleaner makes it last. The panel is
 protected meanwhile: everything but the volumes only applies once the knob settles, so a stray
 reading shorter than the Speed setting's wait never reaches a display or a light. If a panel flashes
 on a faster Speed, go back to Slow.
@@ -312,14 +347,14 @@ Apple silicon and Intel, signed with your Apple Development certificate when you
 Items shows TheeJ by name and icon. Without one it is signed ad hoc.
 
 ```bash
-./run.sh /dev/cu.usbserial-1130     # force a specific port (list them with ls /dev/cu.*)
+./run.sh /dev/cu.usbserial-1130     # force the first DIY board's port (list them with ls /dev/cu.*)
 ./run.sh -testNotifications YES     # show the update notification, offering the next version
 swift test                          # run the tests
 ```
 
 **Run at login.** The app in Applications turns this on with **Launch at login** in the menu. For a
 build run from this folder, `./install.sh` installs a LaunchAgent that starts at login and restarts
-on crash, logging to `/tmp/theej.log`; `./install.sh /dev/cu.usbserial-1130` bakes a port into it,
+on crash, logging to `/tmp/theej.log`; `./install.sh /dev/cu.usbserial-1130` bakes the first DIY board's port into it,
 and `./install.sh --uninstall` removes it. Quit from the menu really does quit: the agent uses
 `KeepAlive` with `SuccessfulExit` set to false, so a clean exit is left alone while a crash is still
 restarted.
@@ -337,11 +372,12 @@ raising `appVersion` in `Sources/TheeJ/Version.swift`.
 <details>
 <summary><b>Tuning</b></summary>
 
-What each knob does and which input it is on live in Settings, not in source. A fresh install has
-no knobs, and calibration finds them. They are stored as JSON in the `com.zolfer.theej`
-defaults domain: `defaults read com.zolfer.theej` shows them, and `defaults delete
-com.zolfer.theej` followed by a restart clears them. Knobs saved by 1.0.2 or earlier become the
-Default profile the first time a newer TheeJ starts, and the old `knobs` key is left as it was.
+The boards, what each control does and which input it is on live in Settings, not in source. A
+fresh install has no boards. They are stored as JSON under `boards` in the `com.zolfer.theej`
+defaults domain: `defaults read com.zolfer.theej boards` shows them, and `defaults delete
+com.zolfer.theej` followed by a restart clears everything. The knobs and profiles of TheeJ 1.8 and
+earlier become board d1 the first time 2.0 starts, with Invert turned into each knob's direction. The
+old keys are left as they were, so going back to 1.8 finds them.
 
 Constants in [Dispatch.swift](Sources/TheeJ/Dispatch.swift), [Setup.swift](Sources/TheeJ/Setup.swift)
 and [HUD.swift](Sources/TheeJ/HUD.swift), then rebuild:
@@ -356,8 +392,9 @@ and [HUD.swift](Sources/TheeJ/HUD.swift), then rebuild:
   are not affected.
 - `osdChiclets`: `100`, the HUD bar resolution. Drop it to `16` for the classic segmented look.
 - `osdFadeMsec`: how long the HUD stays up.
-- `Calibrator.turnSeconds`, in [Calibrator.swift](Sources/TheeJ/Calibrator.swift): `20` seconds of
-  turning per knob.
+- `LightGuard.window` and `LightGuard.steps`, in [Mixer.swift](Sources/TheeJ/Mixer.swift): `5`
+  seconds and `5` steps of 127. For that long after an SMC-Mixer's lights change, a resting fader's
+  move this small is taken for the lights pulling its reading, not a hand.
 
 Turning a brightness knob fully down sets the backlight to 0 and the panel goes black, and a screen
 contrast knob at 0 leaves it close to black too. The knob is the way back.
@@ -367,7 +404,7 @@ contrast knob at 0 leaves it close to black too. The knob is the way back.
 ## Disclaimer
 
 Unofficial. An independent client for the [deej](https://github.com/omriharel/deej) serial
-protocol, not affiliated with deej or with Apple, and it contains no deej code. It relies on private
+protocol and for MIDI mixers, not affiliated with deej, M-VAVE or Apple, and it contains no deej code. It relies on private
 macOS frameworks that a future macOS update may change or remove.
 
 ## License
