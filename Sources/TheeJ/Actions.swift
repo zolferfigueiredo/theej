@@ -100,6 +100,10 @@ func perform(_ action: String, on id: String) {
     case "profile.next": menuBar?.setProfiles([HotKeyTarget(board: id, step: 1)])
     case "profile.previous": menuBar?.setProfiles([HotKeyTarget(board: id, step: -1)])
     case "settings": menuBar?.openSettings()
+    case "lights.next": menuBar?.changeLights(id, nextLightPattern)
+    case "lights.previous": menuBar?.changeLights(id, previousLightPattern)
+    case "lights.on": menuBar?.changeLights(id) { _ in "on" }
+    case "lights.off": menuBar?.changeLights(id) { _ in "" }
     default: break
     }
 }
@@ -167,7 +171,8 @@ func actionTitle(_ action: String, on board: Board) -> String {
                 "close:": "action.close_app", "url:": "action.open_url", "mute.mic": "action.mute_mic", "keys:": "action.keys",
                 "nightlight": "action.night_light", "screens.off": "action.screens_off", "pc.lock": "action.lock",
                 "pc.sleep": "action.sleep", "profile.previous": "previous_profile", "profile.next": "next_profile",
-                "settings": "action.open_settings"]
+                "settings": "action.open_settings", "lights.next": "action.next_lights", "lights.previous": "action.previous_lights",
+                "lights.on": "action.lights_on", "lights.off": "action.lights_off"]
     return keys[actionKind(action)].map { tr($0) } ?? action
 }
 
@@ -177,7 +182,9 @@ func actionIcon(_ action: String) -> NSImage? {
                    "volume.down": "speaker.minus.fill", "mute.all": "speaker.slash.fill", "open:": "macwindow",
                    "close:": "xmark.square", "url:": "globe", "mute.mic": "mic.slash.fill", "keys:": "keyboard",
                    "nightlight": "moon.fill", "screens.off": "display", "pc.lock": "lock.fill", "pc.sleep": "powersleep",
-                   "profile.previous": "arrow.left", "profile.next": "arrow.right", "settings": "gearshape"]
+                   "profile.previous": "arrow.left", "profile.next": "arrow.right", "settings": "gearshape",
+                   "lights.next": "lightbulb", "lights.previous": "lightbulb", "lights.on": "lightbulb.fill",
+                   "lights.off": "lightbulb.slash"]
     let kind = actionKind(action)
     let name = mutedControl(action) != nil ? "speaker.slash" : profileTarget(action) != nil ? "list.bullet" : symbols[kind]
     return name.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }

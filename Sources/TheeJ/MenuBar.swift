@@ -335,7 +335,27 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     // Only TheeJ's own zoom, so quitting leaves one from Accessibility Zoom alone. A mixer's lights go off.
     func applicationWillTerminate(_ notification: Notification) {
         if zoomTracker != nil { setZoom(0) }
-        engineQueue.sync { for state in boardStates.values { state.lights?.off() } }
+        engineQueue.sync {
+            for (id, state) in boardStates {
+                guard let lights = state.lights else { continue }
+                lights.off()
+                saveFaders(id, lights.faders)
+            }
+        }
+    }
+
+    // A light action: the pattern of the SMC-Mixer the button is on, or of every SMC-Mixer when it is on
+    // another board. Saved at once, as a board's own settings are.
+    func changeLights(_ id: String, _ change: (String) -> String) {
+        var setup = shared.config().setup
+        let own = setup.board(id)?.type == .smc
+        for index in setup.boards.indices where setup.boards[index].type == .smc && (!own || setup.boards[index].id == id) {
+            let pattern = parseLightPattern(change(setup.boards[index].lights))
+            setup.boards[index].lights = pattern
+            if let shown = draft.index(of: setup.boards[index].id) { draft.boards[shown].lights = pattern }
+        }
+        shared.setSetup(setup)
+        applyLights(setup)
     }
 
     @objc func reconnect() {

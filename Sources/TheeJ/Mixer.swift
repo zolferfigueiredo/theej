@@ -92,6 +92,7 @@ func smcMode(_ message: UInt32) -> Bool? {
 // position is unknown until the mixer sends it.
 struct MixerState {
     private(set) var values = Array(repeating: -1, count: mixerColumns)
+    private(set) var lastChanged: Int?  // the column the last feed changed
 
     // The knobs go back to unknown, so each starts again from where its job is.
     mutating func forgetKnobs() {
@@ -101,6 +102,7 @@ struct MixerState {
     // Whether a column changed, and the id of a button just pressed, the same id in either mode. seed is
     // where a knob that hasn't moved yet starts, or nil for the middle.
     mutating func feed(_ message: UInt32, seed: (Int) -> Int? = { _ in nil }) -> (changed: Bool, pressed: Int?) {
+        lastChanged = nil
         let (status, data1, data2) = parts(message)
         switch status & 0xF0 {
         case 0x90:
@@ -128,6 +130,7 @@ struct MixerState {
     private mutating func set(_ column: Int, _ value: Int) -> Bool {
         guard values[column] != value else { return false }
         values[column] = value
+        lastChanged = column
         return true
     }
 }

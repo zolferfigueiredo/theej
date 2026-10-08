@@ -466,7 +466,8 @@ extension MenuBar {
             (tr("action.group.media"), ["media.playpause", "media.previous", "media.next", "volume.up", "volume.down", "mute.all"]),
             (tr("action.group.apps"), ["open:", "close:", "url:"]),
             (tr("action.group.system"), ["mute.mic", "keys:", "nightlight", "screens.off", "pc.lock", "pc.sleep"]),
-            (appName, ["profile.previous", "profile.next"] + board.profiles.indices.map { "profile:\($0)" } + ["settings"]),
+            (appName, ["profile.previous", "profile.next"] + board.profiles.indices.map { "profile:\($0)" }
+                + ["settings", "lights.next", "lights.previous", "lights.on", "lights.off"]),
             (tr("action.group.fkeys"), functionKeys.map(\.action)),
             (tr("action.group.knobs"), pots.map { "mute:\($0)" }),
         ]

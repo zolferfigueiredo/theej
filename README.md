@@ -60,6 +60,7 @@ You need:
 - **One knob, several jobs.** The volume of your Mac, your mic or a single app, a screen's brightness or contrast, Night Shift, a keyboard backlight, screen zoom. Tick several, of any kind, and they all follow the knob or fader.
 - **Any number of boards.** A deej board, an M-VAVE SMC-Mixer and other MIDI controllers side by side, each with its own profiles, shortcuts and calibration.
 - **The SMC-Mixer, ready to go.** Its 8 faders, 8 knobs and 43 buttons are known, over USB or Bluetooth, in DAW or CC mode. Settings draws it as it sits on your desk, and its M buttons light up while their fader is muted.
+- **Lights that dance.** The SMC-Mixer's buttons can show one of 28 light patterns, from Fire and Comet to a binary clock and three EQs that follow your Mac's sound, and the light over a fader blinks while its knob turns.
 - **Buttons that do things.** Play/pause, the volume keys, mute a fader, open an app or a website, press a shortcut, Night Shift, lock, sleep, switch profiles. Several at once, if you like.
 - **The real macOS HUD.** It shows up on the display the knob controls, or for screen zoom the one with the pointer, with the app's own icon for an app's volume.
 - **Finds your controls by itself.** Calibration reads every knob and fader at 0% and at 100%, then has you turn each one back, so it learns which input each is on and which way round it is wired.
@@ -149,7 +150,8 @@ A button does any number of these, in order, each time it is pressed:
 - **System**: Mute microphone, Press a shortcut (any keys, recorded in Settings), Night Shift on/off,
   Turn off screens, Lock the Mac and Sleep.
 - **TheeJ**: Previous profile, Next profile, Go to a profile, and Open Settings, on the board the
-  button is on.
+  button is on, and Next button lights, Previous button lights, Button lights on and Button lights off,
+  for the SMC-Mixer the button is on, or every SMC-Mixer when it is on another board.
 - **Function keys**: F13 to F20, keys no Mac keyboard has, for another app to take.
 - **Knobs**: Mute a knob or fader of the board, which sets its jobs to 0 until pressed again, when
   they go back to where the control now is. On an SMC-Mixer the button lights up while it is muted.
@@ -173,6 +175,14 @@ small Swift app that speaks the same serial protocol and drives macOS instead.
   Its knobs, faders and buttons are read in DAW (Mackie) mode or CC mode alike, and its button lights
   are sent no more than 4 at a time. Lit buttons pull the faders' readings down a little for a few
   seconds, which TheeJ ignores unless a fader moves further than that.
+- An SMC-Mixer's **Button lights**, in its settings, run a pattern on its 32 strip buttons; pressed
+  buttons and mutes still light up over it. The bottom row stays dark, since lighting it makes the
+  mixer report fader moves nobody made. The light over a fader blinks while its knob turns, by sending
+  the mixer a fader position other than the real one; each fader's last position is kept between runs
+  so the blink can always be stopped. The three EQ patterns follow the Mac's sound through a Core Audio
+  tap on every app, which macOS asks you to allow under Screen & System Audio Recording, and shows its
+  recording indicator for while an EQ runs. Nothing is recorded or kept: the sound only lights the
+  buttons.
 - The **output and input volume** go through CoreAudio, in-process, with no `osascript`, and follow
   whichever devices are current.
 - **Each app's volume** goes through Core Audio process taps (macOS 14.2).
@@ -232,8 +242,8 @@ on the Boards tab, its type, whether it is connected, and a gear for its own set
 asks for a name, the type (DIY (Arduino), SMC-Mixer or Other MIDI), the device it is on, and for a
 DIY board or another MIDI controller, its baud rate and how many knobs, faders and buttons it has;
 Next then calibrates it. The gear holds the board's name, its status with Reconnect, the device and,
-for a DIY board, its baud rate and **Speed**, then the board's **Next profile** and **Previous
-profile** shortcuts, with Remove board and Calibrate. Its Save applies at once. Under the boards come
+for a DIY board, its baud rate and **Speed**, for an SMC-Mixer its **Button lights**, then the board's
+**Next profile** and **Previous profile** shortcuts, with Remove board and Calibrate. Its Save applies at once. Under the boards come
 **Language**, **Hide menu bar icon**, **Show profile name**, **Icon** (Mixer, Dial or App icon) and
 **Profile list**, which puts the profiles in the menu.
 

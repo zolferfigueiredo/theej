@@ -54,11 +54,12 @@ struct Board: Codable, Equatable {
     var active = 0
     var next: Shortcut?
     var previous: Shortcut?
+    var lights = ""  // an SMC-Mixer's button light pattern, "" for none
 
     // The keys and their spelling are WeeJ's, so the two apps' boards read alike.
     enum CodingKeys: String, CodingKey {
         case id, name, type, enabled, port, baud = "baudRate", speed, controls, view, profiles, active = "profile"
-        case next = "nextProfile", previous = "previousProfile"
+        case next = "nextProfile", previous = "previousProfile", lights
     }
 
     init(id: String, name: String, type: BoardType) {
@@ -83,6 +84,7 @@ struct Board: Codable, Equatable {
         active = Swift.min(Swift.max((try? values.decode(Int.self, forKey: .active)) ?? 0, 0), profiles.count - 1)
         next = try? values.decodeIfPresent(Shortcut.self, forKey: .next)
         previous = try? values.decodeIfPresent(Shortcut.self, forKey: .previous)
+        lights = type == .smc ? parseLightPattern((try? values.decode(String.self, forKey: .lights)) ?? "") : ""
     }
 
     func encode(to encoder: Encoder) throws {
@@ -100,6 +102,7 @@ struct Board: Codable, Equatable {
         try values.encode(active, forKey: .active)
         try values.encodeIfPresent(next, forKey: .next)
         try values.encodeIfPresent(previous, forKey: .previous)
+        if !lights.isEmpty { try values.encode(lights, forKey: .lights) }
     }
 
     // A board with one profile and its knobs, faders and buttons still to find. An SMC-Mixer's controls

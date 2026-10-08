@@ -237,8 +237,12 @@ func midiMessages(_ id: String, _ messages: [UInt32]) {
         if let lights = state.lights {
             if let daw = smcMode(message), daw != lights.daw { lights.setMode(daw: daw) }
             guard lights.guardian.pass(message, now: now, lightChanged: lights.lastSent) else { continue }
+            if (0xE0..<0xE8).contains(message & 0xFF) {
+                lights.faderMoved(Int(message & 0x0F), lsb: Int(message >> 8 & 0x7F), msb: Int(message >> 16 & 0x7F))
+            }
         }
         let (moved, pressed) = state.mixer.feed(message) { seed(board, state, $0) }
+        if let column = state.mixer.lastChanged, (30..<38).contains(column) { state.lights?.knobTurned(column - 30) }
         changed = changed || moved
         if let pressed {
             state.lights?.hold(pressed, true)
@@ -437,6 +441,19 @@ func startBoards() {
         serialReaders[id] = nil
     }
     midi?.sync()
+    applyLights(setup)
     registerHotKeys(setup)
+}
+
+// Each SMC-Mixer's lights take its pattern, and the Mac's sound is listened to only while one of them follows
+// it, which macOS asks to allow the first time.
+func applyLights(_ setup: Setup) {
+    for board in setup.boards where board.type == .smc {
+        let (id, pattern) = (board.id, board.lights)
+        engineQueue.async { boardStates[id]?.lights?.setPattern(pattern) }
+    }
+    let eq = setup.boards.contains { $0.enabled && $0.type == .smc && isEQ($0.lights) }
+    if eq, !audioCaptureAllowed() { requestAudioCapture { _ in } }
+    followSound(eq)
 }
 #endif
