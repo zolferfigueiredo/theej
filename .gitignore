@@ -2,3 +2,6 @@
 dist/
 .DS_Store
 .swiftpm/
+
+# Worktrees, each a checkout of its own
+.claude/worktrees/
