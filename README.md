@@ -28,9 +28,6 @@
 <p align="center">On Windows? Get <a href="https://weej.zolfer.com">WeeJ</a>.</p>
 
 <p align="center">
-  <img src="docs/screenshots/theej-menu.png" width="447" alt="The TheeJ menu: each knob's job with its level, Settings, Calibrate, the Language list open, and the port">
-</p>
-<p align="center">
   <img src="docs/screenshots/theej-boards-draw-light.png" width="900" alt="Settings, Boards: a board of 5 knobs, 5 faders and 5 buttons drawn as it moves, each with its job, and knob A's jobs ticked beside it">
 </p>
 <p align="center"><a href="#screenshots"><b>More screenshots</b></a></p>
