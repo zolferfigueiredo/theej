@@ -3,5 +3,5 @@ dist/
 .DS_Store
 .swiftpm/
 
-# Worktrees made by Claude Code, each a checkout of its own
+# Worktrees, each a checkout of its own
 .claude/worktrees/
