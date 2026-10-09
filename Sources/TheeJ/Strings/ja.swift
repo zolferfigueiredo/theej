@@ -199,7 +199,7 @@ extension Strings {
         "profile.export": "エクスポート…",
         "profile.export_failed": "プロファイルを保存できませんでした。",
         "profile.import": "インポート…",
-        "profile_list": "プロファイル一覧",
+        "profile_list": "メニューバーのメニューのプロファイル一覧",
         "profile_n": "プロファイル {n}",
         "quit": "TheeJ を終了",
         "reconnect": "再接続",

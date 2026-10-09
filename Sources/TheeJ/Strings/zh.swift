@@ -199,7 +199,7 @@ extension Strings {
         "profile.export": "导出…",
         "profile.export_failed": "无法保存配置方案。",
         "profile.import": "导入…",
-        "profile_list": "配置方案列表",
+        "profile_list": "菜单栏菜单中的配置方案列表",
         "profile_n": "配置方案 {n}",
         "quit": "退出 TheeJ",
         "reconnect": "重新连接",

@@ -264,7 +264,7 @@ Next then calibrates it. The gear holds the board's name, its status with Reconn
 for a DIY board, its baud rate and **Speed**, for an SMC-Mixer its **Button lights**, then the board's
 **Next profile** and **Previous profile** shortcuts, with Remove board and Calibrate. Its Save applies at once. Under the boards come
 **Language**, **Hide menu bar icon**, **Show profile name**, **Icon** (Mixer, Dial or App icon) and
-**Profile list**, which puts the profiles in the menu.
+**Profile list in tray menu**, which puts the profiles in the menu.
 
 **Boards** shows one connected board at a time. Its toolbar picks the board and the profile you are
 editing, and its ⋯ menu edits the profile's name and shortcut, adds a profile, removes the one shown,

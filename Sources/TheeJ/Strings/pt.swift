@@ -199,7 +199,7 @@ extension Strings {
         "profile.export": "Exportar…",
         "profile.export_failed": "Não foi possível salvar o perfil.",
         "profile.import": "Importar…",
-        "profile_list": "Lista de perfis",
+        "profile_list": "Lista de perfis no menu da barra de menus",
         "profile_n": "Perfil {n}",
         "quit": "Encerrar TheeJ",
         "reconnect": "Reconectar",
