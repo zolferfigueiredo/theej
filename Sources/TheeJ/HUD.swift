@@ -48,7 +48,9 @@ func squareIcon(_ symbol: NSImage, tint: NSColor?) -> NSImage {
         symbol.draw(in: NSRect(x: square.midX - size.width / 2, y: square.midY - size.height / 2,
                                width: size.width, height: size.height))
         if let tint {
-            tint.set()  // resolved as it draws, so a dynamic colour follows light and dark
+            // Resolved as it draws, so it follows light and dark. With the app's appearance, since a checkbox draws
+            // its title's images with the system's as current, which differs once NSApp.appearance is set.
+            NSApp.effectiveAppearance.performAsCurrentDrawingAppearance { tint.set() }
             square.fill(using: .sourceAtop)
         }
         return true

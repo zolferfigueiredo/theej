@@ -79,6 +79,22 @@ You need:
 ## Screenshots
 
 <p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/theej-boards-draw.png">
+    <img src="docs/screenshots/theej-boards-draw-light.png" width="900" alt="Settings, Boards, Draw: a board of 5 knobs, 5 faders and 5 buttons drawn as it moves, each with its job, and knob A's jobs ticked beside it">
+  </picture>
+</p>
+<p align="center"><sub>Settings, Boards: the board drawn as it moves. Click a control, or move it, to tick what it does</sub></p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/theej-boards-list.png">
+    <img src="docs/screenshots/theej-boards-list-light.png" width="900" alt="Settings, Boards, List: the knobs, faders and buttons in three columns, each with its jobs or actions">
+  </picture>
+</p>
+<p align="center"><sub>Or as a list: every knob, fader and button with what it does. Drag a control's jobs onto another</sub></p>
+
+<p align="center">
   <img src="docs/screenshots/theej-hud-volume.png" width="200" alt="The macOS volume indicator, raised by a knob">
   &nbsp;&nbsp;&nbsp;
   <img src="docs/screenshots/theej-hud-microphone.png" width="200" alt="TheeJ's microphone indicator">
@@ -371,6 +387,7 @@ Items shows TheeJ by name and icon. Without one it is signed ad hoc.
 ```bash
 ./run.sh /dev/cu.usbserial-1130     # force the first DIY board's port (list them with ls /dev/cu.*)
 ./run.sh -testNotifications YES     # show the update notification, offering the next version
+swift run TheeJ --screenshots docs/screenshots   # retake the Boards screenshots, with a made-up board
 swift test                          # run the tests
 ```
 
