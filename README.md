@@ -30,6 +30,9 @@
 <p align="center">
   <img src="docs/screenshots/theej-menu.png" width="447" alt="The TheeJ menu: each knob's job with its level, Settings, Calibrate, the Language list open, and the port">
 </p>
+<p align="center">
+  <img src="docs/screenshots/theej-boards-draw-light.png" width="900" alt="Settings, Boards: a board of 5 knobs, 5 faders and 5 buttons drawn as it moves, each with its job, and knob A's jobs ticked beside it">
+</p>
 <p align="center"><a href="#screenshots"><b>More screenshots</b></a></p>
 
 ## Install
@@ -58,6 +61,7 @@ You need:
 ## Features
 
 - **One knob, several jobs.** The volume of your Mac, your mic or a single app, a screen's brightness or contrast, Night Shift, a keyboard backlight, screen zoom. Tick several, of any kind, and they all follow the knob or fader.
+- **Your board, drawn.** The Boards tab draws any board with its knobs and faders moving as you move the real ones, and what each one does under it. Click a control, or just move it, to tick its jobs beside the drawing, or switch to List to see every control at once.
 - **Any number of boards.** A deej board, an M-VAVE SMC-Mixer and other MIDI controllers side by side, each with its own profiles, shortcuts and calibration.
 - **The SMC-Mixer, ready to go.** Its 8 faders, 8 knobs and 43 buttons are known, over USB or Bluetooth, in DAW or CC mode. Settings draws it as it sits on your desk, and its M buttons light up while their fader is muted.
 - **Lights that dance.** The SMC-Mixer's buttons can show one of 28 light patterns, from Fire and Comet to a binary clock and three EQs that follow your Mac's sound, and the light over a fader blinks while its knob turns.
