@@ -104,14 +104,12 @@ You need:
 <p align="center"><sub>The indicator on the display a knob controls: the volume, the microphone, and one app's volume with its icon</sub></p>
 
 <p align="center">
-  <img src="docs/screenshots/theej-settings-general.png" width="460" alt="Settings, General: a profile's knobs, some doing several jobs, apps with their icons">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/theej-settings-general.png">
+    <img src="docs/screenshots/theej-settings-general-light.png" width="460" alt="Settings, General: m1ddc installed, a connected board with its gear, then the language, the menu bar icon and the profile list">
+  </picture>
 </p>
-<p align="center"><sub>Settings, General: what each knob does. One knob can do several jobs, an app's volume with its icon</sub></p>
-
-<p align="center">
-  <img src="docs/screenshots/theej-settings-language.png" width="460" alt="Settings, App settings: the language, shortcuts, menu bar and sensitivity, with the language list open">
-</p>
-<p align="center"><sub>Settings, App settings: the language, shortcuts, menu bar and sensitivity</sub></p>
+<p align="center"><sub>Settings, General: your boards, each on or off with its gear, then the language and the menu bar</sub></p>
 
 <p align="center">
   <img src="docs/screenshots/theej-calibration.png" width="400" alt="Calibration, knob A found: turn it back and forth for 20 seconds">
@@ -387,7 +385,7 @@ Items shows TheeJ by name and icon. Without one it is signed ad hoc.
 ```bash
 ./run.sh /dev/cu.usbserial-1130     # force the first DIY board's port (list them with ls /dev/cu.*)
 ./run.sh -testNotifications YES     # show the update notification, offering the next version
-swift run TheeJ --screenshots docs/screenshots   # retake the Boards screenshots, with a made-up board
+swift run TheeJ --screenshots docs/screenshots   # retake the Settings screenshots, with a made-up board
 swift test                          # run the tests
 ```
 

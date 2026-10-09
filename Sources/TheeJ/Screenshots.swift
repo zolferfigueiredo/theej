@@ -2,11 +2,13 @@
 import AppKit
 import ScreenCaptureKit
 
-// Settings' Boards tab with a made-up board of 5 knobs, 5 faders and 5 buttons, in Draw and List, dark and
-// light, written as the README's PNGs. Nothing is saved.
+// Settings' General tab and Boards tab, in Draw and List, with a made-up board of 5 knobs, 5 faders and 5 buttons,
+// dark and light, written as the README's PNGs. Nothing is saved.
 func takeScreenshots(into dir: URL) -> Never {
-    // The argument domain is never written to disk. updateEvery 0 keeps MenuBar.init from checking for updates.
-    UserDefaults.standard.setVolatileDomain(["language": "en", "updateEvery": 0], forName: UserDefaults.argumentDomain)
+    // The argument domain is never written to disk. updateEvery 0 keeps MenuBar.init from checking for updates, and
+    // WhenScrolling hides the scroll bars a connected mouse would show.
+    UserDefaults.standard.setVolatileDomain(["language": "en", "updateEvery": 0, "AppleShowScrollBars": "WhenScrolling"],
+                                            forName: UserDefaults.argumentDomain)
     var board = Board.make(id: nextBoardID(0), name: "Desk board", type: .diy, knobs: 5, faders: 5, buttons: 5,
                            profileName: tr("default_profile"))
     for index in board.controls.indices { board.controls[index].input = index }
@@ -26,16 +28,18 @@ func takeScreenshots(into dir: URL) -> Never {
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             bar.showSettings()
-            bar.showTab(.boards)
             for (look, suffix) in [(NSAppearance.Name.aqua, "-light"), (.darkAqua, "")] {
                 NSApp.appearance = NSAppearance(named: look)
-                for (list, view) in [(false, "draw"), (true, "list")] {
+                for (tab, list, name) in [(NSToolbarItem.Identifier.general, false, "settings-general"), (.boards, false, "boards-draw"),
+                                          (.boards, true, "boards-list")] {
                     bar.draft.boards[0].list = list
-                    bar.reloadBoards()
-                    bar.fitSettings()
-                    try await Task.sleep(for: .seconds(0.7))
+                    bar.showTab(tab)
+                    // NSApp.activate() is refused while another app is in use, and an inactive window draws grey. The
+                    // deprecated call still takes focus; by selector, as its warning would fail CI.
+                    NSApp.perform(NSSelectorFromString("activateIgnoringOtherApps:"), with: true)
+                    try await Task.sleep(for: .seconds(1.5))
                     let image = try await capture(bar.settingsWindow!)
-                    let file = dir.appendingPathComponent("theej-boards-\(view)\(suffix).png")
+                    let file = dir.appendingPathComponent("theej-\(name)\(suffix).png")
                     try NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])!.write(to: file)
                     print(file.path)
                 }
