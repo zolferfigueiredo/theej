@@ -37,9 +37,10 @@ final class Shared {
         return lines[id] ?? []
     }
 
-    func setSetup(_ value: Setup) {
+    // save false keeps it in memory only, as the screenshots need.
+    func setSetup(_ value: Setup, save: Bool = true) {
         lock.lock(); setup = value; lock.unlock()
-        value.save()
+        if save { value.save() }
     }
 
     func setCalibrating(_ id: String?) {

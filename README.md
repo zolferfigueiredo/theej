@@ -113,9 +113,12 @@ You need:
 <p align="center"><sub>Settings, General: your boards, each on or off with its gear, then the language and the menu bar</sub></p>
 
 <p align="center">
-  <img src="docs/screenshots/theej-calibration.png" width="400" alt="Calibration, knob A found: turn it back and forth for 20 seconds">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/theej-calibration.png">
+    <img src="docs/screenshots/theej-calibration-light.png" width="420" alt="Calibrate Desk board, step 2 of 15: turn Knob B back to 0%, with Start again, Skip and Cancel">
+  </picture>
 </p>
-<p align="center"><sub>Calibration finds each knob, then sweeps it clean</sub></p>
+<p align="center"><sub>Calibration reads every knob and fader at 0% and at 100%, then finds each one as you turn it back</sub></p>
 
 ## What a knob or fader can do
 
@@ -386,7 +389,7 @@ Items shows TheeJ by name and icon. Without one it is signed ad hoc.
 ```bash
 ./run.sh /dev/cu.usbserial-1130     # force the first DIY board's port (list them with ls /dev/cu.*)
 ./run.sh -testNotifications YES     # show the update notification, offering the next version
-swift run TheeJ --screenshots docs/screenshots   # retake the Settings screenshots, with a made-up board
+swift run TheeJ --screenshots docs/screenshots   # retake the Settings and calibration screenshots, with a made-up board
 swift test                          # run the tests
 ```
 

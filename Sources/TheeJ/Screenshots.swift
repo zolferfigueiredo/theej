@@ -2,8 +2,9 @@
 import AppKit
 import ScreenCaptureKit
 
-// Settings' General tab and Boards tab, in Draw and List, with a made-up board of 5 knobs, 5 faders and 5 buttons,
-// dark and light, written as the README's PNGs. Nothing is saved.
+// Settings' General tab and Boards tab, in Draw and List, and the calibration window finding knob B, with a made-up
+// board of 5 knobs, 5 faders and 5 buttons, dark and light, written as the README's PNGs. Nothing is saved: the
+// board stands in for the saved ones in memory only.
 func takeScreenshots(into dir: URL) -> Never {
     // The argument domain is never written to disk. updateEvery 0 keeps MenuBar.init from checking for updates, and
     // WhenScrolling hides the scroll bars a connected mouse would show.
@@ -15,6 +16,9 @@ func takeScreenshots(into dir: URL) -> Never {
     board.profiles[0].jobs = board.fitted([[.master], [.microphone], [.nightShift], [.zoom], [.builtinKeyboard],
                                            [.builtinBrightness], [.builtinContrast], [.master, .microphone], [.externalKeyboard], []])
     board.profiles[0].buttons = [10: ["media.playpause"], 11: ["media.next"], 12: ["mute.mic"], 13: ["profile.next"]]
+    var setup = shared.config().setup
+    setup.boards = [board]
+    shared.setSetup(setup, save: false)
     shared.setStatus(board.id, BoardStatus(connected: true, port: "/dev/cu.usbmodem1101"))
     let bar = MenuBar()
     bar.draft.boards = [board]
@@ -38,11 +42,25 @@ func takeScreenshots(into dir: URL) -> Never {
                     // deprecated call still takes focus; by selector, as its warning would fail CI.
                     NSApp.perform(NSSelectorFromString("activateIgnoringOtherApps:"), with: true)
                     try await Task.sleep(for: .seconds(1.5))
-                    let image = try await capture(bar.settingsWindow!)
-                    let file = dir.appendingPathComponent("theej-\(name)\(suffix).png")
-                    try NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])!.write(to: file)
-                    print(file.path)
+                    try await save(bar.settingsWindow!, as: "theej-\(name)\(suffix).png", in: dir)
                 }
+                // Read at 0% and at 100%, then knob A turned back to 0%: the window asks for knob B.
+                if bar.wizard == nil {
+                    let board = bar.draft.boards[0]
+                    bar.startWizard(board.id)
+                    let pots = board.controls.indices.filter { board.controls[$0].kind != .button }
+                    let frame = { (pot: Int) in board.controls.indices.map { pots.contains($0) ? pot : 0 } }
+                    bar.wizard?.run.feed(frame(0))
+                    bar.wizard?.run.next()
+                    bar.wizard?.run.feed(frame(1023))
+                    bar.wizard?.run.next()
+                    bar.wizard?.run.feed(frame(1023).enumerated().map { $0.offset == 0 ? 0 : $0.element })
+                    bar.showStep()
+                }
+                bar.present(bar.calibrationWindow!)
+                NSApp.perform(NSSelectorFromString("activateIgnoringOtherApps:"), with: true)
+                try await Task.sleep(for: .seconds(1.5))
+                try await save(bar.calibrationWindow!, as: "theej-calibration\(suffix).png", in: dir)
             }
             exit(0)
         } catch {
@@ -52,6 +70,14 @@ func takeScreenshots(into dir: URL) -> Never {
     }
     NSApplication.shared.run()
     exit(0)
+}
+
+@available(macOS 14.4, *)
+@MainActor
+private func save(_ window: NSWindow, as name: String, in dir: URL) async throws {
+    let file = dir.appendingPathComponent(name)
+    try NSBitmapImageRep(cgImage: try await capture(window)).representation(using: .png, properties: [:])!.write(to: file)
+    print(file.path)
 }
 
 // currentProcess needs no Screen Recording permission, since it only reaches this app's own windows.
