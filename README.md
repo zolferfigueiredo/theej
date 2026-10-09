@@ -28,7 +28,7 @@
 <p align="center">On Windows? Get <a href="https://weej.zolfer.com">WeeJ</a>.</p>
 
 <p align="center">
-  <img src="docs/screenshots/theej-menu.png" width="447" alt="The TheeJ menu: each knob's job with its level, Settings, Calibrate, the Language list open, and the port">
+  <img src="docs/screenshots/theej-boards-draw-light.png" width="900" alt="Settings, Boards: a board of 5 knobs, 5 faders and 5 buttons drawn as it moves, each with its job, and knob A's jobs ticked beside it">
 </p>
 <p align="center"><a href="#screenshots"><b>More screenshots</b></a></p>
 
@@ -58,6 +58,7 @@ You need:
 ## Features
 
 - **One knob, several jobs.** The volume of your Mac, your mic or a single app, a screen's brightness or contrast, Night Shift, a keyboard backlight, screen zoom. Tick several, of any kind, and they all follow the knob or fader.
+- **Your board, drawn.** The Boards tab draws any board with its knobs and faders moving as you move the real ones, and what each one does under it. Click a control, or just move it, to tick its jobs beside the drawing, or switch to List to see every control at once.
 - **Any number of boards.** A deej board, an M-VAVE SMC-Mixer and other MIDI controllers side by side, each with its own profiles, shortcuts and calibration.
 - **The SMC-Mixer, ready to go.** Its 8 faders, 8 knobs and 43 buttons are known, over USB or Bluetooth, in DAW or CC mode. Settings draws it as it sits on your desk, and its M buttons light up while their fader is muted.
 - **Lights that dance.** The SMC-Mixer's buttons can show one of 28 light patterns, from Fire and Comet to a binary clock and three EQs that follow your Mac's sound, and the light over a fader blinks while its knob turns.
@@ -79,6 +80,22 @@ You need:
 ## Screenshots
 
 <p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/theej-boards-draw.png">
+    <img src="docs/screenshots/theej-boards-draw-light.png" width="900" alt="Settings, Boards, Draw: a board of 5 knobs, 5 faders and 5 buttons drawn as it moves, each with its job, and knob A's jobs ticked beside it">
+  </picture>
+</p>
+<p align="center"><sub>Settings, Boards: the board drawn as it moves. Click a control, or move it, to tick what it does</sub></p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/theej-boards-list.png">
+    <img src="docs/screenshots/theej-boards-list-light.png" width="900" alt="Settings, Boards, List: the knobs, faders and buttons in three columns, each with its jobs or actions">
+  </picture>
+</p>
+<p align="center"><sub>Or as a list: every knob, fader and button with what it does. Drag a control's jobs onto another</sub></p>
+
+<p align="center">
   <img src="docs/screenshots/theej-hud-volume.png" width="200" alt="The macOS volume indicator, raised by a knob">
   &nbsp;&nbsp;&nbsp;
   <img src="docs/screenshots/theej-hud-microphone.png" width="200" alt="TheeJ's microphone indicator">
@@ -88,14 +105,12 @@ You need:
 <p align="center"><sub>The indicator on the display a knob controls: the volume, the microphone, and one app's volume with its icon</sub></p>
 
 <p align="center">
-  <img src="docs/screenshots/theej-settings-general.png" width="460" alt="Settings, General: a profile's knobs, some doing several jobs, apps with their icons">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/theej-settings-general.png">
+    <img src="docs/screenshots/theej-settings-general-light.png" width="460" alt="Settings, General: m1ddc installed, a connected board with its gear, then the language, the menu bar icon and the profile list">
+  </picture>
 </p>
-<p align="center"><sub>Settings, General: what each knob does. One knob can do several jobs, an app's volume with its icon</sub></p>
-
-<p align="center">
-  <img src="docs/screenshots/theej-settings-language.png" width="460" alt="Settings, App settings: the language, shortcuts, menu bar and sensitivity, with the language list open">
-</p>
-<p align="center"><sub>Settings, App settings: the language, shortcuts, menu bar and sensitivity</sub></p>
+<p align="center"><sub>Settings, General: your boards, each on or off with its gear, then the language and the menu bar</sub></p>
 
 <p align="center">
   <img src="docs/screenshots/theej-calibration.png" width="400" alt="Calibration, knob A found: turn it back and forth for 20 seconds">
@@ -248,7 +263,7 @@ Next then calibrates it. The gear holds the board's name, its status with Reconn
 for a DIY board, its baud rate and **Speed**, for an SMC-Mixer its **Button lights**, then the board's
 **Next profile** and **Previous profile** shortcuts, with Remove board and Calibrate. Its Save applies at once. Under the boards come
 **Language**, **Hide menu bar icon**, **Show profile name**, **Icon** (Mixer, Dial or App icon) and
-**Profile list**, which puts the profiles in the menu.
+**Profile list in tray menu**, which puts the profiles in the menu.
 
 **Boards** shows one connected board at a time. Its toolbar picks the board and the profile you are
 editing, and its ⋯ menu edits the profile's name and shortcut, adds a profile, removes the one shown,
@@ -371,6 +386,7 @@ Items shows TheeJ by name and icon. Without one it is signed ad hoc.
 ```bash
 ./run.sh /dev/cu.usbserial-1130     # force the first DIY board's port (list them with ls /dev/cu.*)
 ./run.sh -testNotifications YES     # show the update notification, offering the next version
+swift run TheeJ --screenshots docs/screenshots   # retake the Settings screenshots, with a made-up board
 swift test                          # run the tests
 ```
 

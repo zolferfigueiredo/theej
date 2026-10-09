@@ -49,6 +49,9 @@ extension MenuBar {
         for (index, view) in views.enumerated() where view is NSBox && index + 1 < views.count {
             boardsPage.setCustomSpacing(16, after: view)
         }
+        // Its own size before its first layout: built from General, it is not in the window yet and has none, and the
+        // inspector's ticks would wrap at a squeezed width.
+        boardsPage.setFrameSize(boardsPage.fittingSize)
         boardsPage.layoutSubtreeIfNeeded()
         for (key, scroll) in scrollers {
             if let y = scrolled[key] {

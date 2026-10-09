@@ -25,6 +25,11 @@ if let flag = args.firstIndex(of: "--iconset"), flag + 1 < args.count {
     exit(0)
 }
 
+// Before the running-copy check, so it can run beside the installed TheeJ.
+if let flag = args.firstIndex(of: "--screenshots"), flag + 1 < args.count {
+    takeScreenshots(into: URL(fileURLWithPath: args[flag + 1]))
+}
+
 setvbuf(stdout, nil, _IOLBF, 0)
 
 let app = NSApplication.shared

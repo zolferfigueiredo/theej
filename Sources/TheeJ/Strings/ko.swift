@@ -199,7 +199,7 @@ extension Strings {
         "profile.export": "내보내기…",
         "profile.export_failed": "프로필을 저장할 수 없습니다.",
         "profile.import": "가져오기…",
-        "profile_list": "프로필 목록",
+        "profile_list": "메뉴 막대 메뉴의 프로필 목록",
         "profile_n": "프로필 {n}",
         "quit": "TheeJ 종료",
         "reconnect": "다시 연결",
