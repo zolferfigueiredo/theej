@@ -249,22 +249,37 @@ final class AppTap {
 }
 
 // A private device that joins a tap to the output device, so one callback reads the tap on the output's clock.
+// An aggregate can't hold another, and gives silence if asked to, so an aggregate output, a Multi-Output Device
+// among them, is rebuilt from its own devices, stacked if it was, and the tap plays on every one of them.
 private func joinTap(_ tap: UUID, to output: AudioDeviceID, uid: String) -> AudioObjectID? {
+    let composition = (read(output, kAudioAggregateDevicePropertyComposition, Unmanaged<CFDictionary>?.none) ?? nil)?
+        .takeRetainedValue() as? [String: Any]
+    let main = composition?[kAudioAggregateDeviceMainSubDeviceKey] as? String ?? uid
     // Drift compensation crackles on Bluetooth, which is where other tap apps turned it off.
-    let transport: UInt32 = read(output, kAudioDevicePropertyTransportType, 0) ?? 0
+    let transport: UInt32 = read(device(main) ?? output, kAudioDevicePropertyTransportType, 0) ?? 0
     let bluetooth = transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
     let device: [String: Any] = [
         kAudioAggregateDeviceNameKey: "TheeJ",
         kAudioAggregateDeviceUIDKey: UUID().uuidString,
-        kAudioAggregateDeviceMainSubDeviceKey: uid,
+        kAudioAggregateDeviceMainSubDeviceKey: main,
         kAudioAggregateDeviceIsPrivateKey: true,
-        kAudioAggregateDeviceIsStackedKey: false,
+        kAudioAggregateDeviceIsStackedKey: composition?[kAudioAggregateDeviceIsStackedKey] as? Bool ?? false,
         kAudioAggregateDeviceTapAutoStartKey: true,
-        kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: uid]],
+        kAudioAggregateDeviceSubDeviceListKey: composition?[kAudioAggregateDeviceSubDeviceListKey] ?? [[kAudioSubDeviceUIDKey: uid]],
         kAudioAggregateDeviceTapListKey: [[kAudioSubTapDriftCompensationKey: !bluetooth, kAudioSubTapUIDKey: tap.uuidString]],
     ]
     var aggregate = AudioObjectID(kAudioObjectUnknown)
     return AudioHardwareCreateAggregateDevice(device as CFDictionary, &aggregate) == noErr ? aggregate : nil
+}
+
+private func device(_ uid: String) -> AudioDeviceID? {
+    var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyTranslateUIDToDevice, mScope: kAudioObjectPropertyScopeGlobal,
+                                             mElement: kAudioObjectPropertyElementMain)
+    var qualifier = Unmanaged.passRetained(uid as CFString), device = AudioDeviceID(kAudioObjectUnknown), size = UInt32(MemoryLayout<AudioDeviceID>.size)
+    defer { qualifier.release() }
+    guard AudioObjectGetPropertyData(system, &address, UInt32(MemoryLayout.size(ofValue: qualifier)), &qualifier, &size, &device) == noErr,
+          device != kAudioObjectUnknown else { return nil }
+    return device
 }
 
 // MARK: The Mac's sound, for the EQ light patterns
