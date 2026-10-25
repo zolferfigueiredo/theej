@@ -331,6 +331,7 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         }
         guard let first = switched.first else { return }
         shared.setSetup(setup)
+        keepAppVolumes(for: setup)
         refresh()
         let name = setup.boards.count > 1 ? "\(first.name) · \(first.profile.name)" : first.profile.name
         showHUD(hudProfile, on: pointerDisplayID(), 0, text: name, place: (first.active, first.profiles.count))

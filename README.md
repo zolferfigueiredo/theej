@@ -131,17 +131,18 @@ You need:
   the knob to the app's own level at the top. macOS has no volume per app, so TheeJ captures the
   app's sound with a Core Audio process tap and plays it back at the knob's level, about a hundredth
   of a second later. That has three consequences. macOS must allow TheeJ under Screen & System Audio
-  Recording, which Apply asks for the first time, and a TheeJ started before the answer needs
-  reopening. macOS shows its recording indicator while a turned-down app plays. And a sound can lose
-  its first tenth of a second. At the top of the knob there is no capture at all. The app is back to
-  its own level when TheeJ quits, or when no profile gives it a knob. It needs a TheeJ signed with a
-  certificate, as the release is: macOS gives an ad hoc build silence without asking.
-- **Focused app** (macOS 14.2 or later): the volume of the app in front, the same way. An app keeps
-  its level when another comes to the front, until TheeJ quits or no profile has Focused app. With
-  TheeJ in front, the knob does nothing.
-- **Other apps** (macOS 14.2 or later): the volume of every other app in the Dock, the same way, as
-  deej's `deej.unmapped`. That leaves out the apps a knob of a board's active profile names and the
-  ones Focused app has turned, which have volumes of their own.
+  Recording, which Apply asks for the first time, and a yes works at once. The app is captured whenever it plays, even at the top of the knob, since going between
+  its own sound and TheeJ's while it plays would cut it, so macOS shows its recording indicator
+  meanwhile. And a sound can lose its first tenth of a second. The app is back to its own level,
+  uncaptured, when TheeJ quits, or when no profile in use gives it a knob. It needs a TheeJ signed
+  with a certificate, as the release is: macOS gives an ad hoc build silence without asking.
+- **Focused app** (macOS 14.2 or later): the volume of the app in front, the same way, except that
+  an app is captured only once turned down, and, back at the top, until it goes quiet: the first turn
+  down from the top while it plays is a short cut. An app keeps its level when another comes to the
+  front, until TheeJ quits or no profile has Focused app. With TheeJ in front, the knob does nothing.
+- **Other apps** (macOS 14.2 or later): the volume of every other app in the Dock, the same way as
+  Focused app, as deej's `deej.unmapped`. That leaves out the apps a knob of a board's active
+  profile names and the ones Focused app has turned, which have volumes of their own.
 - **Built-in display brightness**: the Retina panel, through DisplayServices.
 - **Built-in display contrast**: the Accessibility "Display contrast" setting, normal at the bottom
   of the knob and maximum at the top. External screens ignore it.
@@ -392,9 +393,11 @@ brew install m1ddc
 ```
 
 `run.sh` quits any running TheeJ, builds with `build.sh --fast` (a debug build for this Mac, without
-the tests) and runs the new build in the terminal,
-where it prints live slider values so you can see which physical slider is which index. Its first
-run also turns on the repository's git hook, which refuses commits made directly on `main`.
+the tests) and opens the new build with its output in the terminal,
+where it prints live slider values so you can see which physical slider is which index. It is opened
+by macOS rather than run by the terminal, so macOS asks whether TheeJ may record audio, not the
+terminal. Its first run also turns on the repository's git hook, which refuses commits made directly
+on `main`.
 `build.sh` runs the tests (`swift test`), then produces `.build/TheeJ.app`, a universal app for
 Apple silicon and Intel, signed with your Apple Development certificate when you have one, so Login
 Items shows TheeJ by name and icon. Without one it is signed ad hoc.

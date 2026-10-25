@@ -5,7 +5,7 @@ import CoreAudio
 // A knob sets one app's volume by capturing the app's audio with a Core Audio process tap (macOS 14.2)
 // and playing it back at the knob's level. The tap mutes the app's own output, so everything it plays
 // comes through here. macOS shows its recording indicator while a tap is read, so a tap is read only
-// while its app plays, and at full volume there is no tap at all. Taps die with TheeJ, which unmutes.
+// while its app plays. Taps die with TheeJ, which unmutes.
 
 // Everything here runs on this queue, never on the serial thread: making a tap takes a while.
 let appQueue = DispatchQueue(label: "theej.apps")
@@ -120,6 +120,7 @@ final class AppTap {
     let processes: Set<AudioObjectID>
     let output: AudioDeviceID
     private let tap: AudioObjectID
+    private let description: NSObject  // the CATapDescription, changed to change how the tap mutes
     private let aggregate: AudioObjectID
     private let proc: AudioDeviceIOProcID
     private(set) var running = false
@@ -132,19 +133,21 @@ final class AppTap {
         set { level[0] = newValue }
     }
 
-    private init(processes: Set<AudioObjectID>, output: AudioDeviceID, tap: AudioObjectID, aggregate: AudioObjectID,
-                 proc: AudioDeviceIOProcID, level: UnsafeMutablePointer<Float32>) {
-        (self.processes, self.output, self.tap, self.aggregate, self.proc, self.level) = (processes, output, tap, aggregate, proc, level)
+    private init(processes: Set<AudioObjectID>, output: AudioDeviceID, tap: AudioObjectID, description: NSObject,
+                 aggregate: AudioObjectID, proc: AudioDeviceIOProcID, level: UnsafeMutablePointer<Float32>) {
+        (self.processes, self.output, self.tap, self.description, self.aggregate, self.proc, self.level) =
+            (processes, output, tap, description, aggregate, proc, level)
     }
 
     // A private tap on the processes, and a private device that joins it to the output device, so one
-    // callback can read the tap and write the output. Nothing is read until run(true).
-    static func make(_ processes: Set<AudioObjectID>, gain: Float32) -> AppTap? {
+    // callback can read the tap and write the output. Nothing is read until run(true). Not muted, the app
+    // plays by itself until then.
+    static func make(_ processes: Set<AudioObjectID>, gain: Float32, muted: Bool) -> AppTap? {
         guard #available(macOS 14.2, *), let output = defaultDevice(input: false),
               let uid = readString(output, kAudioDevicePropertyDeviceUID) else { return nil }
         let description = CATapDescription(stereoMixdownOfProcesses: Array(processes))
         description.name = "TheeJ"
-        description.muteBehavior = .muted
+        description.muteBehavior = muted ? .muted : .mutedWhenTapped
         description.isPrivate = true
         var tap = AudioObjectID(kAudioObjectUnknown)
         guard AudioHardwareCreateProcessTap(description, &tap) == noErr else { return nil }
@@ -185,7 +188,8 @@ final class AppTap {
             level.deallocate()
             return nil
         }
-        return AppTap(processes: processes, output: output, tap: tap, aggregate: aggregate, proc: proc, level: level)
+        return AppTap(processes: processes, output: output, tap: tap, description: description, aggregate: aggregate,
+                      proc: proc, level: level)
     }
 
     // Reading the tap is what plays the app, and what shows the recording indicator.
@@ -195,12 +199,33 @@ final class AppTap {
             level[1] = level[0]  // at the knob's level from the first sample
             running = AudioDeviceStart(aggregate, proc) == noErr
         } else {
+            // Muted while it isn't read, so the app's next sound doesn't start at full volume. Changed once
+            // the read has stopped, never while it runs, and the app is quiet now, so it isn't heard.
             AudioDeviceStop(aggregate, proc)
             running = false
+            mute(always: true)
+        }
+    }
+
+    // Muted mutes the app for as long as the tap exists, mutedWhenTapped only while it is read. macOS
+    // switches the latter as the read starts or stops, so the app goes between its own output and the
+    // tap's with no gap, where making or removing a tap takes long enough to be heard.
+    private func mute(always: Bool) {
+        guard #available(macOS 14.2, *), let description = description as? CATapDescription else { return }
+        let before = description.muteBehavior
+        description.muteBehavior = always ? .muted : .mutedWhenTapped
+        guard description.muteBehavior != before else { return }
+        var address = AudioObjectPropertyAddress(mSelector: kAudioTapPropertyDescription, mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        var value = Unmanaged.passUnretained(description)
+        if AudioObjectSetPropertyData(tap, &address, 0, nil, UInt32(MemoryLayout.size(ofValue: value)), &value) != noErr {
+            description.muteBehavior = before
         }
     }
 
     deinit {
+        // The app plays by itself from the moment the read stops, not once the tap is gone.
+        mute(always: false)
         if running { AudioDeviceStop(aggregate, proc) }
         AudioDeviceDestroyIOProcID(aggregate, proc)
         AudioHardwareDestroyAggregateDevice(aggregate)
@@ -353,8 +378,9 @@ func setAppVolume(_ app: String, _ scalar: Float32) {
 // waits for appQueue, which can be busy making a tap.
 func appLevel(_ app: String) -> Float32 { appLevels[app] ?? 1 }
 
-// On Apply: an app no profile gives a knob any more goes back to its own volume, as do the other apps once
-// no profile has Other apps, and the apps Focused app turned once no profile has Focused app.
+// At launch, on Apply and on a profile switch: an app no profile gives a knob any more goes back to its own
+// volume, as do the other apps once no profile has Other apps, and the apps Focused app turned once no
+// profile has Focused app. An app the profile in use gives a knob is tapped from now, before its knob moves.
 func keepAppVolumes(for setup: Setup) {
     let jobs = setup.jobs
     let apps = setup.apps.union(jobs.contains(.otherApps) ? [otherAppsKey] : [])
@@ -365,14 +391,18 @@ func keepAppVolumes(for setup: Setup) {
     }
 }
 
+// The apps a knob of their own is for, in the profiles in use.
+private func knobApps() -> Set<String> {
+    Set(shared.config().setup.boards.filter(\.enabled).flatMap { $0.profile.jobs.joined() }.compactMap { job -> String? in
+        if case .app(let id) = job { return id }
+        return nil
+    })
+}
+
 // The processes of Other apps: those of the apps in the Dock that have no volume of their own, neither a
 // knob's nor a job in a profile in use, so no sound is ever tapped twice. Never TheeJ's.
 private func otherProcesses(_ processes: [AudioObjectID]) -> Set<AudioObjectID> {
-    let used = shared.config().setup.boards.filter(\.enabled).flatMap { $0.profile.jobs.joined() }.compactMap { job -> String? in
-        if case .app(let id) = job { return id }
-        return nil
-    }
-    let own = Set(appGains.keys).subtracting([otherAppsKey]).union(used)
+    let own = Set(appGains.keys).subtracting([otherAppsKey]).union(knobApps())
     let docked = Set(NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular && $0.processIdentifier != getpid() }
         .compactMap(\.bundleIdentifier))
     return Set(processes.filter { process in
@@ -381,15 +411,20 @@ private func otherProcesses(_ processes: [AudioObjectID]) -> Set<AudioObjectID> 
     })
 }
 
-// Ten times a second while any app is turned down, and at once when a knob turns. An app that is turned
-// down and has audio processes gets a tap, which is read only while the app plays.
+// Ten times a second while any app is tapped, and at once when a knob turns. A tapped app that has audio
+// processes gets a tap, which is read only while the app plays. The tap's sound comes out a buffer after the
+// app's own, so going between the two while the app plays is heard as a cut. So an app with a knob of its own
+// is tapped at the top too, from the start, and a knob never cuts it. Focused app and Other apps, which could
+// be any app, are tapped once turned down, and back at the top until they go quiet.
 // ponytail: a sound loses up to this tick's 0.1 s at its start, since playing is noticed by polling (the
 // listener for it doesn't fire on macOS 26). Swapping a tap, when the app's processes or the output
-// device change, is a cut and not a crossfade. No watchdog for a tap that goes silent on its own.
+// device change, is a cut and not a crossfade, and so is Focused app's or Other apps' first turn down
+// from the top while they play. No watchdog for a tap that goes silent on its own.
 private func tendApps() {
     let now = Date()
-    let turnedDown = appGains.filter { $0.value < 1 }
-    if turnedDown.isEmpty {
+    var tapped = appGains.filter { $0.value < 1 || appTaps[$0.key]?.running == true }
+    for app in knobApps() where tapped[app] == nil { tapped[app] = appGains[app] ?? 1 }
+    if tapped.isEmpty {
         appTimer?.cancel()
         appTimer = nil
     } else if appTimer == nil {
@@ -399,12 +434,12 @@ private func tendApps() {
         timer.resume()
         appTimer = timer
     }
-    let allowed = !turnedDown.isEmpty && audioCaptureAllowed()
+    let allowed = !tapped.isEmpty && audioCaptureAllowed()
     let processes = allowed ? readList(system, kAudioHardwarePropertyProcessObjectList) : []
     processInfo = processInfo.filter { processes.contains($0.key) }
     let output = defaultDevice(input: false)
-    for app in Set(appTaps.keys).union(turnedDown.keys) {
-        guard allowed, let gain = turnedDown[app], (retryAfter[app] ?? .distantPast) <= now else {
+    for app in Set(appTaps.keys).union(tapped.keys) {
+        guard allowed, let gain = tapped[app], (retryAfter[app] ?? .distantPast) <= now else {
             appTaps[app] = nil
             continue
         }
@@ -415,10 +450,13 @@ private func tendApps() {
             continue
         }
         if mine.contains(where: { read($0, kAudioProcessPropertyIsRunningOutput, UInt32(0)) == 1 }) { lastPlayed[app] = now }
+        // Two seconds past the last sound, so a gap between songs isn't clipped.
+        let playing = now.timeIntervalSince(lastPlayed[app] ?? .distantPast) < 2
         if appTaps[app]?.processes != mine || appTaps[app]?.output != output {
             // The new tap is made before the old one goes, so the app is muted throughout and nothing
-            // gets out at full volume.
-            let fresh = AppTap.make(mine, gain: gain)
+            // gets out at full volume. An app playing by itself, as a knob leaves the top, is muted only
+            // once the tap is read, so the time making it takes isn't heard as a gap.
+            let fresh = AppTap.make(mine, gain: gain, muted: !playing || appTaps[app] != nil)
             appTaps[app] = fresh
         }
         guard let tap = appTaps[app] else {
@@ -426,8 +464,6 @@ private func tendApps() {
             continue
         }
         tap.gain = gain
-        // Two seconds past the last sound, so a gap between songs isn't clipped.
-        let playing = now.timeIntervalSince(lastPlayed[app] ?? .distantPast) < 2
         tap.run(playing)
         // Never muted and unheard: if reading won't start, let the app play by itself and try again later.
         if playing && !tap.running {

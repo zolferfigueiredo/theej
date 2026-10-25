@@ -731,8 +731,8 @@ extension MenuBar: NSToolbarDelegate {
         field.changed(nil)
     }
 
-    // An app's volume is set by capturing its audio, which macOS has to allow. It asks the first time,
-    // and the answer only reaches a TheeJ started after it.
+    // An app's volume is set by capturing its audio, which macOS has to allow. It asks the first time, and
+    // a yes works at once, in this TheeJ.
     func askForAudioCapture() {
         guard !audioCaptureAllowed() else { return }
         requestAudioCapture { [self] granted in
@@ -775,7 +775,6 @@ extension MenuBar: NSToolbarDelegate {
         startBoards()
         refresh()
         reloadDraft()
-        keepAppVolumes(for: draft)
         if !draft.apps.isEmpty || !draft.jobs.isDisjoint(with: [.focusedApp, .otherApps]) { askForAudioCapture() }
         askForKeyAccess()
     }

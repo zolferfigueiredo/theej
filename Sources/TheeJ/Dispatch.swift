@@ -439,7 +439,7 @@ final class SerialReader {
 var serialReaders: [String: SerialReader] = [:]  // main thread only
 
 // After anything that changes the boards: every DIY board that is on has a reader, started again when its
-// port or speed changed, MIDI boards follow, and the shortcuts are registered again.
+// port or speed changed, MIDI boards follow, the shortcuts are registered again, and the apps' taps follow.
 func startBoards() {
     let setup = shared.config().setup
     var keep: Set<String> = []
@@ -459,6 +459,7 @@ func startBoards() {
     midi?.sync()
     applyLights(setup)
     registerHotKeys(setup)
+    keepAppVolumes(for: setup)
 }
 
 // Each SMC-Mixer's lights take its pattern, and the Mac's sound is listened to only while one of them follows

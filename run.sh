@@ -13,4 +13,10 @@ fi
 if pgrep -x TheeJ >/dev/null; then osascript -e 'quit app id "com.zolfer.theej"'; fi
 while pgrep -x TheeJ >/dev/null; do sleep 0.2; done
 ./build.sh --fast
-exec .build/TheeJ.app/Contents/MacOS/TheeJ "$@"
+# Opened by macOS, not run from this shell: macOS would hold the terminal responsible for TheeJ and ask
+# whether the terminal may record audio, so no app's knob would work. The output still comes here, and
+# Control-C still quits it.
+output=()
+if [ -t 0 ] && [ -t 1 ]; then output=(--stdout "$(tty)" --stderr "$(tty)"); fi
+trap 'osascript -e "quit app id \"com.zolfer.theej\""' INT TERM
+open -W "${output[@]}" .build/TheeJ.app --args "$@"
