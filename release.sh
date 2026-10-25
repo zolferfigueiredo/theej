@@ -20,6 +20,13 @@ if gh release view "v$VERSION" -R zolferfigueiredo/theej >/dev/null 2>&1; then
   echo "v$VERSION is already released."
   exit 0
 fi
+# A version with a "-", 2.7.0-dac-beta.1, is a beta: a pre-release, which GitHub never calls latest, so neither the
+# apps' update check nor the website or the cask offer it. A beta branch publishes betas only.
+PRERELEASE=()
+case $VERSION in *-*) PRERELEASE=(--prerelease) ;; esac
+case "${GITHUB_REF_NAME:-}" in *-beta)
+  [ ${#PRERELEASE[@]} -gt 0 ] || { echo "$GITHUB_REF_NAME publishes betas only, and $VERSION isn't one."; exit 0; } ;;
+esac
 
 # The build half.
 if [ "$MODE" != sign ]; then
@@ -100,4 +107,4 @@ echo "Release ready: $DMG"
 }
 # The apps learn the newest version from releases/latest/download/latest.json, the same file the website serves.
 printf '{"version": "%s"}\n' "$VERSION" > dist/latest.json
-gh release create "v$VERSION" "$DMG" dist/latest.json -R zolferfigueiredo/theej --target "$(git rev-parse HEAD)" --title "$NAME $VERSION" --generate-notes
+gh release create "v$VERSION" "$DMG" dist/latest.json -R zolferfigueiredo/theej --target "$(git rev-parse HEAD)" --title "$NAME $VERSION" --generate-notes "${PRERELEASE[@]}"

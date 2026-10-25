@@ -29,7 +29,9 @@ jobs:
           if git diff --quiet "$base"...HEAD -- Sources Package.swift; then echo "The app is unchanged."; exit 0; fi
           version() { git show "$1:Sources/TheeJ/Version.swift" | sed -n 's/^let appVersion = "\(.*\)"$/\1/p'; }
           old=$(version "$base") new=$(version HEAD)
-          if [ "$new" = "$old" ] || [ "$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -n 1)" != "$new" ]; then
+          # A beta's "-" sorts as "~", which sort -V puts before the release: 2.7.0-dac-beta.2 < 2.7.0.
+          top=$(printf '%s\n%s\n' "$old" "$new" | sed 's/-/~/' | sort -V | tail -n 1 | sed 's/~/-/')
+          if [ "$new" = "$old" ] || [ "$top" != "$new" ]; then
             echo "::error file=Sources/TheeJ/Version.swift::The app changed, so appVersion has to go above $old (it is $new)."
             exit 1
           fi

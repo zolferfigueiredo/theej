@@ -15,6 +15,12 @@ import Testing
     ("1.0.0", "0.9.9", true),
     ("0.1.2", "0.1.2", false),
     ("0.1.1", "0.1.2", false),
+    ("2.7.0", "2.7.0-dac-beta.1", true),  // the release after its betas
+    ("2.7.0-dac-beta.1", "2.7.0", false),
+    ("2.7.0-dac-beta.2", "2.7.0-dac-beta.1", true),
+    ("2.7.0-dac-beta.10", "2.7.0-dac-beta.2", true),
+    ("2.6.1", "2.7.0-dac-beta.1", false),  // a fix on main isn't offered to the beta
+    ("", "2.6.0", false),
 ])
 func newerVersion(remote: String, local: String, expected: Bool) {
     #expect(isNewer(remote, than: local) == expected)
