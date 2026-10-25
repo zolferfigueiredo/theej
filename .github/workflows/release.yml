@@ -1,9 +1,10 @@
 name: Release
-# Every push to main whose version isn't released yet becomes a release. GitHub's Mac builds the unsigned app, and
-# the self-hosted runner on z's Mac signs, notarizes and publishes it, since the Developer ID key stays in its keychain.
+# Every push to main whose version isn't released yet becomes a release, and every push to a beta branch
+# (dac-beta) a pre-release. GitHub's Mac builds the unsigned app, and the self-hosted runner on z's Mac signs,
+# notarizes and publishes it, since the Developer ID key stays in its keychain.
 on:
   push:
-    branches: [main]
+    branches: [main, '*-beta']
   workflow_dispatch:
   pull_request:  # builds only, so a change to the release can be tried before it merges
     paths: [release.sh, build.sh, .github/workflows/release.yml]

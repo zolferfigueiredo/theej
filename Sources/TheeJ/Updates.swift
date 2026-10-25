@@ -1,7 +1,16 @@
 import Foundation
 
+/// Past a "-" is a beta of the version before it: 2.7.0-dac-beta.1, then 2.7.0-dac-beta.2, then 2.7.0.
 func isNewer(_ remote: String, than local: String) -> Bool {
-    remote.compare(local, options: .numeric) == .orderedDescending
+    let r = remote.split(separator: "-", maxSplits: 1, omittingEmptySubsequences: false)
+    let l = local.split(separator: "-", maxSplits: 1, omittingEmptySubsequences: false)
+    let order = r[0].compare(l[0], options: .numeric)
+    if order != .orderedSame { return order == .orderedDescending }
+    switch (r.count, l.count) {
+    case (1, 2): return true
+    case (2, 2): return r[1].compare(l[1], options: .numeric) == .orderedDescending
+    default: return false
+    }
 }
 
 /// "1.7.0" gives "1.7.1": the version the test notification offers, so it reads like a real one.
