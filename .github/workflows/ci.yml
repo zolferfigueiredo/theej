@@ -36,10 +36,16 @@ jobs:
             exit 1
           fi
           echo "$old -> $new"
+      # A beta (a version with a "-") leaves the cask on the last release, so brew never installs a beta.
       - name: The cask installs this version
         run: |
           app=$(sed -n 's/^let appVersion = "\(.*\)"$/\1/p' Sources/TheeJ/Version.swift)
           cask=$(sed -n 's/^  version "\(.*\)"$/\1/p' Casks/theej.rb)
+          case $cask in *-*)
+            echo "::error file=Casks/theej.rb::The cask never installs a beta, and $cask is one."
+            exit 1 ;;
+          esac
+          case $app in *-*) echo "$app is a beta, so the cask stays on $cask."; exit 0 ;; esac
           if [ "$cask" != "$app" ]; then
             echo "::error file=Casks/theej.rb::version has to be the app's, $app (it is $cask)."
             exit 1
