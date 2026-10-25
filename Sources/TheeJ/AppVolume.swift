@@ -117,7 +117,7 @@ func appsPlayingSound() -> Set<String> {
 // MARK: One app's tap
 
 final class AppTap {
-    let processes: Set<AudioObjectID>
+    private(set) var processes: Set<AudioObjectID>  // those left out, for an everyoneBut tap
     let output: AudioDeviceID
     private let tap: AudioObjectID
     private let description: NSObject  // the CATapDescription, changed to change how the tap mutes
@@ -141,11 +141,12 @@ final class AppTap {
 
     // A private tap on the processes, and a private device that joins it to the output device, so one
     // callback can read the tap and write the output. Nothing is read until run(true). Not muted, the app
-    // plays by itself until then.
-    static func make(_ processes: Set<AudioObjectID>, gain: Float32, muted: Bool) -> AppTap? {
+    // plays by itself until then. everyoneBut taps every process but these, and one that starts later at once.
+    static func make(_ processes: Set<AudioObjectID>, everyoneBut: Bool = false, gain: Float32, muted: Bool) -> AppTap? {
         guard #available(macOS 14.2, *), let output = defaultDevice(input: false),
               let uid = readString(output, kAudioDevicePropertyDeviceUID) else { return nil }
-        let description = CATapDescription(stereoMixdownOfProcesses: Array(processes))
+        let description = everyoneBut ? CATapDescription(stereoGlobalTapButExcludeProcesses: Array(processes))
+            : CATapDescription(stereoMixdownOfProcesses: Array(processes))
         description.name = "TheeJ"
         description.muteBehavior = muted ? .muted : .mutedWhenTapped
         description.isPrivate = true
@@ -215,12 +216,25 @@ final class AppTap {
         let before = description.muteBehavior
         description.muteBehavior = always ? .muted : .mutedWhenTapped
         guard description.muteBehavior != before else { return }
+        if !describe(description) { description.muteBehavior = before }
+    }
+
+    // Changes who an everyoneBut tap leaves out while it runs, where a new tap would be heard as a cut.
+    // False when macOS won't, and then the description no longer matches the tap, which has to be remade.
+    func exclude(_ processes: Set<AudioObjectID>) -> Bool {
+        guard #available(macOS 14.2, *), let description = description as? CATapDescription else { return false }
+        description.processes = Array(processes)
+        guard describe(description) else { return false }
+        self.processes = processes
+        return true
+    }
+
+    @available(macOS 14.2, *)
+    private func describe(_ description: CATapDescription) -> Bool {
         var address = AudioObjectPropertyAddress(mSelector: kAudioTapPropertyDescription, mScope: kAudioObjectPropertyScopeGlobal,
                                                  mElement: kAudioObjectPropertyElementMain)
         var value = Unmanaged.passUnretained(description)
-        if AudioObjectSetPropertyData(tap, &address, 0, nil, UInt32(MemoryLayout.size(ofValue: value)), &value) != noErr {
-            description.muteBehavior = before
-        }
+        return AudioObjectSetPropertyData(tap, &address, 0, nil, UInt32(MemoryLayout.size(ofValue: value)), &value) == noErr
     }
 
     deinit {
@@ -424,7 +438,9 @@ private func tendApps() {
     let now = Date()
     var tapped = appGains.filter { $0.value < 1 || appTaps[$0.key]?.running == true }
     for app in knobApps() where tapped[app] == nil { tapped[app] = appGains[app] ?? 1 }
-    if tapped.isEmpty {
+    let output = defaultDevice(input: false)
+    let mac = output.map(hasVolume) == false ? macGain : 1
+    if tapped.isEmpty && mac == 1 {
         appTimer?.cancel()
         appTimer = nil
     } else if appTimer == nil {
@@ -434,10 +450,9 @@ private func tendApps() {
         timer.resume()
         appTimer = timer
     }
-    let allowed = !tapped.isEmpty && audioCaptureAllowed()
+    let allowed = (!tapped.isEmpty || mac < 1) && audioCaptureAllowed()
     let processes = allowed ? readList(system, kAudioHardwarePropertyProcessObjectList) : []
     processInfo = processInfo.filter { processes.contains($0.key) }
-    let output = defaultDevice(input: false)
     for app in Set(appTaps.keys).union(tapped.keys) {
         guard allowed, let gain = tapped[app], (retryAfter[app] ?? .distantPast) <= now else {
             appTaps[app] = nil
@@ -463,13 +478,85 @@ private func tendApps() {
             retryAfter[app] = now + 5
             continue
         }
-        tap.gain = gain
+        tap.gain = gain * mac  // its sound isn't in the Mac's tap, so it follows Master volume here
         tap.run(playing)
         // Never muted and unheard: if reading won't start, let the app play by itself and try again later.
         if playing && !tap.running {
             appTaps[app] = nil
             retryAfter[app] = now + 5
         }
+    }
+    tendMac(mac, output, allowed, now)
+}
+
+// MARK: The Mac's volume, on an output with none of its own
+
+// Some USB DACs have no volume macOS can set, so Master volume sets this instead: everything no app tap has
+// is tapped at once and played back at it. Muted keeps the level to come back to, as a device's mute does.
+private let macLock = NSLock()
+private var macLevel: Float32 = 1, macMuted = false  // macLock: set from the engine queue and the main thread
+private var macGain: Float32 = 1
+private var macTap: AppTap?
+private var macRetryAfter = Date.distantPast
+private var askedForMac = false
+
+func softVolume() -> Float32 {
+    macLock.lock()
+    defer { macLock.unlock() }
+    return macLevel
+}
+
+func softMuted() -> Bool {
+    macLock.lock()
+    defer { macLock.unlock() }
+    return macMuted
+}
+
+func setSoftVolume(_ scalar: Float32? = nil, muted: Bool? = nil) {
+    macLock.lock()
+    macLevel = scalar ?? macLevel
+    macMuted = muted ?? macMuted
+    let gain = macMuted ? 0 : appGain(macLevel)
+    macLock.unlock()
+    appQueue.async {
+        macGain = gain
+        tendApps()
+    }
+}
+
+// TheeJ's own audio process plays the app taps back, so the Mac's tap leaves it out, or it would hear itself.
+private func ownProcess() -> AudioObjectID? {
+    var pid = getpid(), process = AudioObjectID(kAudioObjectUnknown), size = UInt32(MemoryLayout<AudioObjectID>.size)
+    var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyTranslatePIDToProcessObject,
+                                             mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    guard AudioObjectGetPropertyData(system, &address, UInt32(MemoryLayout<pid_t>.size), &pid, &size, &process) == noErr,
+          process != kAudioObjectUnknown else { return nil }
+    return process
+}
+
+// After the apps, so it leaves out whatever they tapped. Read for as long as it's turned down, so no sound
+// loses its start, and gone at the top, where the output plays by itself.
+// ponytail: macOS shows its recording indicator all that time. Reaching the top while sound plays is a cut.
+private func tendMac(_ gain: Float32, _ output: AudioDeviceID?, _ allowed: Bool, _ now: Date) {
+    if gain < 1, !allowed, !askedForMac {
+        askedForMac = true
+        requestAudioCapture { _ in }
+    }
+    guard gain < 1, allowed, macRetryAfter <= now, let own = ownProcess() else {
+        macTap = nil
+        return
+    }
+    let mine = Set(appTaps.values.flatMap(\.processes)).union([own])
+    if macTap?.output != output || macTap?.processes != mine && macTap?.exclude(mine) != true {
+        // As for an app, the new one is made muted while the old one still plays.
+        let fresh = AppTap.make(mine, everyoneBut: true, gain: gain, muted: macTap != nil)
+        macTap = fresh
+    }
+    macTap?.gain = gain
+    macTap?.run(true)
+    if macTap?.running != true {
+        macTap = nil
+        macRetryAfter = now + 5
     }
 }
 

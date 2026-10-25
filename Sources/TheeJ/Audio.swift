@@ -41,9 +41,20 @@ func getScalar(_ dev: AudioDeviceID, _ scope: AudioObjectPropertyScope,
     return AudioObjectGetPropertyData(dev, &addr, 0, nil, &size, &value) == noErr ? value : nil
 }
 
+// Whether macOS can set the output's volume. Some USB DACs have none, and then TheeJ turns their sound
+// down itself: setSoftVolume.
+func hasVolume(_ dev: AudioDeviceID) -> Bool {
+    [(virtualMainVolume, UInt32(0)), (kAudioDevicePropertyVolumeScalar, 1)].contains { selector, element in
+        var addr = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioDevicePropertyScopeOutput, mElement: element)
+        var settable: DarwinBoolean = false
+        return AudioObjectHasProperty(dev, &addr) && AudioObjectIsPropertySettable(dev, &addr, &settable) == noErr && settable.boolValue
+    }
+}
+
 // Where setVolume left it, read the same way.
 func volume(input: Bool = false) -> Float32? {
     guard let dev = defaultDevice(input: input) else { return nil }
+    if !input, !hasVolume(dev) { return softVolume() }
     let scope = input ? kAudioDevicePropertyScopeInput : kAudioDevicePropertyScopeOutput
     return getScalar(dev, scope, virtualMainVolume, 0) ?? getScalar(dev, scope, kAudioDevicePropertyVolumeScalar, 1)
 }
@@ -60,6 +71,8 @@ func setMuted(_ muted: Bool, input: Bool = false) {
     var value: UInt32 = muted ? 1 : 0
     if AudioObjectHasProperty(dev, &addr) {
         AudioObjectSetPropertyData(dev, &addr, 0, nil, UInt32(MemoryLayout<UInt32>.size), &value)
+    } else if !input, !hasVolume(dev) {
+        setSoftVolume(muted: muted)
     }
 }
 
@@ -71,6 +84,11 @@ func toggleMute(input: Bool = false) -> Bool? {
     var addr = muteAddress(input: input)
     var value: UInt32 = 0
     var size = UInt32(MemoryLayout<UInt32>.size)
+    if !AudioObjectHasProperty(dev, &addr), !input, !hasVolume(dev) {
+        let muted = !softMuted()
+        setSoftVolume(muted: muted)
+        return muted
+    }
     guard AudioObjectHasProperty(dev, &addr), AudioObjectGetPropertyData(dev, &addr, 0, nil, &size, &value) == noErr else { return nil }
     value = value == 0 ? 1 : 0
     return AudioObjectSetPropertyData(dev, &addr, 0, nil, size, &value) == noErr ? value == 1 : nil
@@ -79,6 +97,7 @@ func toggleMute(input: Bool = false) -> Bool? {
 // Resolved per call so swapping device (headphones connecting) just works.
 func setVolume(_ scalar: Float32, input: Bool = false) {
     guard let dev = defaultDevice(input: input) else { return }
+    if !input, !hasVolume(dev) { return setSoftVolume(scalar) }
     let scope = input ? kAudioDevicePropertyScopeInput : kAudioDevicePropertyScopeOutput
     if setScalar(dev, scope, virtualMainVolume, 0, scalar) { return }
     _ = setScalar(dev, scope, kAudioDevicePropertyVolumeScalar, 1, scalar)
