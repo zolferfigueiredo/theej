@@ -74,7 +74,7 @@ You need:
 - **Any number of knobs.** As many as your sketch sends, from A to Z, then A2, B2 and on.
 - **Same firmware.** Speaks the deej serial protocol, unchanged, at the baud rate your sketch uses.
 - **Few permissions.** Shortcuts need no Accessibility or Input Monitoring access. App volume asks macOS for audio recording access, once. Only a button that presses keys or media keys needs Accessibility, which macOS asks for when you apply one.
-- **Speaks 12 languages.** Deutsch, English, Español, Français, Italiano, Polski, Português, Русский, Українська, 中文, 日本語 and 한국어. **Language** in the menu and on the General tab changes it at once, open windows included.
+- **Speaks 12 languages.** Deutsch, English, Español, Français, Italiano, Polski, Português, Русский, Українська, 中文, 日本語 and 한국어. **Language** on the General tab changes it at once, open windows included.
 - **Lives in the menu bar.** Out of the Dock and Cmd+Tab unless Settings is open or you keep it in the Dock. Reconnects on its own, can launch at login, and installs updates in one click.
 
 ## Screenshots
@@ -245,14 +245,14 @@ using they stay as bright as macOS's own icons. Both icons are drawn in code in
 [Icons.swift](Sources/TheeJ/Icons.swift), the menu bar one by `makeIcon` and the app icon by
 `makeAppIcon`.
 
-Clicking it opens Settings. Right-clicking it, or Control-clicking, opens a menu: Show data below
-first, on by default, then a block for each board that is on, headed by its name and whether it is
-connected. Under the heading come the live value of every one of its jobs, one job per line in control
-order, an app's with its icon, then its profiles, with a check by the active one and each one's
-shortcut. Then come Settings and Language, Launch at
-login and Keep in Dock, About TheeJ, which opens the About tab of Settings, Check for updates… with
-Check automatically (daily, weekly by default, or never), and Quit TheeJ. Settings can leave the
-profiles out.
+Clicking it opens Settings. Right-clicking it, or Control-clicking, opens a menu: Settings first,
+then Show levels, on by default and there only while a board is connected, then a block for each
+board that is on, headed by its name and whether it is connected. Under the heading come the live
+value of every one of its jobs, one job per line in control order, an app's with its icon, then its
+profiles, with a check by the active one and each one's shortcut. Then come Launch at login and Keep
+in Dock, About TheeJ, which opens the About tab of Settings, Check for updates… with Check
+automatically (daily, weekly by default, or never), and Quit TheeJ. Settings can leave the profiles
+out.
 
 Settings can show each connected board's profile name beside the icon, or hide the icon altogether.
 **Keep in Dock** pins a shortcut to TheeJ in the Dock, as the Dock's own Keep in Dock does; clicking it

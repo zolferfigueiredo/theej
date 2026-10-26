@@ -238,7 +238,7 @@ extension Strings {
         "shortcut.clash": "此设备板已在使用该快捷键。请换一个。",
         "shortcut.taken": "其他应用已占用该快捷键。请换一个。",
         "shortcut_tip": "请将 ⌘ 或 ⌃ 与一个按键组合使用。Delete 清除，Escape 取消。",
-        "show_data": "在下方显示数据",
+        "show_data": "显示数值",
         "show_icon": "显示图标",
         "show_name": "显示配置方案名称",
         "skip": "跳过",
