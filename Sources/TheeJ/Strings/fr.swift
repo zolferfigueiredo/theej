@@ -238,7 +238,7 @@ extension Strings {
         "shortcut.clash": "Ce boîtier utilise déjà ce raccourci. Essayez-en un autre.",
         "shortcut.taken": "Une autre app utilise déjà ce raccourci. Essayez-en un autre.",
         "shortcut_tip": "Utilisez ⌘ ou ⌃ avec une touche. Supprimer l’efface, Échap annule.",
-        "show_data": "Afficher les données ci-dessous",
+        "show_data": "Afficher les niveaux",
         "show_icon": "Afficher l’icône",
         "show_name": "Afficher le nom du profil",
         "skip": "Ignorer",

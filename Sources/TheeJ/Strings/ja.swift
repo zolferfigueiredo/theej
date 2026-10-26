@@ -238,7 +238,7 @@ extension Strings {
         "shortcut.clash": "このボードはこのショートカットを使用中です。別のキーを押してください。",
         "shortcut.taken": "ほかのアプリがこのショートカットを使用中です。別のキーを押してください。",
         "shortcut_tip": "⌘ または ⌃ とキーを組み合わせてください。Delete で消去、Escape でキャンセル。",
-        "show_data": "下にデータを表示",
+        "show_data": "レベルを表示",
         "show_icon": "アイコンを表示",
         "show_name": "プロファイル名を表示",
         "skip": "スキップ",

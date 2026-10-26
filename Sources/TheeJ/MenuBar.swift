@@ -131,8 +131,8 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         return tr("not_connected")
     }
 
-    // Rebuilt as the menu opens, so the status lines are never stale. A block for each board that is on:
-    // its status, its jobs' levels, its profiles and its Calibrate.
+    // Rebuilt as the menu opens, so the status lines are never stale. Settings first, then a block for each
+    // board that is on: its status, its jobs' levels, its profiles and its Calibrate.
     func menuNeedsUpdate(_ menu: NSMenu) {
         let setup = shared.config().setup
         menu.removeAllItems()
@@ -141,12 +141,17 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             mi.isEnabled = false
             return mi
         }
-        let showData = prefs.bool(forKey: "showDataInMenu")
-        let data = entry(tr("show_data"), #selector(toggleData), "")
-        data.state = showData ? .on : .off
-        menu.addItem(data)
+        menu.addItem(entry(tr("settings"), #selector(openSettings), ","))
         menu.addItem(.separator())
+        let showData = prefs.bool(forKey: "showDataInMenu")
         let boards = setup.boards.filter(\.enabled)
+        // Only a connected board has levels to show.
+        if boards.contains(where: { shared.status($0.id).connected }) {
+            let data = entry(tr("show_data"), #selector(toggleData), "")
+            data.state = showData ? .on : .off
+            menu.addItem(data)
+            menu.addItem(.separator())
+        }
         if boards.isEmpty {
             menu.addItem(label(tr("boards.none")))
             menu.addItem(.separator())
@@ -177,20 +182,6 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             }
             menu.addItem(.separator())
         }
-        menu.addItem(entry(tr("settings"), #selector(openSettings), ","))
-        // The globe is the website's language picker. Each language is named in itself, so it can always be found.
-        let languages = NSMenu()
-        for (index, language) in Language.allCases.enumerated() {
-            let choice = entry("\(language.flag) \(language.name)", #selector(pickLanguage), "")
-            choice.tag = index
-            choice.state = language == .current ? .on : .off
-            languages.addItem(choice)
-        }
-        let languageItem = NSMenuItem(title: tr("language"), action: nil, keyEquivalent: "")
-        languageItem.image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
-        languageItem.submenu = languages
-        menu.addItem(languageItem)
-        menu.addItem(.separator())
         // Registering from anywhere else (a build folder) would point the login item at a bundle that disappears.
         let login = entry(tr("login"), #selector(toggleLogin), "")
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
@@ -404,9 +395,9 @@ final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         prefs.set(sender.tag, forKey: "updateEvery")
     }
 
-    // From the menu, by tag, or from the popup in Settings, by index.
-    @objc func pickLanguage(_ sender: Any) {
-        let index = (sender as? NSPopUpButton)?.indexOfSelectedItem ?? (sender as? NSMenuItem)?.tag ?? 0
+    // From the popup in Settings.
+    @objc func pickLanguage(_ sender: NSPopUpButton) {
+        let index = sender.indexOfSelectedItem
         // Once the click is over: Settings is built again, and the popup that sent this with it.
         DispatchQueue.main.async { [self] in setLanguage(Language.allCases[index]) }
     }

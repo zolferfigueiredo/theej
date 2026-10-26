@@ -238,7 +238,7 @@ extension Strings {
         "shortcut.clash": "Questa scheda usa già questi tasti. Prova con altri.",
         "shortcut.taken": "Un’altra app usa già questi tasti. Prova con altri.",
         "shortcut_tip": "Usa ⌘ o ⌃ con un tasto. Cancella la elimina, Esc annulla.",
-        "show_data": "Mostra i dati qui sotto",
+        "show_data": "Mostra i livelli",
         "show_icon": "Mostra l’icona",
         "show_name": "Mostra il nome del profilo",
         "skip": "Salta",
