@@ -104,7 +104,7 @@ extension MenuBar {
         box.boxType = .custom
         box.cornerRadius = 10
         box.borderColor = .separatorColor
-        box.fillColor = .quaternarySystemFill
+        box.fillColor = cardFill
         box.addSubview(scroll)
         let fit = scroll.heightAnchor.constraint(equalTo: rows.heightAnchor)
         fit.priority = .defaultHigh - 1
@@ -301,7 +301,7 @@ extension MenuBar {
         card.boxType = .custom
         card.cornerRadius = 10
         card.borderColor = .separatorColor
-        card.fillColor = .quaternarySystemFill
+        card.fillColor = cardFill
         card.addSubview(drawing)
         let fit = card.heightAnchor.constraint(equalTo: drawing.heightAnchor, constant: 24)
         fit.priority = .defaultLow
