@@ -238,7 +238,7 @@ extension Strings {
         "shortcut.clash": "This board already uses that shortcut. Try another.",
         "shortcut.taken": "Another app uses that shortcut. Try another.",
         "shortcut_tip": "Use ⌘ or ⌃ with a key. Delete clears it, Escape cancels.",
-        "show_data": "Show data below",
+        "show_data": "Show levels",
         "show_icon": "Show icon",
         "show_name": "Show profile name",
         "skip": "Skip",

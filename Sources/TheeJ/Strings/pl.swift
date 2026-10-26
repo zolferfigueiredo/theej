@@ -238,7 +238,7 @@ extension Strings {
         "shortcut.clash": "Ta płytka używa już tego skrótu. Spróbuj innego.",
         "shortcut.taken": "Inna aplikacja używa już tego skrótu. Spróbuj innego.",
         "shortcut_tip": "Użyj ⌘ lub ⌃ z klawiszem. Delete usuwa skrót, Escape anuluje.",
-        "show_data": "Pokaż dane poniżej",
+        "show_data": "Pokaż poziomy",
         "show_icon": "Pokazuj ikonę",
         "show_name": "Pokazuj nazwę profilu",
         "skip": "Pomiń",
