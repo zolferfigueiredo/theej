@@ -238,7 +238,7 @@ extension Strings {
         "shortcut.clash": "Dieses Board nutzt diesen Kurzbefehl schon. Probiere einen anderen.",
         "shortcut.taken": "Eine andere App nutzt diesen Kurzbefehl. Probiere einen anderen.",
         "shortcut_tip": "Verwende ⌘ oder ⌃ mit einer Taste. Die Rückschritttaste löscht ihn, Escape bricht ab.",
-        "show_data": "Daten unten anzeigen",
+        "show_data": "Werte anzeigen",
         "show_icon": "Symbol anzeigen",
         "show_name": "Profilnamen anzeigen",
         "skip": "Überspringen",

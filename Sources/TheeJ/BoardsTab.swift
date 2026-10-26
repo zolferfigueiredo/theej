@@ -37,15 +37,17 @@ extension MenuBar {
             if draft.boards.isEmpty { empty.addArrangedSubview(NSButton(title: tr("boards.set_up"), target: self, action: #selector(showGeneral))) }
             views = [empty]
         }
-        if boardsFooter == nil {
-            boardsFooter = saveFooter()
-            boardsFooter?.widthAnchor.constraint(equalToConstant: boardsWidth).isActive = true
-        }
+        if boardsFooter == nil { boardsFooter = saveFooter() }
+        // With no board to draw, as narrow as General, so switching tabs doesn't widen the window for a line of text.
+        let width = board == nil ? formWidth : boardsWidth
         for view in views {
             boardsPage.addArrangedSubview(view)
-            if !(view is NSBox) { view.widthAnchor.constraint(equalToConstant: boardsWidth).isActive = true }
+            if !(view is NSBox) { view.widthAnchor.constraint(equalToConstant: width).isActive = true }
         }
         boardsPage.addArrangedSubview(boardsFooter!)
+        // As wide as the views above. Tied to the page, so taking the footer out of it above dropped the old width.
+        let insets = boardsPage.edgeInsets.left + boardsPage.edgeInsets.right
+        boardsFooter!.widthAnchor.constraint(equalTo: boardsPage.widthAnchor, constant: -insets).isActive = true
         for (index, view) in views.enumerated() where view is NSBox && index + 1 < views.count {
             boardsPage.setCustomSpacing(16, after: view)
         }
@@ -102,7 +104,7 @@ extension MenuBar {
         box.boxType = .custom
         box.cornerRadius = 10
         box.borderColor = .separatorColor
-        box.fillColor = .quaternarySystemFill
+        box.fillColor = cardFill
         box.addSubview(scroll)
         let fit = scroll.heightAnchor.constraint(equalTo: rows.heightAnchor)
         fit.priority = .defaultHigh - 1
@@ -299,7 +301,7 @@ extension MenuBar {
         card.boxType = .custom
         card.cornerRadius = 10
         card.borderColor = .separatorColor
-        card.fillColor = .quaternarySystemFill
+        card.fillColor = cardFill
         card.addSubview(drawing)
         let fit = card.heightAnchor.constraint(equalTo: drawing.heightAnchor, constant: 24)
         fit.priority = .defaultLow

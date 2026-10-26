@@ -1,7 +1,7 @@
 # Installs the DMG of release v<version>. CI keeps version equal to the app's, so a version bump bumps it too.
 # The app updates itself, so brew upgrade leaves it alone, and Gatekeeper checks its notarization.
 cask "theej" do
-  version "2.6.2"
+  version "2.6.4"
   sha256 :no_check
 
   url "https://github.com/zolferfigueiredo/theej/releases/download/v#{version}/TheeJ-#{version}.dmg"

@@ -238,7 +238,7 @@ extension Strings {
         "shortcut.clash": "Esta placa já usa esse atalho. Tente outro.",
         "shortcut.taken": "Outro app já usa esse atalho. Tente outro.",
         "shortcut_tip": "Use ⌘ ou ⌃ com uma tecla. Apagar limpa o atalho, Esc cancela.",
-        "show_data": "Mostrar dados abaixo",
+        "show_data": "Mostrar níveis",
         "show_icon": "Mostrar ícone",
         "show_name": "Mostrar nome do perfil",
         "skip": "Pular",

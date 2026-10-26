@@ -19,7 +19,13 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # A new file rather than cp over the old one: macOS remembers the old binary's signature for that
 # file, and kills the new one the moment it runs (Killed: 9, when making the icons just below).
 rm -f "$APP/Contents/MacOS/TheeJ"
-cp "$(swift build "${FLAGS[@]}" --show-bin-path)/TheeJ" "$APP/Contents/MacOS/"
+# SwiftPM records the oldest macOS as the SDK too, and macOS 26 and later draw an app built with an older SDK in
+# their old look: lighter buttons, and Settings' tabs darker than the page. The SDK it is really built with goes
+# in instead, and the oldest macOS stays. Signed again ad hoc at once: the icons below run it.
+BIN="$(swift build "${FLAGS[@]}" --show-bin-path)/TheeJ"
+OLDEST=$(vtool -show-build "$BIN" | awk '/minos/ { print $2; exit }')
+vtool -set-build-version macos "$OLDEST" "$(xcrun --sdk macosx --show-sdk-version)" -replace -output "$APP/Contents/MacOS/TheeJ" "$BIN"
+codesign --force --sign - "$APP/Contents/MacOS/TheeJ"
 # iconutil packs every file in the folder, so sizes left over from older builds would ride along.
 rm -rf .build/AppIcon.iconset
 "$APP/Contents/MacOS/TheeJ" --iconset .build/AppIcon.iconset

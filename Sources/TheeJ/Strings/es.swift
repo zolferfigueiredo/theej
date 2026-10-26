@@ -238,7 +238,7 @@ extension Strings {
         "shortcut.clash": "Esta placa ya usa ese atajo. Prueba otro.",
         "shortcut.taken": "Otra app ya usa ese atajo. Prueba otro.",
         "shortcut_tip": "Usa ⌘ o ⌃ con una tecla. Borrar lo elimina, Escape cancela.",
-        "show_data": "Mostrar datos abajo",
+        "show_data": "Mostrar niveles",
         "show_icon": "Mostrar el icono",
         "show_name": "Mostrar el nombre del perfil",
         "skip": "Omitir",

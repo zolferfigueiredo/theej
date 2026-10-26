@@ -238,7 +238,7 @@ extension Strings {
         "shortcut.clash": "이 보드에서 이미 이 단축키를 사용 중입니다. 다른 단축키를 누르세요.",
         "shortcut.taken": "다른 앱이 이 단축키를 사용 중입니다. 다른 단축키를 누르세요.",
         "shortcut_tip": "⌘ 또는 ⌃를 키와 함께 사용하세요. Delete는 지우고 Escape는 취소합니다.",
-        "show_data": "아래에 데이터 표시",
+        "show_data": "레벨 표시",
         "show_icon": "아이콘 보기",
         "show_name": "프로필 이름 보기",
         "skip": "건너뛰기",
