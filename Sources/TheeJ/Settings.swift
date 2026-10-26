@@ -18,6 +18,13 @@ let settingsTabs: [(id: NSToolbarItem.Identifier, label: String, symbol: String)
 let formWidth: CGFloat = 420  // every group, heading and footnote on General and About
 let boardsWidth: CGFloat = 860  // the Boards tab, wide enough for the drawing and its inspector side by side
 
+// A group's card, as System Settings draws them: #232323 in dark, #F9F9F9 in light. macOS has no named color
+// for it. Everything else in the windows is macOS's own.
+let cardFill = NSColor(name: nil) { look in
+    let level: CGFloat = look.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? 0x23 : 0xF9
+    return NSColor(srgbRed: level / 255, green: level / 255, blue: level / 255, alpha: 1)
+}
+
 // Flipped, so a page taller than the window starts at its top rather than its bottom.
 final class TopClipView: NSClipView {
     override var isFlipped: Bool { true }
@@ -459,7 +466,7 @@ extension MenuBar: NSToolbarDelegate {
         box.boxType = .custom
         box.cornerRadius = 10
         box.borderColor = .separatorColor
-        box.fillColor = .quaternarySystemFill
+        box.fillColor = cardFill
         box.addSubview(rows)
         rows.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
