@@ -89,5 +89,15 @@ installHotKeyHandler()
 midi = MIDI()
 startBoards()
 if saved.boards.isEmpty { DispatchQueue.main.async { menuBar?.openSettings() } }  // where a first board is added
+// Its menu bar, shown only while Settings is open, has nothing to see, but its keys work: Cmd-W and Cmd-Q close the
+// window in front. Quitting would stop every board. Hidden, else Settings' menu bar would show two blank rows.
+let keys = NSMenu()
+for key in ["w", "q"] {
+    let item = keys.addItem(withTitle: "", action: #selector(NSWindow.performClose(_:)), keyEquivalent: key)
+    item.isHidden = true
+    item.allowsKeyEquivalentWhenHidden = true
+}
+app.mainMenu = NSMenu()
+app.mainMenu?.addItem(withTitle: "", action: nil, keyEquivalent: "").submenu = keys
 app.run()
 #endif
