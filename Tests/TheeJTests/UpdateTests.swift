@@ -26,6 +26,13 @@ func newerVersion(remote: String, local: String, expected: Bool) {
     #expect(isNewer(remote, than: local) == expected)
 }
 
+@Test func betaFindsTheNewestRelease() {
+    let list = #"[{"tag_name": "v2.6.5"}, {"tag_name": "v2.7.0-dac-beta.10"}, {"tag_name": "v2.7.0-dac-beta.9"}]"#
+    #expect(newestVersion(inReleases: Data(list.utf8)) == "2.7.0-dac-beta.10")
+    #expect(newestVersion(inReleases: Data(#"[{"tag_name": "v2.7.0-dac-beta.3"}, {"tag_name": "v2.7.0"}]"#.utf8)) == "2.7.0")
+    #expect(newestVersion(inReleases: Data(#"{"message": "API rate limit exceeded"}"#.utf8)) == nil)
+}
+
 @Test func updateCheckSchedule() {
     let now = Date.now, hour: TimeInterval = 3600, day = 24 * hour
     #expect(updateCheckIsDue(last: nil, every: day, now: now))

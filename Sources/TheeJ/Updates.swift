@@ -20,6 +20,12 @@ func nextPatch(_ version: String) -> String {
     return parts.map(String.init).joined(separator: ".")
 }
 
+/// The newest version in GitHub's list of releases, its betas among them: tag v2.7.0-dac-beta.3 is 2.7.0-dac-beta.3.
+func newestVersion(inReleases data: Data) -> String? {
+    guard let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return nil }
+    return list.compactMap { ($0["tag_name"] as? String).map { String($0.dropFirst()) } }.max { isNewer($1, than: $0) }
+}
+
 /// `every` 0 means never.
 func updateCheckIsDue(last: Date?, every: TimeInterval, now: Date) -> Bool {
     every > 0 && now.timeIntervalSince(last ?? .distantPast) >= every
@@ -40,13 +46,17 @@ func dmgURL(_ version: String) -> URL {
         ?? releases.appending(path: "download/v\(version)/TheeJ-\(version).dmg")
 }
 
-/// The version in the newest release's latest.json, or nil when it can't be reached. Drafts and pre-releases never count as latest.
+/// The version in the newest release's latest.json, or nil when it can't be reached. Drafts and pre-releases never count as latest,
+/// so a beta reads the list of releases instead, to find the next beta as well as the release after them.
 func latestVersion() async -> String? {
-    let url = (testSite ?? releases.appending(path: "latest/download")).appending(path: "latest.json")
+    let beta = appVersion.contains("-") && testSite == nil
+    let url = beta ? URL(string: "https://api.github.com/repos/zolferfigueiredo/theej/releases")!
+        : (testSite ?? releases.appending(path: "latest/download")).appending(path: "latest.json")
     let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
     guard let (data, response) = try? await URLSession.shared.data(for: request),
-          (response as? HTTPURLResponse)?.statusCode == 200,
-          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+          (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+    if beta { return newestVersion(inReleases: data) }
+    guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
     return json["version"] as? String
 }
 
