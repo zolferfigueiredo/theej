@@ -55,46 +55,13 @@ fi
 [ -d "dist/dmg/$NAME.app" ] || { echo "dist/dmg/$NAME.app is missing: run ./release.sh build first." >&2; exit 1; }
 # Notarization requires the hardened runtime and a secure timestamp.
 codesign --force --options runtime --timestamp --sign "$ID" "dist/dmg/$NAME.app"
-ln -s /Applications dist/dmg/Applications
+ln -sfn /Applications dist/dmg/Applications
 
-# Finder lays out a temporary read-write copy (background, icon spots) and saves it in the volume's .DS_Store.
-# Icon positions must match the arrow. Finder finds the volume by name, so every mounted TheeJ volume
-# ("TheeJ 1"...) is ejected first.
-mount | { grep -i " on /Volumes/$NAME" || true; } | sed 's|^.* on \(/Volumes/[^(]*\) (.*|\1|' |
-    while IFS= read -r volume; do hdiutil detach -quiet -force "$volume"; done
-trap '[ -z "${MNT:-}" ] || hdiutil detach -quiet -force "$MNT"' EXIT
-hdiutil create -quiet -volname "$NAME" -srcfolder dist/dmg -format UDRW dist/rw.dmg
-hdiutil attach -quiet -readwrite -noverify -noautoopen dist/rw.dmg
-MNT="/Volumes/$NAME"
-osascript <<EOF
-tell application "Finder" to tell disk "$NAME"
-    open
-    set current view of container window to icon view
-    set toolbar visible of container window to false
-    set statusbar visible of container window to false
-    set bounds of container window to {200, 120, 800, 552}
-    set opts to icon view options of container window
-    set arrangement of opts to not arranged
-    set icon size of opts to 100
-    set background picture of opts to file "$NAME.app:Contents:Resources:dmg-background.tiff"
-    set position of item "$NAME.app" to {170, 160}
-    set position of item "Applications" to {430, 160}
-    update without registering applications
-    close
-end tell
-EOF
-# A Finder that can't be scripted would leave this waiting for ever.
-for i in $(seq 61); do
-    [ ! -f "$MNT/.DS_Store" ] || break
-    [ "$i" -le 60 ] || { echo "Finder didn't lay out the DMG within a minute." >&2; exit 1; }
-    sleep 1
-done
-rm -rf "$MNT/.fseventsd" "$MNT/.Trashes"
-sync
-hdiutil detach -quiet "$MNT"
-MNT=
-hdiutil convert -quiet dist/rw.dmg -format UDZO -o "$DMG"
-rm -r dist/rw.dmg dist/dmg
+# The window's layout (background, icon spots) as Finder saved it, so no Finder window opens while a release builds.
+# dmg/layout.sh makes it again when the background or the icon spots change.
+cp dmg/layout.DS_Store dist/dmg/.DS_Store
+hdiutil create -quiet -volname "$NAME" -srcfolder dist/dmg -format UDZO "$DMG"
+rm -r dist/dmg
 
 codesign --timestamp --sign "$ID" "$DMG"
 xcrun notarytool submit "$DMG" --keychain-profile bihan --wait
