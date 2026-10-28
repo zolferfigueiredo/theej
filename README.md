@@ -428,7 +428,7 @@ Every push to `main` whose version isn't released yet is released by `.github/wo
 1. On GitHub, open Settings > Actions > Runners > New self-hosted runner (macOS, ARM64), and download it into `~/www/actions-runner/theej` as that page shows.
 2. From a terminal where `gh` and Homebrew are on the PATH (the runner keeps that PATH), run `./config.sh --url https://github.com/zolferfigueiredo/theej --token <the token on that page> --labels release --name theej-mac --unattended`, then `./svc.sh install`. Then run `plutil -remove SessionCreate ~/Library/LaunchAgents/actions.runner.zolferfigueiredo-theej.theej-mac.plist` and `./svc.sh stop && ./svc.sh start`: with its own session, the runner can't use the login keychain, and `codesign` fails with errSecInternalComponent. The runner then starts at login, and `~/www/actions-runner/run.sh` starts every runner in that folder.
 3. Under Settings > Actions > General > Fork pull request workflows, choose "Require approval for all external contributors", so a fork's pull request can't reach the runner.
-4. On the first release, let the runner control Finder, and let `codesign` and `notarytool` use the keychain.
+4. On the first release, let `codesign` and `notarytool` use the keychain.
 
 While that Mac is off or logged out, the sign job waits; Re-run failed jobs retries it with the same build.
 
