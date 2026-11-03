@@ -70,6 +70,7 @@ You need:
 - **No jumps.** A knob takes up a new job the next time you move it, so switching profiles never jumps the volume or a screen. An SMC-Mixer's endless knobs carry on from where their job is.
 - **Every level at a glance.** The menu lists each board with its jobs and their levels, one per line, each app with its icon.
 - **Follows your audio device.** Switch outputs or inputs, Bluetooth headphones included, and the knobs follow.
+- **USB DACs too.** Master volume works on a DAC whose volume macOS can't set: TheeJ turns its sound down itself, as it does an app's. Quit TheeJ and the DAC plays at its own level again.
 - **Twin screens stay put.** Identical panels stay left and right across sleep and replug.
 - **Any number of knobs.** As many as your sketch sends, from A to Z, then A2, B2 and on.
 - **Same firmware.** Speaks the deej serial protocol, unchanged, at the baud rate your sketch uses.
