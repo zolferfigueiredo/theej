@@ -69,6 +69,7 @@ extension Strings {
         "calibrate": "보정",
         "cancel": "취소",
         "check": "업데이트 확인…",
+        "check_betas": "베타 버전 확인",
         "check_connection": "연결을 확인하고 다시 시도하세요.",
         "check_failed": "업데이트를 확인할 수 없음",
         "checking_signature": "서명 확인 중…",

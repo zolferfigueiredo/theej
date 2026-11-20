@@ -320,7 +320,7 @@ extension MenuBar: NSToolbarDelegate {
         return footer
     }
 
-    func aboutPage() -> NSStackView {
+    func aboutPage(version shown: String = appVersion) -> NSStackView {
         let icon = NSImageView(image: makeAppIcon(side: 96, scale: 2))
         icon.widthAnchor.constraint(equalToConstant: 96).isActive = true
         icon.heightAnchor.constraint(equalToConstant: 96).isActive = true
@@ -328,7 +328,7 @@ extension MenuBar: NSToolbarDelegate {
         name.font = .boldSystemFont(ofSize: 16)
         let madeBy = credit(tr("made_by"), "Zolfer Figueiredo", "https://zolfer.com/")
         for case let view as NSControl in madeBy.views { view.font = .systemFont(ofSize: NSFont.smallSystemFontSize) }
-        let version = NSTextField(labelWithString: tr("version", ["version": appVersion]))
+        let version = NSTextField(labelWithString: tr("version", ["version": shown]))
         let check = NSButton(title: tr("check"), target: self, action: #selector(checkNow))
         check.isEnabled = !checking && UpdateProgress.underway == nil
         checkButton = check
@@ -345,14 +345,24 @@ extension MenuBar: NSToolbarDelegate {
         }
         let footer = saveFooter()
         footer.widthAnchor.constraint(equalToConstant: formWidth).isActive = true
-        let page = NSStackView(views: [icon, name, madeBy, version, check, lines[0], website, liked, coffee, lines[1],
+        let betas = NSSwitch()
+        betas.controlSize = .mini
+        betas.state = prefs.object(forKey: "checkBetas") as? Bool ?? true ? .on : .off
+        betas.target = self
+        betas.action = #selector(toggleBetas)
+        let betasRow = NSStackView(views: [NSTextField(labelWithString: tr("check_betas")), betas])
+        betasRow.spacing = 8
+        var shownViews = [icon, name, madeBy, version]
+        if isBeta(shown) { shownViews.append(betasRow) }  // a release has no betas to look for
+        let page = NSStackView(views: shownViews + [check, lines[0], website, liked, coffee, lines[1],
                                        windows, inspired, footer])
         page.orientation = .vertical
         page.alignment = .centerX
         page.spacing = 4
         page.setCustomSpacing(12, after: icon)
         for view in [name, madeBy] { page.setCustomSpacing(10, after: view) }
-        page.setCustomSpacing(16, after: version)
+        if isBeta(shown) { page.setCustomSpacing(10, after: version) }
+        page.setCustomSpacing(16, after: isBeta(shown) ? betasRow : version)
         for view in [check, lines[0], coffee, lines[1]] { page.setCustomSpacing(16, after: view) }
         page.setCustomSpacing(10, after: website)
         page.setCustomSpacing(8, after: liked)
@@ -595,6 +605,11 @@ extension MenuBar: NSToolbarDelegate {
         if status.connected { return (tr("status.connected"), .systemGreen) }
         if status.busy { return (tr("port_busy", ["port": status.port ?? "?"]), .systemOrange) }
         return (tr("status.disconnected"), .secondaryLabelColor)
+    }
+
+    @objc func toggleBetas(_ sender: NSSwitch) {
+        prefs.set(sender.state == .on, forKey: "checkBetas")
+        prefs.removeObject(forKey: "availableVersion")  // a beta found while the switch was on isn't offered once it is off
     }
 
     @objc func toggleBoard(_ sender: NSSwitch) {

@@ -69,6 +69,7 @@ extension Strings {
         "calibrate": "キャリブレーション",
         "cancel": "キャンセル",
         "check": "アップデートを確認…",
+        "check_betas": "ベータ版を確認",
         "check_connection": "接続を確認して、もう一度お試しください。",
         "check_failed": "アップデートを確認できませんでした",
         "checking_signature": "署名を確認中…",

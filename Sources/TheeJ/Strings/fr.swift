@@ -69,6 +69,7 @@ extension Strings {
         "calibrate": "Calibrer",
         "cancel": "Annuler",
         "check": "Rechercher les mises à jour…",
+        "check_betas": "Rechercher les versions bêta",
         "check_connection": "Vérifiez votre connexion et réessayez.",
         "check_failed": "Impossible de rechercher les mises à jour",
         "checking_signature": "Vérification de la signature…",
