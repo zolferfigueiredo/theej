@@ -80,6 +80,8 @@ if zoomServices == nil {
 menuBar = MenuBar()
 app.delegate = menuBar
 UNUserNotificationCenter.current().delegate = menuBar
+// Back on a release, About's beta switch is forgotten, so the next beta starts with it on.
+if !isBeta(appVersion) { prefs.removeObject(forKey: "checkBetas") }
 DispatchQueue.main.async { menuBar?.showUpdateComplete() }  // once the app is running
 if prefs.bool(forKey: "testNotifications") { Task { _ = await showUpdateNotification(nextPatch(appVersion)) } }
 DistributedNotificationCenter.default().addObserver(forName: settingsRequest, object: nil, queue: .main) { _ in

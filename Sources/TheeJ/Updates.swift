@@ -13,6 +13,9 @@ func isNewer(_ remote: String, than local: String) -> Bool {
     }
 }
 
+/// A version with a "-" is a beta of the version before it: 2.7.0-dac-beta.1, then 2.7.0-dac-beta.2, then 2.7.0.
+func isBeta(_ version: String) -> Bool { version.contains("-") }
+
 /// "1.7.0" gives "1.7.1": the version the test notification offers, so it reads like a real one.
 func nextPatch(_ version: String) -> String {
     var parts = version.split(separator: ".", omittingEmptySubsequences: false).map { Int($0) ?? 0 }
@@ -46,10 +49,15 @@ func dmgURL(_ version: String) -> URL {
         ?? releases.appending(path: "download/v\(version)/TheeJ-\(version).dmg")
 }
 
+/// A beta looks for newer betas too, unless About's "Check for beta releases" is off. A release never does.
+var checksBetas: Bool {
+    isBeta(appVersion) && (prefs.object(forKey: "checkBetas") as? Bool ?? true)
+}
+
 /// The version in the newest release's latest.json, or nil when it can't be reached. Drafts and pre-releases never count as latest,
-/// so a beta reads the list of releases instead, to find the next beta as well as the release after them.
+/// so a beta that looks for betas reads the list of releases instead, to find the next beta as well as the release after them.
 func latestVersion() async -> String? {
-    let beta = appVersion.contains("-") && testSite == nil
+    let beta = checksBetas && testSite == nil
     let url = beta ? URL(string: "https://api.github.com/repos/zolferfigueiredo/theej/releases")!
         : (testSite ?? releases.appending(path: "latest/download")).appending(path: "latest.json")
     let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)

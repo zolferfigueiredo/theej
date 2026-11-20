@@ -69,6 +69,7 @@ extension Strings {
         "calibrate": "Calibrate",
         "cancel": "Cancel",
         "check": "Check for updates…",
+        "check_betas": "Check for beta releases",
         "check_connection": "Check your connection and try again.",
         "check_failed": "Couldn’t check for updates",
         "checking_signature": "Checking the signature…",

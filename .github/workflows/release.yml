@@ -7,7 +7,7 @@ on:
     branches: [main, '*-beta']
   workflow_dispatch:
   pull_request:  # builds only, so a change to the release can be tried before it merges
-    paths: [release.sh, build.sh, .github/workflows/release.yml]
+    paths: [release.sh, build.sh, Icon/make-dmg-background.swift, dmg/layout.DS_Store, .github/workflows/release.yml]
 permissions:
   contents: write
 concurrency:

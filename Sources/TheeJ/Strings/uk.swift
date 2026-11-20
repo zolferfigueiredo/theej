@@ -69,6 +69,7 @@ extension Strings {
         "calibrate": "Калібрувати",
         "cancel": "Скасувати",
         "check": "Перевірити оновлення…",
+        "check_betas": "Перевіряти бета-версії",
         "check_connection": "Перевірте з’єднання та спробуйте ще раз.",
         "check_failed": "Не вдалося перевірити оновлення",
         "checking_signature": "Перевірка підпису…",
