@@ -26,7 +26,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           base=origin/${{ github.base_ref }}
-          if git diff --quiet "$base"...HEAD -- Sources Package.swift; then echo "The app is unchanged."; exit 0; fi
+          if git diff --quiet "$base"...HEAD -- Sources Package.swift Icon; then echo "The app is unchanged."; exit 0; fi
           version() { git show "$1:Sources/TheeJ/Version.swift" | sed -n 's/^let appVersion = "\(.*\)"$/\1/p'; }
           old=$(version "$base") new=$(version HEAD)
           # A beta's "-" sorts as "~", which sort -V puts before the release: 2.7.0-dac-beta.2 < 2.7.0.

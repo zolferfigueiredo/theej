@@ -35,19 +35,11 @@ rm -rf dist
 mkdir -p dist/dmg
 cp -R ".build/$NAME.app" dist/dmg/
 
-# The DMG window's arrow from the app to Applications. It lives inside the app, before codesign so the signature
-# covers it, and the DMG shows nothing but the app and Applications. The cream is the website's plate color.
-cat > dist/background.svg <<EOF
-<svg xmlns="http://www.w3.org/2000/svg" width="600" height="440">
-<rect width="600" height="440" fill="#ddd5c6"/>
-<g fill="none" stroke="#86868b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-<path d="M236 166C266 124 330 120 362 152"/><path d="M349 151.5h13.5v-13.5"/>
-</g>
-</svg>
-EOF
-for s in 1 2; do sips -s format png -z $((440 * s)) $((600 * s)) dist/background.svg --out "dist/bg$s.png" >/dev/null; done
-tiffutil -cathidpicheck dist/bg1.png dist/bg2.png -out "dist/dmg/$NAME.app/Contents/Resources/dmg-background.tiff"
-rm dist/background.svg dist/bg1.png dist/bg2.png
+# The DMG window's background lives inside the app, before codesign so the signature covers it, and the DMG shows
+# nothing but the app and Applications.
+swift Icon/make-dmg-background.swift dist/bg
+tiffutil -cathidpicheck dist/bg/background.png dist/bg/background@2x.png -out "dist/dmg/$NAME.app/Contents/Resources/dmg-background.tiff"
+rm -r dist/bg
 fi
 
 # The sign half.
